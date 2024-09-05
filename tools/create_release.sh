@@ -2,7 +2,7 @@
 
 TAGNAME=$1
 
-REPO=dantegarden/siliconcloud-cli
+REPO=siliconflow/siliconcloud-cli
 DATA='{"tag_name":"'$TAGNAME'","name":"'$TAGNAME'","draft":false,"prerelease":true,"generate_release_notes":true}'
 
 curl -fsSL \

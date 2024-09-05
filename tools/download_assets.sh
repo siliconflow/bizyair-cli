@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 
 VERSION=$1
-REPO=dantegarden/siliconcloud-cli
+REPO=siliconflow/siliconcloud-cli
 URL="https://api.github.com/repos/$REPO/releases"
 
 LIST=(

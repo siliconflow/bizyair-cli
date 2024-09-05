@@ -2,7 +2,7 @@
 
 TAG=v$1
 ASSET=$2
-REPO=dantegarden/siliconcloud-cli
+REPO=siliconflow/siliconcloud-cli
 
 if [[ $ASSET == *.tgz ]]
 then

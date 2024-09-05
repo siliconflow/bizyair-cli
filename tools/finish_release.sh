@@ -4,7 +4,7 @@ set -e
 
 VERSION=$1
 
-REPO=dantegarden/siliconcloud-cli
+REPO=siliconflow/siliconcloud-cli
 
 if [[ "$VERSION" == *"-beta" ]]; then
   echo "beta. skip."
