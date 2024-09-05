@@ -22,7 +22,7 @@ func Whoami(c *cli.Context) error {
 		return err
 	}
 
-	client := lib.NewClient(args.BaseDomain, apiKey)
+	client := lib.NewClient(meta.AuthDomain, apiKey)
 	info, err := client.UserInfo()
 	if err != nil {
 		return err
