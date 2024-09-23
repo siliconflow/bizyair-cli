@@ -88,12 +88,18 @@ siliconcloud model ls -t bizyair/checkpoint
 
 You must specify model type by using the `-t` flag.
 
+You can specify public flag `--public` to view all public models in the silicon cloud. By default it will show only your private models.
+
+```bash
+
 ### View Model Files
 To view all files in a model, run the following CLI:
 
 ```bash
 siliconcloud model ls-files -n mymodel -t bizyair/checkpoint
 ```
+
+You can specify public flag `--public` to view all public model files in the silicon cloud. By default, it will show only your private model files.
 
 If you want to see the files in a model in tree view, run the following CLI:
 ```bash

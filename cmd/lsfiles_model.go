@@ -33,7 +33,7 @@ func ListFilesModel(c *cli.Context) error {
 
 	client := lib.NewClient(args.BaseDomain, apiKey)
 
-	modelFilesResp, err := client.ListModelFiles(args.Type, args.Name, args.ExtName)
+	modelFilesResp, err := client.ListModelFiles(args.Type, args.Name, args.ExtName, args.Public)
 	if err != nil {
 		return err
 	}

@@ -101,12 +101,13 @@ func (c *Client) CommitModel(modelName string, modelType string, overwrite bool,
 	return handleResponse[ModelCommitResp](body)
 }
 
-func (c *Client) ListModel(modelType string) (*Response[ModelListResp], error) {
+func (c *Client) ListModel(modelType string, public bool) (*Response[ModelListResp], error) {
 	serverUrl := fmt.Sprintf("%s/x/%s/models", c.Domain, meta.APIv1)
-	if modelType != "" {
-		serverUrl = fmt.Sprintf("%s?type=%s", serverUrl, modelType)
+	param := ModelListReq{
+		Type:   modelType,
+		Public: public,
 	}
-	body, statusCode, err := c.doGet(serverUrl, nil, c.authHeader())
+	body, statusCode, err := c.doGet(serverUrl, param, c.authHeader())
 	if err != nil {
 		return nil, cli.Exit(err, meta.ServerError)
 	}
@@ -117,12 +118,13 @@ func (c *Client) ListModel(modelType string) (*Response[ModelListResp], error) {
 	return handleResponse[ModelListResp](body)
 }
 
-func (c *Client) ListModelFiles(modelType string, modelName string, extName string) (*Response[ModelListFilesResp], error) {
+func (c *Client) ListModelFiles(modelType string, modelName string, extName string, public bool) (*Response[ModelListFilesResp], error) {
 	serverUrl := fmt.Sprintf("%s/x/%s/models/files", c.Domain, meta.APIv1)
 	param := ModelListFilesReq{
 		Type:    modelType,
 		Name:    modelName,
 		ExtName: extName,
+		Public:  public,
 	}
 	body, statusCode, err := c.doGet(serverUrl, param, c.authHeader())
 	if err != nil {

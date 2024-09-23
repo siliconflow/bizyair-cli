@@ -88,7 +88,8 @@ type ModelInfo struct {
 }
 
 type ModelListReq struct {
-	Type string `json:"type,omitempty" form:"type" query:"type"`
+	Type   string `json:"type,omitempty" form:"type" query:"type"`
+	Public bool   `json:"public,omitempty" form:"public" query:"public"`
 }
 
 type ModelListResp struct {
@@ -99,6 +100,7 @@ type ModelListFilesReq struct {
 	Type    string `json:"type,omitempty" form:"type" query:"type"`
 	Name    string `json:"name,omitempty" path:"name"`
 	ExtName string `json:"ext_name,omitempty" path:"ext_name"`
+	Public  bool   `json:"public,omitempty" form:"public" query:"public"`
 }
 
 type ModelListFilesResp struct {

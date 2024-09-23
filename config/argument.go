@@ -17,6 +17,7 @@ type Argument struct {
 	FilePath   string // file path
 	FormatTree bool   // format tree
 	Overwrite  bool   // overwrite model
+	Public     bool   // only show public model
 }
 
 func NewArgument() *Argument {

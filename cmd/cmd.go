@@ -21,6 +21,7 @@ func Init() *cli.App {
 	formatTreeFlag := cli.BoolFlag{Name: "tree", Usage: "Display in file tree format.", Destination: &globalArgs.FormatTree, Required: false}
 	extFlag := cli.StringFlag{Name: "ext", Usage: "Specify the ext name of file.", Destination: &globalArgs.ExtName, Required: false}
 	overwriteFlag := cli.BoolFlag{Name: "overwrite", Usage: "Overwrite existent model", Destination: &globalArgs.Overwrite, Value: false, Required: false}
+	publicFlag := cli.BoolFlag{Name: "public", Usage: "Only show public model", Destination: &globalArgs.Public, Value: false, Required: false}
 
 	app := cli.NewApp()
 	app.Name = meta.Name
@@ -78,6 +79,7 @@ func Init() *cli.App {
 					Usage: "List your models",
 					Flags: []cli.Flag{
 						&typeFlag,
+						&publicFlag,
 					},
 					Action: ListModel,
 				},
@@ -89,6 +91,7 @@ func Init() *cli.App {
 						&nameFlag,
 						&extFlag,
 						&formatTreeFlag,
+						&publicFlag,
 					},
 					Action: ListFilesModel,
 				},

@@ -18,7 +18,7 @@ func ListModel(c *cli.Context) error {
 	setLogVerbose(args.Verbose)
 	logs.Debugf("args: %#v\n", args)
 
-	if err = checkType(args, false); err != nil {
+	if err = checkType(args, true); err != nil {
 		return err
 	}
 
@@ -29,7 +29,7 @@ func ListModel(c *cli.Context) error {
 
 	client := lib.NewClient(args.BaseDomain, apiKey)
 
-	modelResp, err := client.ListModel(args.Type)
+	modelResp, err := client.ListModel(args.Type, args.Public)
 	if err != nil {
 		return err
 	}
