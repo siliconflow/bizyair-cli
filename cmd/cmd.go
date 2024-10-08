@@ -35,6 +35,7 @@ func Init() *cli.App {
 	app.Flags = []cli.Flag{
 		&verboseFlag,
 		&baseDomainFlag,
+		&apiKeyFlag,
 	}
 
 	// Commands

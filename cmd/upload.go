@@ -46,9 +46,14 @@ func Upload(c *cli.Context) error {
 		return cli.Exit(fmt.Errorf("check path failed: %s", err), meta.LoadError)
 	}
 
-	apiKey, err := lib.NewSfFolder().GetKey()
-	if err != nil {
-		return err
+	var apiKey string
+	if args.ApiKey != "" {
+		apiKey = args.ApiKey
+	} else {
+		apiKey, err = lib.NewSfFolder().GetKey()
+		if err != nil {
+			return err
+		}
 	}
 
 	client := lib.NewClient(args.BaseDomain, apiKey)

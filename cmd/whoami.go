@@ -17,9 +17,14 @@ func Whoami(c *cli.Context) error {
 	setLogVerbose(args.Verbose)
 	logs.Debugf("args: %#v\n", args)
 
-	apiKey, err := lib.NewSfFolder().GetKey()
-	if err != nil {
-		return err
+	var apiKey string
+	if args.ApiKey != "" {
+		apiKey = args.ApiKey
+	} else {
+		apiKey, err = lib.NewSfFolder().GetKey()
+		if err != nil {
+			return err
+		}
 	}
 
 	client := lib.NewClient(meta.AuthDomain, apiKey)

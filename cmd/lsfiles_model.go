@@ -26,9 +26,14 @@ func ListFilesModel(c *cli.Context) error {
 		return err
 	}
 
-	apiKey, err := lib.NewSfFolder().GetKey()
-	if err != nil {
-		return err
+	var apiKey string
+	if args.ApiKey != "" {
+		apiKey = args.ApiKey
+	} else {
+		apiKey, err = lib.NewSfFolder().GetKey()
+		if err != nil {
+			return err
+		}
 	}
 
 	client := lib.NewClient(args.BaseDomain, apiKey)

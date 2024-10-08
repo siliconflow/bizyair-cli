@@ -39,6 +39,7 @@ const (
 	TypeClip         UploadFileType = "bizyair/clip"
 	TypeClipVision   UploadFileType = "bizyair/clip_vision"
 	TypeUpscale      UploadFileType = "bizyair/upscale"
+	TypeDataset      UploadFileType = "bizyair/dataset"
 	TypeOther        UploadFileType = "other"
 )
 
@@ -52,6 +53,7 @@ var ModelTypes = []UploadFileType{
 	TypeClip,
 	TypeClipVision,
 	TypeUpscale,
+	TypeDataset,
 	TypeOther,
 }
 
