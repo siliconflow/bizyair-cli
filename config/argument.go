@@ -18,6 +18,15 @@ type Argument struct {
 	FormatTree bool   // format tree
 	Overwrite  bool   // overwrite model
 	Public     bool   // only show public model
+	// Host			string
+	// Port			string
+	ModelVersion 	string
+	Versions    string // model versions info
+	BaseModel   string
+	CoverUrls   string
+	Intro       string
+	Current		int
+	PageSize	int
 }
 
 func NewArgument() *Argument {

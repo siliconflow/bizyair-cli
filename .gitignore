@@ -3,3 +3,6 @@
 temp
 .exe
 execs
+
+# vscode debug
+__debug*

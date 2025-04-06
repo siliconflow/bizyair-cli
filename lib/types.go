@@ -41,21 +41,48 @@ type StorageInfo struct {
 	Region   string `json:"region,omitempty" form:"region" query:"region"`
 }
 
+// Deprecated
 type FileCommitReq struct {
 	Sign      string `json:"sign,omitempty" form:"sign" query:"sign"`
 	ObjectKey string `json:"object_key,omitempty" form:"object_key" query:"object_key"`
 }
+type FileCommitReqV2 struct {
+	Sign      string `json:"sign,omitempty" form:"sign" query:"sign"`
+	ObjectKey string `json:"object_key,omitempty" form:"object_key" query:"object_key"`
+	Md5Hash   string `json:"md5_hash,omitempty" form:"md5_hash" query:"md5_hash"`
+	ModelType string `json:"type,omitempty" form:"type" query:"type"`
+}
 
+// Deprecated
 type ModelCommitReq struct {
 	Name      string       `json:"name,omitempty" form:"name" query:"name"`
 	Type      string       `json:"type,omitempty" form:"type" query:"type"`
 	Overwrite bool         `json:"overwrite,omitempty" form:"overwrite" query:"overwrite"`
 	Files     []*ModelFile `json:"files,omitempty" form:"files" query:"files"`
 }
+type ModelCommitReqV2 struct {
+	Name     string          `json:"name,omitempty" form:"name" query:"name"`
+	Type     string          `json:"type,omitempty" form:"type" query:"type"`
+	Versions []*ModelVersion `json:"versions,omitempty" form:"versions" query:"versions"`
+}
 
 type ModelFile struct {
-	Sign string `json:"sign,,omitempty" form:"sign" query:"sign"`
+	Sign string `json:"sign,omitempty" form:"sign" query:"sign"`
 	Path string `json:"path,omitempty" form:"path" query:"path"`
+}
+
+type ModelVersion struct {
+	Version      string   `json:"version,omitempty" form:"version" query:"version"`
+	BaseModel    string   `json:"base_model,omitempty" form:"base_model" query:"base_model"`
+	Introduction string   `json:"intro,omitempty" form:"intro" query:"intro"`
+	Public       bool     `json:"public,omitempty" form:"public" query:"public"`
+	Sign         string   `json:"sign,omitempty" form:"sign" query:"sign"`
+	Path         string   `json:"path,omitempty" form:"path" query:"path"`
+	CoverUrls    []string `json:"cover_urls,omitempty" form:"cover_urls" query:"cover_urls"`
+}
+
+type OssSignReq struct {
+	Type string `json:"type,omitempty" form:"type" query:"type"`
 }
 
 type ModelFileInfo struct {
@@ -91,6 +118,14 @@ type ModelListReq struct {
 	Type   string `json:"type,omitempty" form:"type" query:"type"`
 	Public bool   `json:"public,omitempty" form:"public" query:"public"`
 }
+
+// type ModelListReqV2 struct {
+// 	Current		int			`json:"current" form:"current" query:"current"`
+// 	PageSize  	int			`json:"page_size" form:"page_size" query:"page_size" `
+// 	Keyword		string		`json:"keyword,omitempty" form:"keyword" query:"keyword"`
+// 	Types		[]string 	`json:"model_types,omitempty" form:"model_types" query:"model_types"`
+// 	Sort 		string     	`json:"sort,omitempty" form:"sort" query:"sort"`
+// }
 
 type ModelListResp struct {
 	Models []*ModelInfo `json:"models,omitempty" form:"models" query:"models"`

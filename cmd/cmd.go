@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"fmt"
+
 	"github.com/cloudwego/hertz/cmd/hz/util/logs"
 	"github.com/siliconflow/siliconcloud-cli/config"
 	"github.com/siliconflow/siliconcloud-cli/meta"
@@ -22,6 +23,12 @@ func Init() *cli.App {
 	extFlag := cli.StringFlag{Name: "ext", Usage: "Specify the ext name of file.", Destination: &globalArgs.ExtName, Required: false}
 	overwriteFlag := cli.BoolFlag{Name: "overwrite", Usage: "Overwrite existent model", Destination: &globalArgs.Overwrite, Value: false, Required: false}
 	publicFlag := cli.BoolFlag{Name: "public", Usage: "Only show public model", Destination: &globalArgs.Public, Value: false, Required: false}
+	// hostFlag := cli.StringFlag{Name: "host", Usage: fmt.Sprintf("Specify the request host, default: %s", meta.DefaultHost), Destination: &globalArgs.Host, Value: meta.DefaultHost}
+	// portFlag := cli.StringFlag{Name: "port", Usage: fmt.Sprintf("Specify the request port, default: %s", meta.DefaultPort), Destination: &globalArgs.Port, Value: meta.DefaultPort}
+	versionFlag := cli.StringFlag{Name: "version", Aliases: []string{"v", "V"}, Usage: "Specify the version of model.", Destination: &globalArgs.ModelVersion}
+	introFlag := cli.StringFlag{Name: "intro", Aliases: []string{"i"}, Usage: "An introduction to the model", Destination: &globalArgs.Intro}
+	coverUrlsFlag := cli.StringFlag{Name: "cover", Usage: "Urls of model covers, use ',' as separator", Destination: &globalArgs.CoverUrls}
+	baseModelFlag := cli.StringFlag{Name: "base", Aliases: []string{"b"}, Usage: "Specify the base model of uploaded model", Required: true, Destination: &globalArgs.BaseModel}
 
 	app := cli.NewApp()
 	app.Name = meta.Name
@@ -68,6 +75,12 @@ func Init() *cli.App {
 				&pathFlag,
 				&nameFlag,
 				&overwriteFlag,
+				&versionFlag,
+				&introFlag,
+				&baseModelFlag,
+				&coverUrlsFlag,
+				// &hostFlag,
+				// &portFlag,
 			},
 			Action: Upload,
 		},

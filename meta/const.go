@@ -1,8 +1,9 @@
 package meta
 
 import (
-	"github.com/samber/lo"
 	"strings"
+
+	"github.com/samber/lo"
 )
 
 const (
@@ -14,11 +15,12 @@ const (
 	CmdLs      = "ls"
 	CmdLsFiles = "ls-files"
 	CmdRm      = "rm"
+	CmdCommit  = "commit"
 )
 
 const (
 	DefaultDomain = "https://bizyair-api.siliconflow.cn"
-	AuthDomain    = "https://api.siliconflow.cn"
+	AuthDomain	  = "https://api.siliconflow.cn"
 )
 
 const (
@@ -89,4 +91,15 @@ const (
 var IgnoreUploadDirs = []string{
 	".git",
 	".idea",
+}
+
+var SupportedBaseModels = map[string]bool{
+	"Flux.1 D":  true,
+	"SDXL":      true,
+	"SD 1.5":    true,
+	"SD 3.5":    true,
+	"Pony":      true,
+	"Kolors":    true,
+	"Hunyuan 1": true,
+	"Other":     true,
 }

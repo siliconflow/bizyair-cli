@@ -6,6 +6,13 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 	"fmt"
+	"hash/crc64"
+	"io"
+	"os"
+	"path/filepath"
+	"regexp"
+	"strings"
+
 	"github.com/cloudwego/hertz/cmd/hz/util"
 	"github.com/cloudwego/hertz/cmd/hz/util/logs"
 	"github.com/samber/lo"
@@ -13,11 +20,6 @@ import (
 	"github.com/siliconflow/siliconcloud-cli/lib"
 	"github.com/siliconflow/siliconcloud-cli/meta"
 	"github.com/urfave/cli/v2"
-	"hash/crc64"
-	"io"
-	"os"
-	"path/filepath"
-	"regexp"
 )
 
 func Upload(c *cli.Context) error {
@@ -46,6 +48,23 @@ func Upload(c *cli.Context) error {
 		return cli.Exit(fmt.Errorf("check path failed: %s", err), meta.LoadError)
 	}
 
+	// version: default 'v1'
+	modelVersion := getVersion(args)
+
+	_, err = checkModelIntro(args, false)
+	if err != nil {
+		return err
+	}
+
+	cover_urls, err := checkCoverUrl(args, false)
+	if err != nil {
+		return err
+	}
+
+	if err := checkBaseModel(args, false); err != nil {
+		return err
+	}
+
 	var apiKey string
 	if args.ApiKey != "" {
 		apiKey = args.ApiKey
@@ -58,54 +77,56 @@ func Upload(c *cli.Context) error {
 
 	client := lib.NewClient(args.BaseDomain, apiKey)
 
-	modelExistResp, err := client.CheckModel(args.Type, args.Name)
-	if err != nil {
-		return err
-	}
+	// modelExistResp, err := client.CheckModel(args.Type, args.Name)
+	// if err != nil {
+	// 	return err
+	// }
 
-	if modelExistResp.Data.Exists {
-		if !args.Overwrite {
-			return cli.Exit(fmt.Sprintf("Model already exists, use --overwrite to overwrite it"), meta.LoadError)
-		}
-	}
+	// if modelExistResp.Data.Exists {
+	// 	if !args.Overwrite {
+	// 		return cli.Exit(fmt.Sprintf("Model already exists, use --overwrite to overwrite it"), meta.LoadError)
+	// 	}
+	// }
 
 	var filesToUpload []*lib.FileToUpload
 
+	// TODO: upload dir is not supported
 	if stat.IsDir() {
+		return cli.Exit("uploading directory is not supported yet", meta.LoadError)
 		// recursively upload all files in the directory
-		err = filepath.Walk(modelPath, func(path string, info os.FileInfo, err error) error {
-			if err != nil {
-				return err
-			}
+		// err = filepath.Walk(modelPath, func(path string, info os.FileInfo, err error) error {
+		// 	if err != nil {
+		// 		return err
+		// 	}
 
-			for _, uploadPath := range meta.IgnoreUploadDirs {
-				if filepath.Base(path) == uploadPath {
-					if info.IsDir() {
-						return filepath.SkipDir
-					}
-				}
-			}
+		// 	for _, uploadPath := range meta.IgnoreUploadDirs {
+		// 		if filepath.Base(path) == uploadPath {
+		// 			if info.IsDir() {
+		// 				return filepath.SkipDir
+		// 			}
+		// 		}
+		// 	}
 
-			if !info.IsDir() {
-				// calculate file relative path
-				relPath, err := filepath.Rel(modelPath, path)
-				if err != nil {
-					return err
-				}
+		// 	if !info.IsDir() {
+		// 		// calculate file relative path
+		// 		relPath, err := filepath.Rel(modelPath, path)
+		// 		if err != nil {
+		// 			return err
+		// 		}
 
-				filesToUpload = append(filesToUpload, &lib.FileToUpload{
-					Path:    filepath.ToSlash(path),
-					RelPath: filepath.ToSlash(relPath),
-					Size:    info.Size(),
-				})
-			}
+		// 		filesToUpload = append(filesToUpload, &lib.FileToUpload{
+		// 			Path:    filepath.ToSlash(path),
+		// 			RelPath: filepath.ToSlash(relPath),
+		// 			Size:    info.Size(),
+		// 		})
+		// 	}
 
-			return err
-		})
+		// 	return err
+		// })
 
-		if err != nil {
-			return cli.Exit(fmt.Errorf("traverse dir failed: %s", err), meta.LoadError)
-		}
+		// if err != nil {
+		// 	return cli.Exit(fmt.Errorf("traverse dir failed: %s", err), meta.LoadError)
+		// }
 	} else {
 		// 上传单个文件
 		relPath, err := filepath.Rel(filepath.Dir(modelPath), modelPath)
@@ -123,13 +144,17 @@ func Upload(c *cli.Context) error {
 	if total < 1 {
 		return cli.Exit("No files found to upload, you cannot upload an empty directory!", meta.LoadError)
 	}
+	if total > 1 {
+		return cli.Exit("Uploadig multiple files is not supported yet!", meta.LoadError)
+	}
 
 	// start to upload files
 	fmt.Fprintln(os.Stdout, fmt.Sprintf("Start uploading %d files", total))
 
+	// TODO: upload multiple files is not supported
 	for i, fileToUpload := range filesToUpload {
 		// calculate file hash
-		sha256sum, err := calculateHash(fileToUpload.Path)
+		sha256sum, md5_hash, err := calculateHash(fileToUpload.Path)
 		if err != nil {
 			return err
 		}
@@ -138,17 +163,17 @@ func Upload(c *cli.Context) error {
 		logs.Debugf(fmt.Sprintf("file: %s, signature: %s", fileToUpload.RelPath, fileToUpload.Signature))
 
 		// pass sha256sum to the server
-		sign, err := client.Sign(sha256sum)
+		ossCert, err := client.OssSign(sha256sum, args.Type)
 		if err != nil {
 			return err
 		}
 
 		fileIndex := fmt.Sprintf("%d/%d", i+1, total)
 
-		fileRecord := sign.Data.File
+		fileRecord := ossCert.Data.File
 		if fileRecord.Id == 0 {
 			// upload file
-			fileStorage := sign.Data.Storage
+			fileStorage := ossCert.Data.Storage
 			ossClient, err := lib.NewAliOssStorageClient(fileStorage.Endpoint, fileStorage.Bucket, fileRecord.AccessKeyId, fileRecord.AccessKeySecret, fileRecord.SecurityToken)
 			if err != nil {
 				return err
@@ -160,12 +185,13 @@ func Upload(c *cli.Context) error {
 			}
 
 			// commit
-			newFileRecord, err := client.CommitFile(fileToUpload.Signature, fileRecord.ObjectKey)
+			_, err = client.CommitFileV2(fileToUpload.Signature, fileRecord.ObjectKey, md5_hash, args.Type)
+
 			if err != nil {
 				return err
 			}
-			fileToUpload.Id = newFileRecord.Data.File.Id
-			fileToUpload.RemoteKey = newFileRecord.Data.File.ObjectKey
+			// fileToUpload.Id = newFileRecord.Data.File.Id
+			// fileToUpload.RemoteKey = newFileRecord.Data.File.ObjectKey
 		} else {
 			// skip
 			fileToUpload.Id = fileRecord.Id
@@ -173,33 +199,36 @@ func Upload(c *cli.Context) error {
 
 			fmt.Fprintln(os.Stdout, fmt.Sprintf("(%s) %s Already Uploaded", fileIndex, fileToUpload.RelPath))
 		}
-	}
-
-	// commit model
-	modelFiles := lo.Map[*lib.FileToUpload, *lib.ModelFile](filesToUpload, func(file *lib.FileToUpload, _ int) *lib.ModelFile {
-		return &lib.ModelFile{
-			Sign: file.Signature,
-			Path: file.RelPath,
+		versionInfo := lib.ModelVersion{
+			Version:      modelVersion,
+			BaseModel:    args.BaseModel,
+			Introduction: args.Intro,
+			Public:       args.Public,
+			Sign:         sha256sum,
+			Path:         modelPath,
+			CoverUrls:    cover_urls,
 		}
-	})
+		versionList := []*lib.ModelVersion{&versionInfo}
 
-	_, err = client.CommitModel(args.Name, args.Type, args.Overwrite, modelFiles)
-	if err != nil {
-		return err
+		_, err = client.CommitModelV2(args.Name, args.Type, versionList)
+		if err != nil {
+			return err
+		}
 	}
+
 	fmt.Fprintf(os.Stdout, "Uploaded successfully\n")
 
 	return nil
 }
 
 // calculateHash calculates the SHA256 hash of a file.
-func calculateHash(filePath string) (string, error) {
+func calculateHash(filePath string) (string, string, error) {
 	// read file and calculate CRC64
 	tabECMA := crc64.MakeTable(crc64.ECMA)
 	hashCRC := crc64.New(tabECMA)
 	file, err := os.Open(filePath)
 	if err != nil {
-		return "", err
+		return "", "", err
 	}
 	defer file.Close()
 	io.Copy(hashCRC, file)
@@ -208,7 +237,7 @@ func calculateHash(filePath string) (string, error) {
 	// reset file pointer to the beginning
 	_, err = file.Seek(0, 0)
 	if err != nil {
-		return "", err
+		return "", "", err
 	}
 
 	// MD5
@@ -222,7 +251,7 @@ func calculateHash(filePath string) (string, error) {
 	hashBytes := hasher.Sum(nil)
 	hashString := hex.EncodeToString(hashBytes)
 	logs.Debugf("file: %s, crc64: %d, md5: %s, sha256: %s", filePath, crc1, md5Str, hashString)
-	return hashString, nil
+	return hashString, md5Str, nil
 }
 
 func checkType(args *config.Argument, required bool) error {
@@ -282,4 +311,53 @@ func checkName(args *config.Argument, required bool) error {
 		return cli.Exit(fmt.Errorf("invalid \"name\", it can only include numbers, English letters, and \"-\" or \"_\""), meta.LoadError)
 	}
 	return nil
+}
+
+func getVersion(args *config.Argument) string {
+	defaultVersion := "v1"
+	if args.ModelVersion != "" {
+		return args.ModelVersion
+	}
+	return defaultVersion
+}
+
+func checkBaseModel(args *config.Argument, required bool) error {
+	if required && args.BaseModel == "" {
+		return cli.Exit("The following arguments are required: base_model", meta.LoadError)
+	}
+	isValid := isValidBaseModel(args.BaseModel)
+	if !isValid {
+		return cli.Exit("Base model not supported: "+args.BaseModel, meta.LoadError)
+	}
+	return nil
+}
+
+func checkCoverUrl(args *config.Argument, required bool) ([]string, error) {
+	if required && args.CoverUrls == "" {
+		return nil, cli.Exit("The following arguments are required: cover_urls", meta.LoadError)
+	}
+	if args.CoverUrls == "" {
+		return nil, nil
+	}
+	urlArray := strings.Split(args.CoverUrls, ",")
+
+	return urlArray, nil
+}
+
+func checkModelIntro(args *config.Argument, required bool) (string, error) {
+	if required && args.Intro == "" {
+		return "", cli.Exit("The following arguments are required: intro", meta.LoadError)
+	}
+	return args.Intro, nil
+}
+
+func isValidBaseModel(basemodel string) bool {
+	valid, exists := meta.SupportedBaseModels[basemodel]
+	if !exists {
+		logs.Debugf("Base model not exists: ", basemodel)
+	}
+	if exists && !valid {
+		logs.Debugf("Base model not valid: ", basemodel)
+	}
+	return valid
 }

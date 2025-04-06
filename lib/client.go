@@ -5,16 +5,17 @@ import (
 	"crypto/tls"
 	"encoding/json"
 	"fmt"
-	"github.com/cloudwego/hertz/cmd/hz/util/logs"
-	"github.com/samber/lo"
-	"github.com/siliconflow/siliconcloud-cli/meta"
-	"github.com/urfave/cli/v2"
 	"io/ioutil"
 	"net/http"
 	"net/url"
 	"reflect"
 	"strings"
 	"unicode"
+
+	"github.com/cloudwego/hertz/cmd/hz/util/logs"
+	"github.com/samber/lo"
+	"github.com/siliconflow/siliconcloud-cli/meta"
+	"github.com/urfave/cli/v2"
 )
 
 // Client siliconCloud client
@@ -54,6 +55,7 @@ func (c *Client) UserInfo() (*Response[UserInfo], error) {
 	return handleResponse[UserInfo](body)
 }
 
+// Deprecated: not compatible with current SCX, use OssSign instead
 func (c *Client) Sign(signature string) (*Response[FilesResp], error) {
 	serverUrl := fmt.Sprintf("%s/x/%s/files/%s", c.Domain, meta.APIv1, signature)
 	body, statusCode, err := c.doGet(serverUrl, nil, c.authHeader())
@@ -67,6 +69,23 @@ func (c *Client) Sign(signature string) (*Response[FilesResp], error) {
 	return handleResponse[FilesResp](body)
 }
 
+func (c *Client) OssSign(signature string, modelType string) (*Response[FilesResp], error) {
+
+	// if file exists, return file.id, else return oss certificate
+	// serverUrl := fmt.Sprintf("%s:%s/%s/sign?%s=%s&type=%s", c.Host, c.Port, meta.BizyUrl, meta.SignMethod, signature, modelType)
+	serverUrl := fmt.Sprintf("%s/x/%s/files/%s", c.Domain, meta.APIv1, signature)
+	body, statusCode, err := c.doGet(serverUrl, OssSignReq{Type: modelType}, c.authHeader())
+	if err != nil {
+		return nil, cli.Exit(err, meta.ServerError)
+	}
+	if statusCode != http.StatusOK {
+		return nil, cli.Exit(handleError(body, statusCode), meta.ServerError)
+	}
+	return handleResponse[FilesResp](body)
+
+}
+
+// Deprecated: not compatible with current SCX, use CommitFileV2 instead
 func (c *Client) CommitFile(signature string, objectKey string) (*Response[FilesResp], error) {
 	serverUrl := fmt.Sprintf("%s/x/%s/files", c.Domain, meta.APIv1)
 	body, statusCode, err := c.doPost(serverUrl, FileCommitReq{
@@ -83,6 +102,25 @@ func (c *Client) CommitFile(signature string, objectKey string) (*Response[Files
 	return handleResponse[FilesResp](body)
 }
 
+func (c *Client) CommitFileV2(signature string, objectKey string, md5_hash string, modelType string) (*Response[FilesResp], error) {
+	serverUrl := fmt.Sprintf("%s/x/%s/files", c.Domain, meta.APIv1)
+	body, statusCode, err := c.doPost(serverUrl, FileCommitReqV2{
+		Sign:      signature,
+		ObjectKey: objectKey,
+		Md5Hash:   md5_hash,
+		ModelType: modelType,
+	}, c.authHeader())
+	if err != nil {
+		return nil, cli.Exit(err, meta.ServerError)
+	}
+
+	if statusCode != http.StatusOK {
+		return nil, cli.Exit(handleError(body, statusCode), meta.ServerError)
+	}
+	return handleResponse[FilesResp](body)
+}
+
+// Deprecated: not compatible with current SCX, use CommitModelV2 instead
 func (c *Client) CommitModel(modelName string, modelType string, overwrite bool, modelFiles []*ModelFile) (*Response[ModelCommitResp], error) {
 	serverUrl := fmt.Sprintf("%s/x/%s/models", c.Domain, meta.APIv1)
 	body, statusCode, err := c.doPost(serverUrl, ModelCommitReq{
@@ -90,6 +128,23 @@ func (c *Client) CommitModel(modelName string, modelType string, overwrite bool,
 		Type:      modelType,
 		Overwrite: overwrite,
 		Files:     modelFiles,
+	}, c.authHeader())
+	if err != nil {
+		return nil, cli.Exit(err, meta.ServerError)
+	}
+
+	if statusCode != http.StatusOK {
+		return nil, cli.Exit(handleError(body, statusCode), meta.ServerError)
+	}
+	return handleResponse[ModelCommitResp](body)
+}
+
+func (c *Client) CommitModelV2(modelName string, modelType string, modelVersion []*ModelVersion) (*Response[ModelCommitResp], error) {
+	serverUrl := fmt.Sprintf("%s/x/%s/bizy_models", c.Domain, meta.APIv1)
+	body, statusCode, err := c.doPost(serverUrl, ModelCommitReqV2{
+		Name:     modelName,
+		Type:     modelType,
+		Versions: modelVersion,
 	}, c.authHeader())
 	if err != nil {
 		return nil, cli.Exit(err, meta.ServerError)
@@ -117,6 +172,26 @@ func (c *Client) ListModel(modelType string, public bool) (*Response[ModelListRe
 	}
 	return handleResponse[ModelListResp](body)
 }
+
+// delete it if no need to update func: `ListModel`
+// func (c *Client) ListModelV2(mode string, current int, pagesize int, modelTypes []string, baseModels []string, sort string) (*Response[ModelListResp], error) {
+// 	serverUrl := fmt.Sprintf("%s/x/%s/bizy_models/%s", c.Domain, meta.APIv1, mode)
+// 	param := ModelListReqV2{
+// 		Current: 	current,
+// 		PageSize: 	pagesize,
+// 		Types:   	modelTypes,
+// 		Sort: 		sort,
+// 	}
+// 	body, statusCode, err := c.doGet(serverUrl, param, c.authHeader())
+// 	if err != nil {
+// 		return nil, cli.Exit(err, meta.ServerError)
+// 	}
+
+// 	if statusCode != http.StatusOK {
+// 		return nil, cli.Exit(handleError(body, statusCode), meta.ServerError)
+// 	}
+// 	return handleResponse[ModelListResp](body)
+// }
 
 func (c *Client) ListModelFiles(modelType string, modelName string, extName string, public bool) (*Response[ModelListFilesResp], error) {
 	serverUrl := fmt.Sprintf("%s/x/%s/models/files", c.Domain, meta.APIv1)
