@@ -42,6 +42,9 @@ In order to build it from source you must:
      make build && ./execs/siliconcloud
      ```
 
+- For Windows OS, run `make build_windows`.
+- For MacOS, run `make build_mac`.
+- For Linux, run `make build_linux` or `make build_linux_arm64`.
 ---
 
 ## Quick start
@@ -67,17 +70,31 @@ siliconcloud logout
 To upload files to the silicon cloud, run the following CLI:
 
 ```bash
-siliconcloud upload -n mymodel -t bizyair/checkpoint -p /local/path/directory-or-file
+siliconcloud upload -n mymodel -t [LoRA | Controlnet] -p /local/path/file -b basemodel
 ```
 
-You can specify overwrite flag to overwrite the model if it already exists in the silicon cloud.
+~~You can specify overwrite flag to overwrite the model if it already exists in the silicon cloud.~~
 
 ```bash
-siliconcloud upload -n mymodel -t bizyair/checkpoint -p /local/path/directory-or-file --overwrite
+(Deprecated) siliconcloud upload -n mymodel -t bizyair/checkpoint -p /local/path/file --overwrite
 ```
 
+You can specify model name, model type, base model and path to upload by using the `-n`, `-t`, `-b` and `-p` flags respectively.
 
-You can specify model name, model type and path to upload by using the `-n`, `-t` and `-p` flags respectively.
+You can specify version names, introductions, and model cover urls using `-v`, `-i`, `-cover` flags respectively.
+
+To upload multiple covers for one version, use ";" as a separator.
+
+To upload multiple versions of your model, you can provide a list of values for each flag. Each value in the list corresponds to a specific version of your model. For example, consider the following usage:
+
+```bash
+siliconcloud upload -n mymodel -t [Type] \
+-v "v1" -b basemodel1 -p /local/path/file1 -i "file1" -cover "${url1};${url2}" \
+-v "v2" -b basemodel2 -p /local/path/file2 -cover "${url3}" \
+-v "v3" -b basemodel3 -p /local/path/file3 \
+...
+```
+Default version names will be used if `-v` is not specified.
 
 ### View Models
 To view all your models in the silicon cloud, run the following CLI:

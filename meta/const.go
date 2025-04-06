@@ -20,7 +20,7 @@ const (
 
 const (
 	DefaultDomain = "https://bizyair-api.siliconflow.cn"
-	AuthDomain	  = "https://api.siliconflow.cn"
+	AuthDomain    = "https://api.siliconflow.cn"
 )
 
 const (
@@ -43,6 +43,10 @@ const (
 	TypeUpscale      UploadFileType = "bizyair/upscale"
 	TypeDataset      UploadFileType = "bizyair/dataset"
 	TypeOther        UploadFileType = "other"
+
+	// new version
+	TypeLoraV2       UploadFileType = "LoRA"
+	TypeControlNetV2 UploadFileType = "Controlnet"
 )
 
 var ModelTypes = []UploadFileType{
@@ -57,6 +61,10 @@ var ModelTypes = []UploadFileType{
 	TypeUpscale,
 	TypeDataset,
 	TypeOther,
+
+	// new version
+	TypeLoraV2,
+	TypeControlNetV2,
 }
 
 var ModelTypesStr = func(arr []UploadFileType) string {
