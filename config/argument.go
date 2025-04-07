@@ -9,7 +9,7 @@ type Argument struct {
 	Verbose    bool   // print verbose log
 	BaseDomain string // request domain
 	ApiKey     string // api key
-	Path       string // local path to upload
+	Path       []string // local path to upload
 	Type       string // type of the file to upload
 	Name       string // name of the model
 	ExtName    string // extension name of the model
@@ -18,6 +18,15 @@ type Argument struct {
 	FormatTree bool   // format tree
 	Overwrite  bool   // overwrite model
 	Public     bool   // only show public model
+	// Host			string
+	// Port			string
+	ModelVersion 	[]string
+	VersionPublic	[]string
+	BaseModel   []string
+	CoverUrls   []string
+	Intro       []string
+	Current		int
+	PageSize	int
 }
 
 func NewArgument() *Argument {
@@ -36,6 +45,12 @@ func (arg *Argument) Parse(c *cli.Context, cmd string) (*Argument, error) {
 
 func (arg *Argument) parseStringSlice(c *cli.Context) {
 	// parse string slice
+	arg.ModelVersion = c.StringSlice("version")
+	arg.Intro = c.StringSlice("intro")
+	arg.Path = c.StringSlice("path")
+	arg.CoverUrls = c.StringSlice("cover")
+	arg.BaseModel = c.StringSlice("base")
+	arg.VersionPublic = c.StringSlice("vpub")
 }
 
 // Fork can copy its own parameters to a new argument

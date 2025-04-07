@@ -1,8 +1,9 @@
 package meta
 
 import (
-	"github.com/samber/lo"
 	"strings"
+
+	"github.com/samber/lo"
 )
 
 const (
@@ -14,6 +15,7 @@ const (
 	CmdLs      = "ls"
 	CmdLsFiles = "ls-files"
 	CmdRm      = "rm"
+	CmdCommit  = "commit"
 )
 
 const (
@@ -41,6 +43,10 @@ const (
 	TypeUpscale      UploadFileType = "bizyair/upscale"
 	TypeDataset      UploadFileType = "bizyair/dataset"
 	TypeOther        UploadFileType = "other"
+
+	// new version
+	TypeLoraV2       UploadFileType = "LoRA"
+	TypeControlNetV2 UploadFileType = "Controlnet"
 )
 
 var ModelTypes = []UploadFileType{
@@ -55,6 +61,10 @@ var ModelTypes = []UploadFileType{
 	TypeUpscale,
 	TypeDataset,
 	TypeOther,
+
+	// new version
+	TypeLoraV2,
+	TypeControlNetV2,
 }
 
 var ModelTypesStr = func(arr []UploadFileType) string {
@@ -89,4 +99,15 @@ const (
 var IgnoreUploadDirs = []string{
 	".git",
 	".idea",
+}
+
+var SupportedBaseModels = map[string]bool{
+	"Flux.1 D":  true,
+	"SDXL":      true,
+	"SD 1.5":    true,
+	"SD 3.5":    true,
+	"Pony":      true,
+	"Kolors":    true,
+	"Hunyuan 1": true,
+	"Other":     true,
 }

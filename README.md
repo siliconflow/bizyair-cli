@@ -1,23 +1,20 @@
-<<<<<<< HEAD
-# bizyair-cli
-=======
-<h1 align="center">Silicon Cloud CLI</h1>
+<h1 align="center">BizyAir-cli</h1>
 
 <p align="center">
 <p>
 
-The Silicon Cloud CLI is an open source tool, you can get the latest version from [GitHub](https://github.com/siliconflow/siliconcloud-cli).
+The BizyAir CLI is an open source tool, you can get the latest version from [GitHub](https://github.com/siliconflow/bizyair-cli).
 
 ## Introduction
-The Silicon Cloud CLI is a command line tool for managing your files on silicon cloud. It provides an easy way to upload,  and manage your silicon cloud files.
+The BizyAir CLI is a command line tool for managing your files on bizyair. It provides an easy way to upload,  and manage your bizyair files.
 
 ## CLI Releases
 
-All releases please [click here](https://github.com/siliconflow/siliconcloud--cli/releases).
+All releases please [click here](https://github.com/siliconflow/bizyair-cli/releases).
 
 ## Installation
-SiliconCloud-CLI is available on Linux, macOS and Windows platforms.
-Binaries for Linux, Windows and Mac are available as tarballs in the [release page](https://github.com/siliconcloud-/siliconcloud--cli/releases).
+BizyAir-CLI is available on Linux, macOS and Windows platforms.
+Binaries for Linux, Windows and Mac are available as tarballs in the [release page](https://github.com/siliconflow/bizyair-cli/releases).
 
 - Linux
   ```shell
@@ -30,12 +27,12 @@ Binaries for Linux, Windows and Mac are available as tarballs in the [release pa
 
   ```shell
   # NOTE: The dev version will be in effect!
-  go install github.com/siliconflow/siliconcloud-cli@latest
+  go install github.com/siliconflow/bizyair-cli@latest
   ```
 
 ## Building From Source
 
-SiliconCloud-CLI is currently using GO v1.22.X or above.
+BizyAir-CLI is currently using GO v1.22.X or above.
 In order to build it from source you must:
 
 1. Clone the repo
@@ -45,12 +42,15 @@ In order to build it from source you must:
      make build && ./execs/siliconcloud
      ```
 
+- For Windows OS, run `make build_windows`.
+- For MacOS, run `make build_mac`.
+- For Linux, run `make build_linux` or `make build_linux_arm64`.
 ---
 
 ## Quick start
 
 ### Login
-The Silicon Cloud CLI uses api-keys to authenticate client. To login your machine, run the following CLI:
+The BizyAir CLI uses api-keys to authenticate client. To login your machine, run the following CLI:
 
 ```bash
 # if you have an environment variable SF_API_KEY set with your api key
@@ -70,17 +70,31 @@ siliconcloud logout
 To upload files to the silicon cloud, run the following CLI:
 
 ```bash
-siliconcloud upload -n mymodel -t bizyair/checkpoint -p /local/path/directory-or-file
+siliconcloud upload -n mymodel -t [LoRA | Controlnet] -p /local/path/file -b basemodel
 ```
 
-You can specify overwrite flag to overwrite the model if it already exists in the silicon cloud.
+~~You can specify overwrite flag to overwrite the model if it already exists in the silicon cloud.~~
 
 ```bash
-siliconcloud upload -n mymodel -t bizyair/checkpoint -p /local/path/directory-or-file --overwrite
+(Deprecated) siliconcloud upload -n mymodel -t bizyair/checkpoint -p /local/path/file --overwrite
 ```
 
+You can specify model name, model type, base model and path to upload by using the `-n`, `-t`, `-b` and `-p` flags respectively.
 
-You can specify model name, model type and path to upload by using the `-n`, `-t` and `-p` flags respectively.
+You can specify version names, introductions, and model cover urls using `-v`, `-i`, `-cover` flags respectively.
+
+To upload multiple covers for one version, use ";" as a separator.
+
+To upload multiple versions of your model, you can provide a list of values for each flag. Each value in the list corresponds to a specific version of your model. For example, consider the following usage:
+
+```bash
+siliconcloud upload -n mymodel -t [Type] \
+-v "v1" -b basemodel1 -p /local/path/file1 -i "file1" -cover "${url1};${url2}" \
+-v "v2" -b basemodel2 -p /local/path/file2 -cover "${url3}" \
+-v "v3" -b basemodel3 -p /local/path/file3 \
+...
+```
+Default version names will be used if `-v` is not specified.
 
 ### View Models
 To view all your models in the silicon cloud, run the following CLI:
@@ -119,4 +133,3 @@ siliconcloud model rm -n mymodel -t checkpoint
 ```
 
 You must specify model name and model type by using the `-n` and `-t` flags respectively.
->>>>>>> 9c5efe5
