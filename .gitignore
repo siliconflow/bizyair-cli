@@ -23,3 +23,12 @@ go.work.sum
 
 # env file
 .env
+.idea
+.vscode
+temp
+.exe
+execs
+
+# vscode debug
+__debug*
+>>>>>>> feat/upload-multiversion

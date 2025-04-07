@@ -1,0 +1,113 @@
+package meta
+
+import (
+	"strings"
+
+	"github.com/samber/lo"
+)
+
+const (
+	CmdLogin   = "login"
+	CmdWhoami  = "whoami"
+	CmdLogout  = "logout"
+	CmdUpload  = "upload"
+	CmdModel   = "model"
+	CmdLs      = "ls"
+	CmdLsFiles = "ls-files"
+	CmdRm      = "rm"
+	CmdCommit  = "commit"
+)
+
+const (
+	DefaultDomain = "https://bizyair-api.siliconflow.cn"
+	AuthDomain    = "https://api.siliconflow.cn"
+)
+
+const (
+	LoadError   = 1
+	ServerError = 2
+	HttpError   = 3
+)
+
+type UploadFileType string
+
+const (
+	TypeCheckpoint   UploadFileType = "bizyair/checkpoint"
+	TypeVae          UploadFileType = "bizyair/vae"
+	TypeLora         UploadFileType = "bizyair/lora"
+	TypeControlNet   UploadFileType = "bizyair/controlnet"
+	TypeEmbedding    UploadFileType = "bizyair/embedding"
+	TypeHyperNetwork UploadFileType = "bizyair/hypernetwork"
+	TypeClip         UploadFileType = "bizyair/clip"
+	TypeClipVision   UploadFileType = "bizyair/clip_vision"
+	TypeUpscale      UploadFileType = "bizyair/upscale"
+	TypeDataset      UploadFileType = "bizyair/dataset"
+	TypeOther        UploadFileType = "other"
+
+	// new version
+	TypeLoraV2       UploadFileType = "LoRA"
+	TypeControlNetV2 UploadFileType = "Controlnet"
+)
+
+var ModelTypes = []UploadFileType{
+	TypeCheckpoint,
+	TypeVae,
+	TypeLora,
+	TypeControlNet,
+	TypeEmbedding,
+	TypeHyperNetwork,
+	TypeClip,
+	TypeClipVision,
+	TypeUpscale,
+	TypeDataset,
+	TypeOther,
+
+	// new version
+	TypeLoraV2,
+	TypeControlNetV2,
+}
+
+var ModelTypesStr = func(arr []UploadFileType) string {
+	strs := lo.Map[UploadFileType, string](arr, func(v UploadFileType, _ int) string {
+		return string(v)
+	})
+	return "'" + strings.Join(strs, "','") + "'"
+}(ModelTypes)
+
+const (
+	PercentEncode           = "%2F"
+	HTTPGet                 = "GET"
+	HTTPPost                = "POST"
+	HTTPPut                 = "PUT"
+	HTTPDelete              = "DELETE"
+	HeaderAuthorization     = "Authorization"
+	HeaderContentType       = "Content-Type"
+	HeaderSiliconCliVersion = "X-Silicon-CLI-Version"
+	JsonContentType         = "application/json"
+	APIv1                   = "v1"
+	SfFolder                = ".siliconflow"
+	SfApiKey                = "apikey"
+	OSWindows               = "windows"
+	EnvUserProfile          = "USERPROFILE"
+	EnvHome                 = "HOME"
+	EnvAPIKey               = "SF_API_KEY"
+	OSSObjectKey            = "https://%s.%s.aliyuncs.com/%s"
+	OKCode                  = 20000
+)
+
+// IgnoreUploadDirs ignore files when upload
+var IgnoreUploadDirs = []string{
+	".git",
+	".idea",
+}
+
+var SupportedBaseModels = map[string]bool{
+	"Flux.1 D":  true,
+	"SDXL":      true,
+	"SD 1.5":    true,
+	"SD 3.5":    true,
+	"Pony":      true,
+	"Kolors":    true,
+	"Hunyuan 1": true,
+	"Other":     true,
+}

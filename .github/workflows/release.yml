@@ -1,0 +1,131 @@
+on:
+  push:
+    tags:
+      - 'v*'
+name: Create Release
+
+jobs:
+  create_release:
+    name: Create new release
+    runs-on: ubuntu-latest
+    env:
+      GITHUB_TOKEN: ${{ secrets.GH_TOKEN }} # This token is provided by Actions, you do not need to create your own token
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          submodules: false
+          ref: ${{ github.ref }}
+      - name: Create Release
+        run: |
+          bash tools/create_release.sh ${{ github.ref_name }}
+  build_for_macosx:
+    needs: [ create_release ]
+    name: Build for MacOSX
+    runs-on: macos-12
+    env:
+      GITHUB_TOKEN: ${{ secrets.GH_TOKEN }} # This token is provided by Actions, you do not need to create your own token
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          submodules: true
+          ref: ${{github.ref}}
+      - name: Set up Go
+        uses: actions/setup-go@v4
+        with:
+          go-version: '1.22'
+      - name: Build
+        run: |
+          TAG=${{ github.ref_name }}
+          VERSION=${TAG#v}
+          GIT_REV=`git rev-parse --short HEAD`
+          SOURCE_DATE_EPOCH=`date +%s`
+          TZ=GMT
+          DATE=`date -j -f "%s" ${SOURCE_DATE_EPOCH} +"%Y-%m-%dT%H:%M:%SZ"`
+          PACKAGE=github.com/siliconflow/siliconcloud-cli
+          # build for Linux amd64
+          CGO_ENABLED=0 GOOS=darwin GOARCH=amd64 go build -ldflags "-w -s -X '${PACKAGE}/meta.Version=${VERSION}' -X '${PACKAGE}/meta.Commit=${GIT_REV}' -X '${PACKAGE}/meta.BuildDate=${DATE}'" -o out/siliconcloud main.go
+          tar zcvf out/siliconcloud-cli-macosx-${VERSION}-amd64.tgz -C out siliconcloud
+          bash tools/upload_asset.sh ${VERSION} out/siliconcloud-cli-macosx-${VERSION}-amd64.tgz
+          # build for Linux arm64
+          CGO_ENABLED=0 GOOS=darwin GOARCH=arm64 go build -ldflags "-w -s -X '${PACKAGE}/meta.Version=${VERSION}' -X '${PACKAGE}/meta.Commit=${GIT_REV}' -X '${PACKAGE}/meta.BuildDate=${DATE}'" -o out/siliconcloud main.go
+          tar zcvf out/siliconcloud-cli-macosx-${VERSION}-arm64.tgz -C out siliconcloud
+          bash tools/upload_asset.sh ${VERSION} out/siliconcloud-cli-macosx-${VERSION}-arm64.tgz
+  build_for_linux:
+    needs: [ create_release ]
+    name: Build for Linux
+    runs-on: ubuntu-latest
+    env:
+      GITHUB_TOKEN: ${{ secrets.GH_TOKEN }} # This token is provided by Actions, you do not need to create your own token
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          submodules: true
+          ref: ${{github.ref}}
+      - name: Set up Go
+        uses: actions/setup-go@v4
+        with:
+          go-version: '1.22'
+      - name: Build
+        run: |
+          TAG=${{ github.ref_name }}
+          VERSION=${TAG#v}
+          GIT_REV=`git rev-parse --short HEAD`
+          SOURCE_DATE_EPOCH=`date +%s`
+          DATE=`date -u -d @${SOURCE_DATE_EPOCH} +"%Y-%m-%dT%H:%M:%SZ"`
+          PACKAGE=github.com/siliconflow/siliconcloud-cli
+          # build for Linux amd64
+          CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags "-w -s -X '${PACKAGE}/meta.Version=${VERSION}' -X '${PACKAGE}/meta.Commit=${GIT_REV}' -X '${PACKAGE}/meta.BuildDate=${DATE}'" -o out/siliconcloud main.go
+          tar zcvf out/siliconcloud-cli-linux-${VERSION}-amd64.tgz -C out siliconcloud
+          bash tools/upload_asset.sh ${VERSION} out/siliconcloud-cli-linux-${VERSION}-amd64.tgz
+          # build for Linux arm64
+          CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -ldflags "-w -s -X '${PACKAGE}/meta.Version=${VERSION}' -X '${PACKAGE}/meta.Commit=${GIT_REV}' -X '${PACKAGE}/meta.BuildDate=${DATE}'" -o out/siliconcloud main.go
+          tar zcvf out/siliconcloud-cli-linux-${VERSION}-arm64.tgz -C out siliconcloud
+          bash tools/upload_asset.sh ${VERSION} out/siliconcloud-cli-linux-${VERSION}-arm64.tgz
+  build_for_windows:
+    needs: [ create_release ]
+    name: Build for Windows
+    runs-on: windows-latest
+    env:
+      GITHUB_TOKEN: ${{ secrets.GH_TOKEN }}
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          submodules: true
+          ref: ${{github.ref}}
+      - name: Set up Go
+        uses: actions/setup-go@v4
+        with:
+          go-version: '1.22'
+      - name: Build
+        shell: powershell
+        run: |
+          $tag = "${{ github.ref_name }}"
+          $version = $tag -replace 'v', ''
+          $git_rev = git rev-parse --short HEAD
+          $package = "github.com/siliconflow/siliconcloud-cli"
+          $source_date = (Get-Date).ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ")
+          $env:GOOS = "windows"
+          $env:GOARCH = "amd64"
+          $env:CGO_ENABLED = "0"
+          go build -ldflags "-w -s -X '$package/meta.Version=$version' -X '$package/meta.Commit=$git_rev' -X '$package/meta.BuildDate=$source_date'" -o ./out/siliconcloud.exe main.go
+          Compress-Archive -Path ./out/siliconcloud.exe -DestinationPath ./out/siliconcloud-cli-windows-${version}-amd64.zip
+          bash ./tools/upload_asset.sh ${version} ./out/siliconcloud-cli-windows-${version}-amd64.zip
+  finish_release:
+    needs: [ build_for_macosx, build_for_linux, build_for_windows ]
+    name: Finish the release
+    runs-on: ubuntu-latest
+    env:
+      GITHUB_TOKEN: ${{ secrets.GH_TOKEN }}
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          submodules: false
+          ref: ${{github.ref}}
+      - uses: dcarbone/install-jq-action@v2.1.0
+      - name: Download assets and compute shasum
+        run: |
+          TAG=${{ github.ref_name }}
+          VERSION=${TAG#v}
+          bash tools/download_assets.sh ${VERSION}
+          bash tools/upload_asset.sh ${VERSION} checksums.sha256
+          bash tools/finish_release.sh ${VERSION}
