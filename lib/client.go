@@ -55,19 +55,6 @@ func (c *Client) UserInfo() (*Response[UserInfo], error) {
 	return handleResponse[UserInfo](body)
 }
 
-// Deprecated: not compatible with current SCX, use OssSign instead
-func (c *Client) Sign(signature string) (*Response[FilesResp], error) {
-	serverUrl := fmt.Sprintf("%s/x/%s/files/%s", c.Domain, meta.APIv1, signature)
-	body, statusCode, err := c.doGet(serverUrl, nil, c.authHeader())
-	if err != nil {
-		return nil, cli.Exit(err, meta.ServerError)
-	}
-
-	if statusCode != http.StatusOK {
-		return nil, cli.Exit(handleError(body, statusCode), meta.ServerError)
-	}
-	return handleResponse[FilesResp](body)
-}
 
 func (c *Client) OssSign(signature string, modelType string) (*Response[FilesResp], error) {
 
@@ -85,22 +72,6 @@ func (c *Client) OssSign(signature string, modelType string) (*Response[FilesRes
 
 }
 
-// Deprecated: not compatible with current SCX, use CommitFileV2 instead
-func (c *Client) CommitFile(signature string, objectKey string) (*Response[FilesResp], error) {
-	serverUrl := fmt.Sprintf("%s/x/%s/files", c.Domain, meta.APIv1)
-	body, statusCode, err := c.doPost(serverUrl, FileCommitReq{
-		Sign:      signature,
-		ObjectKey: objectKey,
-	}, c.authHeader())
-	if err != nil {
-		return nil, cli.Exit(err, meta.ServerError)
-	}
-
-	if statusCode != http.StatusOK {
-		return nil, cli.Exit(handleError(body, statusCode), meta.ServerError)
-	}
-	return handleResponse[FilesResp](body)
-}
 
 func (c *Client) CommitFileV2(signature string, objectKey string, md5_hash string, modelType string) (*Response[FilesResp], error) {
 	serverUrl := fmt.Sprintf("%s/x/%s/files", c.Domain, meta.APIv1)
@@ -120,24 +91,6 @@ func (c *Client) CommitFileV2(signature string, objectKey string, md5_hash strin
 	return handleResponse[FilesResp](body)
 }
 
-// Deprecated: not compatible with current SCX, use CommitModelV2 instead
-func (c *Client) CommitModel(modelName string, modelType string, overwrite bool, modelFiles []*ModelFile) (*Response[ModelCommitResp], error) {
-	serverUrl := fmt.Sprintf("%s/x/%s/models", c.Domain, meta.APIv1)
-	body, statusCode, err := c.doPost(serverUrl, ModelCommitReq{
-		Name:      modelName,
-		Type:      modelType,
-		Overwrite: overwrite,
-		Files:     modelFiles,
-	}, c.authHeader())
-	if err != nil {
-		return nil, cli.Exit(err, meta.ServerError)
-	}
-
-	if statusCode != http.StatusOK {
-		return nil, cli.Exit(handleError(body, statusCode), meta.ServerError)
-	}
-	return handleResponse[ModelCommitResp](body)
-}
 
 func (c *Client) CommitModelV2(modelName string, modelType string, modelVersion []*ModelVersion) (*Response[ModelCommitResp], error) {
 	serverUrl := fmt.Sprintf("%s/x/%s/bizy_models", c.Domain, meta.APIv1)

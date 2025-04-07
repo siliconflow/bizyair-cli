@@ -41,11 +41,6 @@ type StorageInfo struct {
 	Region   string `json:"region,omitempty" form:"region" query:"region"`
 }
 
-// Deprecated
-type FileCommitReq struct {
-	Sign      string `json:"sign,omitempty" form:"sign" query:"sign"`
-	ObjectKey string `json:"object_key,omitempty" form:"object_key" query:"object_key"`
-}
 type FileCommitReqV2 struct {
 	Sign      string `json:"sign,omitempty" form:"sign" query:"sign"`
 	ObjectKey string `json:"object_key,omitempty" form:"object_key" query:"object_key"`
@@ -53,13 +48,7 @@ type FileCommitReqV2 struct {
 	ModelType string `json:"type,omitempty" form:"type" query:"type"`
 }
 
-// Deprecated
-type ModelCommitReq struct {
-	Name      string       `json:"name,omitempty" form:"name" query:"name"`
-	Type      string       `json:"type,omitempty" form:"type" query:"type"`
-	Overwrite bool         `json:"overwrite,omitempty" form:"overwrite" query:"overwrite"`
-	Files     []*ModelFile `json:"files,omitempty" form:"files" query:"files"`
-}
+
 type ModelCommitReqV2 struct {
 	Name     string          `json:"name,omitempty" form:"name" query:"name"`
 	Type     string          `json:"type,omitempty" form:"type" query:"type"`
@@ -118,14 +107,6 @@ type ModelListReq struct {
 	Type   string `json:"type,omitempty" form:"type" query:"type"`
 	Public bool   `json:"public,omitempty" form:"public" query:"public"`
 }
-
-// type ModelListReqV2 struct {
-// 	Current		int			`json:"current" form:"current" query:"current"`
-// 	PageSize  	int			`json:"page_size" form:"page_size" query:"page_size" `
-// 	Keyword		string		`json:"keyword,omitempty" form:"keyword" query:"keyword"`
-// 	Types		[]string 	`json:"model_types,omitempty" form:"model_types" query:"model_types"`
-// 	Sort 		string     	`json:"sort,omitempty" form:"sort" query:"sort"`
-// }
 
 type ModelListResp struct {
 	Models []*ModelInfo `json:"models,omitempty" form:"models" query:"models"`

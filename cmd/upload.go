@@ -164,8 +164,6 @@ func Upload(c *cli.Context) error {
 			if err != nil {
 				return err
 			}
-			// fileToUpload.Id = newFileRecord.Data.File.Id
-			// fileToUpload.RemoteKey = newFileRecord.Data.File.ObjectKey
 		} else {
 			// skip
 			fileToUpload.Id = fileRecord.Id
