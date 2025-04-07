@@ -3,18 +3,18 @@
 <p align="center">
 <p>
 
-The Silicon Cloud CLI is an open source tool, you can get the latest version from [GitHub](https://github.com/siliconflow/siliconcloud-cli).
+The BizyAir CLI is an open source tool, you can get the latest version from [GitHub](https://github.com/siliconflow/bizyair-cli).
 
 ## Introduction
-The Silicon Cloud CLI is a command line tool for managing your files on silicon cloud. It provides an easy way to upload,  and manage your silicon cloud files.
+The BizyAir CLI is a command line tool for managing your files on bizyair. It provides an easy way to upload,  and manage your bizyair files.
 
 ## CLI Releases
 
-All releases please [click here](https://github.com/siliconflow/siliconcloud--cli/releases).
+All releases please [click here](https://github.com/siliconflow/bizyair-cli/releases).
 
 ## Installation
-SiliconCloud-CLI is available on Linux, macOS and Windows platforms.
-Binaries for Linux, Windows and Mac are available as tarballs in the [release page](https://github.com/siliconcloud-/siliconcloud--cli/releases).
+BizyAir-CLI is available on Linux, macOS and Windows platforms.
+Binaries for Linux, Windows and Mac are available as tarballs in the [release page](https://github.com/siliconflow/bizyair-cli/releases).
 
 - Linux
   ```shell
@@ -27,7 +27,7 @@ Binaries for Linux, Windows and Mac are available as tarballs in the [release pa
 
   ```shell
   # NOTE: The dev version will be in effect!
-  go install github.com/siliconflow/siliconcloud-cli@latest
+  go install github.com/siliconflow/bizyair-cli@latest
   ```
 
 ## Building From Source
@@ -133,4 +133,3 @@ siliconcloud model rm -n mymodel -t checkpoint
 ```
 
 You must specify model name and model type by using the `-n` and `-t` flags respectively.
->>>>>>> feat/upload-multiversion
