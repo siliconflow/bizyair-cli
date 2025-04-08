@@ -3,8 +3,8 @@ package cmd
 import (
 	"fmt"
 	"github.com/cloudwego/hertz/cmd/hz/util/logs"
-	"github.com/siliconflow/siliconcloud-cli/lib"
-	"github.com/siliconflow/siliconcloud-cli/meta"
+	"github.com/siliconflow/bizyair-cli/lib"
+	"github.com/siliconflow/bizyair-cli/meta"
 	"github.com/urfave/cli/v2"
 	"os"
 	"text/tabwriter"

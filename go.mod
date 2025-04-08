@@ -1,4 +1,4 @@
-module github.com/siliconflow/siliconcloud-cli
+module github.com/siliconflow/bizyair-cli
 
 go 1.22.2
 

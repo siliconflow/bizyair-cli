@@ -2,7 +2,7 @@
 
 TAGNAME=$1
 
-REPO=siliconflow/siliconcloud-cli
+REPO=siliconflow/bizyair-cli
 DATA='{"tag_name":"'$TAGNAME'","name":"'$TAGNAME'","draft":false,"prerelease":true,"generate_release_notes":true}'
 
 curl -fsSL \

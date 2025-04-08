@@ -4,8 +4,8 @@ import (
 	"fmt"
 
 	"github.com/cloudwego/hertz/cmd/hz/util/logs"
-	"github.com/siliconflow/siliconcloud-cli/config"
-	"github.com/siliconflow/siliconcloud-cli/meta"
+	"github.com/siliconflow/bizyair-cli/config"
+	"github.com/siliconflow/bizyair-cli/meta"
 	"github.com/urfave/cli/v2"
 )
 
@@ -26,10 +26,10 @@ func Init() *cli.App {
 	// hostFlag := cli.StringFlag{Name: "host", Usage: fmt.Sprintf("Specify the request host, default: %s", meta.DefaultHost), Destination: &globalArgs.Host, Value: meta.DefaultHost}
 	// portFlag := cli.StringFlag{Name: "port", Usage: fmt.Sprintf("Specify the request port, default: %s", meta.DefaultPort), Destination: &globalArgs.Port, Value: meta.DefaultPort}
 	versionFlag := cli.StringSliceFlag{Name: "version", Aliases: []string{"v", "V"}, Usage: "Specify the version of model.", Destination: &cli.StringSlice{}}
-	versionPublicFlag := cli.StringSliceFlag{Name: "vpub", Aliases: []string{"vp"}, Usage: "Set model version public.", Destination: &cli.StringSlice{}}
-	introFlag := cli.StringSliceFlag{Name: "intro", Aliases: []string{"i"}, Usage: "An introduction to the model", Destination: &cli.StringSlice{}}
-	coverUrlsFlag := cli.StringSliceFlag{Name: "cover", Usage: "Urls of model covers, use ';' as separator", Destination: &cli.StringSlice{}}
-	baseModelFlag := cli.StringSliceFlag{Name: "base", Aliases: []string{"b"}, Usage: "Specify the base model of uploaded model", Required: true, Destination: &cli.StringSlice{}}
+	versionPublicFlag := cli.StringSliceFlag{Name: "vpub", Aliases: []string{"vp"}, Usage: "Set corresponding model version public.", Destination: &cli.StringSlice{}}
+	introFlag := cli.StringSliceFlag{Name: "intro", Aliases: []string{"i"}, Usage: "An introduction to the model version.", Destination: &cli.StringSlice{}}
+	coverUrlsFlag := cli.StringSliceFlag{Name: "cover", Usage: "Urls of model covers, use ';' as separator.", Destination: &cli.StringSlice{}}
+	baseModelFlag := cli.StringSliceFlag{Name: "base", Aliases: []string{"b"}, Usage: fmt.Sprintf("Specify the base model of uploaded model. (Only works for %s)",meta.BaseModelStr), Required: true, Destination: &cli.StringSlice{}}
 
 	app := cli.NewApp()
 	app.Name = meta.Name
@@ -50,7 +50,7 @@ func Init() *cli.App {
 	app.Commands = []*cli.Command{
 		{
 			Name:  meta.CmdLogin,
-			Usage: "Login to the SiliconCloud",
+			Usage: "Login to the BizyAir",
 			Flags: []cli.Flag{
 				&apiKeyFlag,
 			},
@@ -70,7 +70,7 @@ func Init() *cli.App {
 		},
 		{
 			Name:  meta.CmdUpload,
-			Usage: "Upload a file or a folder to your model directory on SiliconCloud",
+			Usage: "Upload a file or a folder to your model directory on BizyAir",
 			Flags: []cli.Flag{
 				&typeFlag,
 				&pathFlag,

@@ -2,7 +2,7 @@ package main
 
 import (
 	"github.com/cloudwego/hertz/cmd/hz/util/logs"
-	"github.com/siliconflow/siliconcloud-cli/cmd"
+	"github.com/siliconflow/bizyair-cli/cmd"
 	"os"
 )
 

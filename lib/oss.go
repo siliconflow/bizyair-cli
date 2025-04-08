@@ -5,7 +5,7 @@ import (
 	"github.com/aliyun/aliyun-oss-go-sdk/oss"
 	"github.com/cloudwego/hertz/cmd/hz/util/logs"
 	"github.com/schollz/progressbar/v3"
-	"github.com/siliconflow/siliconcloud-cli/meta"
+	"github.com/siliconflow/bizyair-cli/meta"
 	"github.com/urfave/cli/v2"
 	"os"
 	"path/filepath"

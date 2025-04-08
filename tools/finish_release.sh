@@ -4,7 +4,7 @@ set -e
 
 VERSION=$1
 
-REPO=siliconflow/siliconcloud-cli
+REPO=siliconflow/bizyair-cli
 
 if [[ "$VERSION" == *"-beta" ]]; then
   echo "beta. skip."

@@ -14,17 +14,17 @@ import (
 
 	"github.com/cloudwego/hertz/cmd/hz/util/logs"
 	"github.com/samber/lo"
-	"github.com/siliconflow/siliconcloud-cli/meta"
+	"github.com/siliconflow/bizyair-cli/meta"
 	"github.com/urfave/cli/v2"
 )
 
-// Client siliconCloud client
+// Client bizyair client
 type Client struct {
 	Domain string
 	ApiKey string
 }
 
-// Response the response of siliconCloud
+// Response the response of bizyair
 type Response[T any] struct {
 	RequestId string `json:"requestId,omitempty"`
 	Code      int32  `json:"code,omitempty"`

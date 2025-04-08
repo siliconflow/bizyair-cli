@@ -17,9 +17,9 @@ import (
 	"github.com/cloudwego/hertz/cmd/hz/util"
 	"github.com/cloudwego/hertz/cmd/hz/util/logs"
 	"github.com/samber/lo"
-	"github.com/siliconflow/siliconcloud-cli/config"
-	"github.com/siliconflow/siliconcloud-cli/lib"
-	"github.com/siliconflow/siliconcloud-cli/meta"
+	"github.com/siliconflow/bizyair-cli/config"
+	"github.com/siliconflow/bizyair-cli/lib"
+	"github.com/siliconflow/bizyair-cli/meta"
 	"github.com/urfave/cli/v2"
 )
 
@@ -107,20 +107,8 @@ func Upload(c *cli.Context) error {
 
 	client := lib.NewClient(args.BaseDomain, apiKey)
 
-	// modelExistResp, err := client.CheckModel(args.Type, args.Name)
-	// if err != nil {
-	// 	return err
-	// }
 
-	// if modelExistResp.Data.Exists {
-	// 	if !args.Overwrite {
-	// 		return cli.Exit(fmt.Sprintf("Model already exists, use --overwrite to overwrite it"), meta.LoadError)
-	// 	}
-	// 	// TODO: overwrite model, 
-	// 	// api:{BIZYAIR_SERVER_ADDRESS}/bizy_models/{model_id}
-	// 	// struct:{"name": name, "type": type_, "versions": versions}
-	// 	return cli.Exit("Overwrite is not supported!", meta.LoadError)
-	// }
+	// 	// TODO: overwrite model
 
 	// start to upload files
 	fmt.Fprintln(os.Stdout, fmt.Sprintf("Start uploading %d files", total))

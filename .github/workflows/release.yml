@@ -41,15 +41,15 @@ jobs:
           SOURCE_DATE_EPOCH=`date +%s`
           TZ=GMT
           DATE=`date -j -f "%s" ${SOURCE_DATE_EPOCH} +"%Y-%m-%dT%H:%M:%SZ"`
-          PACKAGE=github.com/siliconflow/siliconcloud-cli
+          PACKAGE=github.com/siliconflow/bizyair-cli
           # build for Linux amd64
-          CGO_ENABLED=0 GOOS=darwin GOARCH=amd64 go build -ldflags "-w -s -X '${PACKAGE}/meta.Version=${VERSION}' -X '${PACKAGE}/meta.Commit=${GIT_REV}' -X '${PACKAGE}/meta.BuildDate=${DATE}'" -o out/siliconcloud main.go
-          tar zcvf out/siliconcloud-cli-macosx-${VERSION}-amd64.tgz -C out siliconcloud
-          bash tools/upload_asset.sh ${VERSION} out/siliconcloud-cli-macosx-${VERSION}-amd64.tgz
+          CGO_ENABLED=0 GOOS=darwin GOARCH=amd64 go build -ldflags "-w -s -X '${PACKAGE}/meta.Version=${VERSION}' -X '${PACKAGE}/meta.Commit=${GIT_REV}' -X '${PACKAGE}/meta.BuildDate=${DATE}'" -o out/bizyair main.go
+          tar zcvf out/bizyair-cli-macosx-${VERSION}-amd64.tgz -C out bizyair
+          bash tools/upload_asset.sh ${VERSION} out/bizyair-cli-macosx-${VERSION}-amd64.tgz
           # build for Linux arm64
-          CGO_ENABLED=0 GOOS=darwin GOARCH=arm64 go build -ldflags "-w -s -X '${PACKAGE}/meta.Version=${VERSION}' -X '${PACKAGE}/meta.Commit=${GIT_REV}' -X '${PACKAGE}/meta.BuildDate=${DATE}'" -o out/siliconcloud main.go
-          tar zcvf out/siliconcloud-cli-macosx-${VERSION}-arm64.tgz -C out siliconcloud
-          bash tools/upload_asset.sh ${VERSION} out/siliconcloud-cli-macosx-${VERSION}-arm64.tgz
+          CGO_ENABLED=0 GOOS=darwin GOARCH=arm64 go build -ldflags "-w -s -X '${PACKAGE}/meta.Version=${VERSION}' -X '${PACKAGE}/meta.Commit=${GIT_REV}' -X '${PACKAGE}/meta.BuildDate=${DATE}'" -o out/bizyair main.go
+          tar zcvf out/bizyair-cli-macosx-${VERSION}-arm64.tgz -C out bizyair
+          bash tools/upload_asset.sh ${VERSION} out/bizyair-cli-macosx-${VERSION}-arm64.tgz
   build_for_linux:
     needs: [ create_release ]
     name: Build for Linux
@@ -72,15 +72,15 @@ jobs:
           GIT_REV=`git rev-parse --short HEAD`
           SOURCE_DATE_EPOCH=`date +%s`
           DATE=`date -u -d @${SOURCE_DATE_EPOCH} +"%Y-%m-%dT%H:%M:%SZ"`
-          PACKAGE=github.com/siliconflow/siliconcloud-cli
+          PACKAGE=github.com/siliconflow/bizyair-cli
           # build for Linux amd64
-          CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags "-w -s -X '${PACKAGE}/meta.Version=${VERSION}' -X '${PACKAGE}/meta.Commit=${GIT_REV}' -X '${PACKAGE}/meta.BuildDate=${DATE}'" -o out/siliconcloud main.go
-          tar zcvf out/siliconcloud-cli-linux-${VERSION}-amd64.tgz -C out siliconcloud
-          bash tools/upload_asset.sh ${VERSION} out/siliconcloud-cli-linux-${VERSION}-amd64.tgz
+          CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags "-w -s -X '${PACKAGE}/meta.Version=${VERSION}' -X '${PACKAGE}/meta.Commit=${GIT_REV}' -X '${PACKAGE}/meta.BuildDate=${DATE}'" -o out/bizyair main.go
+          tar zcvf out/bizyair-cli-linux-${VERSION}-amd64.tgz -C out bizyair
+          bash tools/upload_asset.sh ${VERSION} out/bizyair-cli-linux-${VERSION}-amd64.tgz
           # build for Linux arm64
-          CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -ldflags "-w -s -X '${PACKAGE}/meta.Version=${VERSION}' -X '${PACKAGE}/meta.Commit=${GIT_REV}' -X '${PACKAGE}/meta.BuildDate=${DATE}'" -o out/siliconcloud main.go
-          tar zcvf out/siliconcloud-cli-linux-${VERSION}-arm64.tgz -C out siliconcloud
-          bash tools/upload_asset.sh ${VERSION} out/siliconcloud-cli-linux-${VERSION}-arm64.tgz
+          CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -ldflags "-w -s -X '${PACKAGE}/meta.Version=${VERSION}' -X '${PACKAGE}/meta.Commit=${GIT_REV}' -X '${PACKAGE}/meta.BuildDate=${DATE}'" -o out/bizyair main.go
+          tar zcvf out/bizyair-cli-linux-${VERSION}-arm64.tgz -C out bizyair
+          bash tools/upload_asset.sh ${VERSION} out/bizyair-cli-linux-${VERSION}-arm64.tgz
   build_for_windows:
     needs: [ create_release ]
     name: Build for Windows
@@ -102,14 +102,14 @@ jobs:
           $tag = "${{ github.ref_name }}"
           $version = $tag -replace 'v', ''
           $git_rev = git rev-parse --short HEAD
-          $package = "github.com/siliconflow/siliconcloud-cli"
+          $package = "github.com/siliconflow/bizyair-cli"
           $source_date = (Get-Date).ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ")
           $env:GOOS = "windows"
           $env:GOARCH = "amd64"
           $env:CGO_ENABLED = "0"
-          go build -ldflags "-w -s -X '$package/meta.Version=$version' -X '$package/meta.Commit=$git_rev' -X '$package/meta.BuildDate=$source_date'" -o ./out/siliconcloud.exe main.go
-          Compress-Archive -Path ./out/siliconcloud.exe -DestinationPath ./out/siliconcloud-cli-windows-${version}-amd64.zip
-          bash ./tools/upload_asset.sh ${version} ./out/siliconcloud-cli-windows-${version}-amd64.zip
+          go build -ldflags "-w -s -X '$package/meta.Version=$version' -X '$package/meta.Commit=$git_rev' -X '$package/meta.BuildDate=$source_date'" -o ./out/bizyair.exe main.go
+          Compress-Archive -Path ./out/bizyair.exe -DestinationPath ./out/bizyair-cli-windows-${version}-amd64.zip
+          bash ./tools/upload_asset.sh ${version} ./out/bizyair-cli-windows-${version}-amd64.zip
   finish_release:
     needs: [ build_for_macosx, build_for_linux, build_for_windows ]
     name: Finish the release

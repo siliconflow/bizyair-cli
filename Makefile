@@ -1,5 +1,5 @@
 
-NAME := siliconcloud
+NAME := bizyair
 VERSION    := v0.0.1
 GOOS	   ?= $(shell go env GOOS)
 OUTPUT_BIN ?= execs/${GOOS}/${NAME}-${VERSION}

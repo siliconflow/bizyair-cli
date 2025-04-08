@@ -32,10 +32,10 @@ const (
 type UploadFileType string
 
 const (
-	TypeCheckpoint   UploadFileType = "bizyair/checkpoint"
+	TypeCheckpoint   UploadFileType = "Checkpoint"
 	TypeVae          UploadFileType = "bizyair/vae"
-	TypeLora         UploadFileType = "bizyair/lora"
-	TypeControlNet   UploadFileType = "bizyair/controlnet"
+	TypeLora         UploadFileType = "LoRA"
+	TypeControlNet   UploadFileType = "Controlnet"
 	TypeEmbedding    UploadFileType = "bizyair/embedding"
 	TypeHyperNetwork UploadFileType = "bizyair/hypernetwork"
 	TypeClip         UploadFileType = "bizyair/clip"
@@ -43,10 +43,6 @@ const (
 	TypeUpscale      UploadFileType = "bizyair/upscale"
 	TypeDataset      UploadFileType = "bizyair/dataset"
 	TypeOther        UploadFileType = "other"
-
-	// new version
-	TypeLoraV2       UploadFileType = "LoRA"
-	TypeControlNetV2 UploadFileType = "Controlnet"
 )
 
 var ModelTypes = []UploadFileType{
@@ -61,10 +57,6 @@ var ModelTypes = []UploadFileType{
 	TypeUpscale,
 	TypeDataset,
 	TypeOther,
-
-	// new version
-	TypeLoraV2,
-	TypeControlNetV2,
 }
 
 var ModelTypesStr = func(arr []UploadFileType) string {
@@ -110,4 +102,14 @@ var SupportedBaseModels = map[string]bool{
 	"Kolors":    true,
 	"Hunyuan 1": true,
 	"Other":     true,
+}
+
+var BaseModelStr = parseMapKey(SupportedBaseModels)
+
+func parseMapKey[T any](myMap map[string]T) string {
+	strs := make([]string, 0)
+	for k, _ := range myMap {
+		strs = append(strs, k)
+	}
+	return "'" + strings.Join(strs, "','") + "'"
 }

@@ -2,7 +2,7 @@ package lib
 
 import (
 	"fmt"
-	"github.com/siliconflow/siliconcloud-cli/meta"
+	"github.com/siliconflow/bizyair-cli/meta"
 	"github.com/urfave/cli/v2"
 	"io/ioutil"
 	"os"
