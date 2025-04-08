@@ -43,6 +43,10 @@ build_mac:
 	@CGO_ENABLED=${CGO_ENABLED} GOOS=darwin GOARCH=amd64 go build ${GO_FLAGS} \
 	-ldflags "-w -s -X ${PACKAGE}/meta.Version=${VERSION} -X ${PACKAGE}/meta.Commit=${GIT_REV} -X ${PACKAGE}/meta.BuildDate=${DATE}" \
 	-a -tags=${GO_TAGS} -o execs/mac/${NAME}-${VERSION} main.go
+build_mac_arm64:
+	@CGO_ENABLED=${CGO_ENABLED} GOOS=darwin GOARCH=arm64 go build ${GO_FLAGS} \
+	-ldflags "-w -s -X ${PACKAGE}/meta.Version=${VERSION} -X ${PACKAGE}/meta.Commit=${GIT_REV} -X ${PACKAGE}/meta.BuildDate=${DATE}" \
+	-a -tags=${GO_TAGS} -o execs/mac/${NAME}-${VERSION} main.go
 
 build_linux_arm64:
 	@CGO_ENABLED=${CGO_ENABLED} GOOS=linux GOARCH=arm64 go build ${GO_FLAGS} \

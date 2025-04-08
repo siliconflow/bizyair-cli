@@ -70,7 +70,7 @@ bizyair logout
 To upload files to the silicon cloud, run the following CLI:
 
 ```bash
-bizyair upload -n mymodel -t [LoRA | Controlnet] -p /local/path/file -b basemodel
+bizyair upload -n mymodel -t [LoRA | Controlnet | Checkpoint] -p /local/path/file -b [basemodel]
 ```
 
 ~~You can specify overwrite flag to overwrite the model if it already exists in the silicon cloud.~~
@@ -88,19 +88,21 @@ To upload multiple covers for one version, use ";" as a separator.
 To upload multiple versions of your model, you can provide a list of values for each flag. Each value in the list corresponds to a specific version of your model. For example, consider the following usage:
 
 ```bash
-bizyair upload -n mymodel -t [Type] \
--v "v1" -b basemodel1 -p /local/path/file1 -i "file1" -cover "${url1};${url2}" \
--v "v2" -b basemodel2 -p /local/path/file2 -cover "${url3}" \
--v "v3" -b basemodel3 -p /local/path/file3 \
+bizyair upload -n mymodel -t Checkpoint \
+-v "v1" -b SDXL -p /local/path/file1 -i "sdxl checkpoint1" -cover "${url1};${url2}" \
+-v "v2" -b [Basemodel2] -p /local/path/file2 -cover "${url3}" \
+-v "v3" -b [basemodel3] -p /local/path/file3 \
 ...
 ```
+ 
 Default version names will be used if `-v` is not specified.
 
-### View Models
+
+### View Models (Not Supported Yet)
 To view all your models in the silicon cloud, run the following CLI:
 
 ```bash
-bizyair model ls -t bizyair/checkpoint
+bizyair model ls -t Checkpoint
 ```
 
 You must specify model type by using the `-t` flag.
@@ -120,7 +122,7 @@ You can specify public flag `--public` to view all public model files in the sil
 
 If you want to see the files in a model in tree view, run the following CLI:
 ```bash
-bizyair model ls-files -n mymodel -t bizyair/checkpoint --tree
+bizyair model ls-files -n mymodel -t Checkpoint --tree
 ```
 
 You must specify model name and model type by using the `-n` and `-t` flags respectively.
@@ -129,7 +131,7 @@ You must specify model name and model type by using the `-n` and `-t` flags resp
 To remove model from the silicon cloud, run the following CLI:
 
 ```bash
-bizyair model rm -n mymodel -t checkpoint
+bizyair model rm -n mymodel -t Checkpoint
 ```
 
 You must specify model name and model type by using the `-n` and `-t` flags respectively.
