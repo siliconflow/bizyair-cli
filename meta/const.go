@@ -20,6 +20,7 @@ const (
 
 const (
 	DefaultDomain = "https://bizyair-api.siliconflow.cn"
+	UATDomain	  = "https://uat-api.bizyair.cn/x/v1"
 	AuthDomain    = "https://api.siliconflow.cn"
 )
 
@@ -47,15 +48,8 @@ const (
 
 var ModelTypes = []UploadFileType{
 	TypeCheckpoint,
-	TypeVae,
 	TypeLora,
 	TypeControlNet,
-	TypeEmbedding,
-	TypeHyperNetwork,
-	TypeClip,
-	TypeClipVision,
-	TypeUpscale,
-	TypeDataset,
 	TypeOther,
 }
 

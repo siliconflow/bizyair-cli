@@ -14,7 +14,7 @@ var globalArgs = config.NewArgument()
 func Init() *cli.App {
 	// flags
 	verboseFlag := cli.BoolFlag{Name: "verbose,vv", Usage: "turn on verbose mode", Destination: &globalArgs.Verbose}
-	baseDomainFlag := cli.StringFlag{Name: "base_domain", Usage: "Specify the request domain.", Destination: &globalArgs.BaseDomain, Value: meta.DefaultDomain, Required: false}
+	baseDomainFlag := cli.StringFlag{Name: "base_domain", Usage: "Specify the request domain.", Destination: &globalArgs.BaseDomain, Value: meta.UATDomain, Required: false}
 	apiKeyFlag := cli.StringFlag{Name: "api_key", Aliases: []string{"k"}, Usage: "Specify the api key.", EnvVars: []string{meta.EnvAPIKey}, Destination: &globalArgs.ApiKey}
 	typeFlag := cli.StringFlag{Name: "type", Aliases: []string{"t"}, Usage: fmt.Sprintf("Specify the mode type. (Only works for %s)", meta.ModelTypesStr), Destination: &globalArgs.Type}
 	pathFlag := cli.StringSliceFlag{Name: "path", Aliases: []string{"p"}, Usage: "Specify the path to upload.", Destination: &cli.StringSlice{}}
