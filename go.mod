@@ -4,6 +4,7 @@ go 1.22.2
 
 require (
 	github.com/aliyun/aliyun-oss-go-sdk v3.0.2+incompatible
+	github.com/chai2010/webp v1.4.0
 	github.com/cloudwego/hertz/cmd/hz v0.9.0
 	github.com/samber/lo v1.46.0
 	github.com/schollz/progressbar/v3 v3.14.4
@@ -11,7 +12,6 @@ require (
 )
 
 require (
-	github.com/chai2010/webp v1.4.0 // indirect
 	github.com/cpuguy83/go-md2man/v2 v2.0.4 // indirect
 	github.com/hashicorp/go-version v1.5.0 // indirect
 	github.com/mitchellh/colorstring v0.0.0-20190213212951-d06e56a500db // indirect
