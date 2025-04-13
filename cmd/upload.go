@@ -9,6 +9,7 @@ import (
 	"hash/crc64"
 	"io"
 	"os"
+	"path"
 	"path/filepath"
 	"regexp"
 	"strconv"
@@ -23,8 +24,9 @@ import (
 	"github.com/urfave/cli/v2"
 )
 
-func Upload(c *cli.Context) error {
-	args, err := globalArgs.Parse(c, meta.CmdUpload)
+// Deprecated: manually upload a single file
+func UploadFile(c *cli.Context) error {
+	args, err := globalArgs.Parse(c, meta.CmdUploadFile)
 	if err != nil {
 		return cli.Exit(err, meta.LoadError)
 	}
@@ -107,7 +109,6 @@ func Upload(c *cli.Context) error {
 
 	client := lib.NewClient(args.BaseDomain, apiKey)
 
-
 	// 	// TODO: overwrite model
 
 	// start to upload files
@@ -116,7 +117,7 @@ func Upload(c *cli.Context) error {
 	versionList := make([]*lib.ModelVersion, 0)
 	for i, fileToUpload := range filesToUpload {
 		// calculate file hash
-		sha256sum, md5_hash, err := calculateHash(fileToUpload.Path)
+		sha256sum, md5Hash, err := CalculateHash(fileToUpload.Path)
 		if err != nil {
 			return err
 		}
@@ -136,7 +137,7 @@ func Upload(c *cli.Context) error {
 		if fileRecord.Id == 0 {
 			// upload file
 			fileStorage := ossCert.Data.Storage
-			ossClient, err := lib.NewAliOssStorageClient(fileStorage.Endpoint, fileStorage.Bucket, fileRecord.AccessKeyId, fileRecord.AccessKeySecret, fileRecord.SecurityToken)
+			ossClient, err := lib.NewAliOssStorageClient(fileStorage.Region, fileStorage.Endpoint, fileStorage.Bucket, fileRecord.AccessKeyId, fileRecord.AccessKeySecret, fileRecord.SecurityToken)
 			if err != nil {
 				return err
 			}
@@ -147,7 +148,7 @@ func Upload(c *cli.Context) error {
 			}
 
 			// commit
-			_, err = client.CommitFileV2(fileToUpload.Signature, fileRecord.ObjectKey, md5_hash, args.Type)
+			_, err = client.CommitFileV2(fileToUpload.Signature, fileRecord.ObjectKey, md5Hash, args.Type)
 
 			if err != nil {
 				return err
@@ -182,8 +183,304 @@ func Upload(c *cli.Context) error {
 	return nil
 }
 
-// calculateHash calculates the SHA256 hash of a file.
-func calculateHash(filePath string) (string, string, error) {
+// upload a structured model folder
+func upload(c *cli.Context) error {
+	args, err := globalArgs.Parse(c, meta.CmdUpload)
+	if err != nil {
+		return cli.Exit(err, meta.LoadError)
+	}
+	setLogVerbose(args.Verbose)
+	logs.Debugf("args: %#v\n", args)
+
+	// init client
+	var apiKey string
+	if args.ApiKey != "" {
+		apiKey = args.ApiKey
+	} else {
+		apiKey, err = lib.NewSfFolder().GetKey()
+		if err != nil {
+			return err
+		}
+	}
+	client := lib.NewClient(args.BaseDomain, apiKey)
+
+	// check model path
+	folders, err := checkPath(args)
+	if err != nil {
+		return err
+	}
+
+	if len(folders) > 1 {
+		return cli.Exit("uploading multiple folders is not supported yet", meta.LoadError)
+	}
+	modelPath := folders[0]
+	stat, err := os.Stat(modelPath)
+	if err != nil {
+		return err
+	}
+	if !stat.IsDir() {
+		return cli.Exit("uploading non-directory is not supported yet", meta.LoadError)
+	}
+
+	// parse model name
+	nameFile := path.Join(modelPath, meta.ModelNameFileName)
+	readName, err := os.ReadFile(nameFile)
+	if err != nil {
+		return cli.Exit(fmt.Sprintf("failed to get model name, error: %s", err), meta.LoadError)
+	}
+	modelName := string(readName)
+	fmt.Printf("Model name: %s\n", modelName)
+
+	modelVersionList := make([]lib.ModelVersion, 0)
+
+	// parse model type
+	typeFile := path.Join(modelPath, meta.ModelTypeFileName)
+	readType, err := os.ReadFile(typeFile)
+	if err != nil {
+		return cli.Exit(fmt.Sprintf("failed to get model type, error: %s", err), meta.LoadError)
+	}
+	modelType := string(readType)
+	// check type
+	checkType := meta.UploadFileType(modelType)
+	if !lo.Contains[meta.UploadFileType](meta.ModelTypes, checkType) {
+		return cli.Exit(fmt.Sprintf("Unsupported type [%s], only works for %s", args.Type, meta.ModelTypesStr), meta.LoadError)
+	}
+
+	// parse model versions	path/to/folder/{version name}	info: description.md, content.json, meta.json (if necessary)
+	err = filepath.Walk(modelPath, func(path string, info os.FileInfo, err error) error {
+		fmt.Printf("current path: %s, isDir: %t \n", path, info.IsDir())
+		return nil
+	})
+	candidateVersionDir, err := filepath.Glob(modelPath + "/*")
+	if err != nil {
+		return cli.Exit(fmt.Sprintf("failed to scan model versions, %s", err), meta.LoadError)
+	}
+	for _, versionDir := range candidateVersionDir {
+		relPath, _ := filepath.Rel(modelPath, versionDir)
+		stat, err := os.Stat(versionDir)
+		if err != nil {
+			logs.Warnf("skip: failed to read file or dir: %s, error: %s \n", versionDir, err)
+		}
+		if stat.IsDir() {
+			fmt.Printf("start to parse folder: %s", versionDir)
+			modelVersion, err := parseModelVersion(*client, modelPath, versionDir)
+			if err != nil {
+				logs.Warnf("skip folder: [%s]", relPath)
+			} else {
+				logs.Debugf("add version folder: %s", versionDir)
+				modelVersionList = append(modelVersionList, *modelVersion)
+			}
+		}
+	}
+	if len(modelVersionList) == 0 {
+		return cli.Exit(fmt.Sprintf("no valid version fetched in path: %s", modelPath), meta.LoadError)
+	}
+
+	ValidVersions := make([]*lib.ModelVersion, 0)
+
+	// commit version content
+	for _, modelVersion := range modelVersionList {
+		stat, err := os.Stat(modelVersion.Path)
+		if err != nil {
+			logs.Errorf("failed to upload version: [%s], error: %s", modelVersion.Version, err)
+			continue
+		}
+
+		relPath, err := filepath.Rel(filepath.Dir(modelVersion.Path), modelVersion.Path)
+		if err != nil {
+			logs.Errorf("failed to upload version: [%s], error: %s", modelVersion.Version, err)
+			continue
+		}
+		uploadFile := lib.FileToUpload{
+			Path:    filepath.ToSlash(modelVersion.Path),
+			RelPath: filepath.ToSlash(relPath),
+			Size:    stat.Size(),
+		}
+
+		err = signAndCommit(client, &uploadFile, modelType)
+		if err != nil {
+			logs.Errorf("failed to upload version: [%s], error: %s", modelVersion.Version, err)
+			continue // skip current version
+		}
+		modelVersion.Sign = uploadFile.Signature
+		ValidVersions = append(ValidVersions, &modelVersion)
+	}
+
+	// commit model
+	_, err = client.CommitModelV2(modelName, modelType, ValidVersions)
+	if err != nil {
+		return cli.Exit(fmt.Sprintf("failed to commit model, error: %s", err), meta.LoadError)
+	}
+	logs.Debugf("successfully upload model: %s", modelName)
+	return nil
+}
+
+// parse a folder, upload content and return version info.
+func parseModelVersion(client lib.Client, modelPath string, versionPath string) (*lib.ModelVersion, error) {
+	/**
+	Version:		${dirName}
+	Path:			./content.* (required)
+	Introduction:	./description.md
+	Sign:			(nil)
+	BaseModel:		default: other
+	Public:			default: true
+	CoverUrls:
+	*/
+
+	// get version name
+	versionName, err := filepath.Rel(modelPath, versionPath)
+	if err != nil {
+		logs.Warnf("failed to parse version name for path: %s", versionPath)
+		return nil, err
+	}
+
+	// get version content
+	contentFileList, err := filepath.Glob(fmt.Sprintf("%s/%s", versionPath, meta.ContentFileName))
+	if err != nil {
+		logs.Warnf("failed to fetch version content in current path: %s", versionPath)
+		return nil, err
+	}
+	if len(contentFileList) == 0 {
+		logs.Warnf("version content not found in current path: %s", versionPath)
+		return nil, err
+	}
+	if len(contentFileList) > 1 {
+		logs.Warnf("multiple content files found in current path: %s ", versionPath)
+		return nil, err
+	}
+	contentFile := contentFileList[0]
+	logs.Debugf("version: [%s] scanned", versionName)
+
+	// parse BaseModel
+	baseModel := string(meta.TypeOther)
+	baseModelList, err := filepath.Glob(fmt.Sprintf("%s/%s", versionPath, meta.BaseModelFileName))
+	if err != nil {
+		logs.Warnf("failed to match basemodel file, set `other` by default")
+	}
+	if len(baseModelList) != 0 {
+		baseModelPath := baseModelList[0] // only use the first BaseModel file
+		readBaseModel, err := os.ReadFile(baseModelPath)
+		if err != nil {
+			logs.Warnf("failed to read base model file: %s", baseModelPath)
+		} else {
+			baseModel = string(readBaseModel)
+		}
+		valid, exists := meta.SupportedBaseModels[baseModel]
+		if !exists || !valid {
+			logs.Errorf("unsupported base model: %s", baseModel)
+			return nil, err
+		}
+	}
+
+	// parse introduction
+	introText := ""
+	introFileList, err := filepath.Glob(fmt.Sprintf("%s/%s", versionPath, meta.IntroFileName))
+	if err != nil {
+		logs.Warnf("failed to match introduction file for version: [%s], set empty by default", versionName)
+	}
+	if len(introFileList) != 0 {
+		introPath := introFileList[0] // only use the first description file
+		readIntro, err := os.ReadFile(introPath)
+		if err != nil {
+			logs.Warnf("failed to read intro file: %s", introPath)
+		} else {
+			introText = string(readIntro)
+		}
+	}
+
+	// parse covers
+	coverList, err := filepath.Glob(fmt.Sprintf("%s/%s", versionPath, meta.CoverFileName))
+	if err != nil {
+		logs.Warnf("failed to fetch cover for version: [%s]", versionName)
+	}
+	coverUrlList := make([]string, 0)
+	// tempWebpList := make([]string, 0)
+	for idx, cover := range coverList {
+		logs.Debugf("uploading cover : %s, index: %d/%d", &cover, idx, len(coverList))
+		coverUrl, err := client.UploadImageToOss(cover)
+		if err != nil {
+			logs.Error("failed to upload cover to oss")
+			continue
+		}
+		coverUrlList = append(coverUrlList, coverUrl)
+	}
+
+	// parse public flag
+	public := false
+	publicFiles, err := filepath.Glob(fmt.Sprintf("%s/%s", versionPath, meta.PublicFileName))
+	if len(publicFiles) != 0 {
+		publicFile := publicFiles[0]
+		readPublic, err := os.ReadFile(publicFile)
+		if err != nil {
+			logs.Warnf("failed to read public flag, set false by default")
+		}
+		value, err := strconv.ParseBool(string(readPublic))
+		if err != nil {
+			logs.Warnf("failed to parse public flag: %s, set false by default", string(readPublic))
+		} else {
+			public = value
+		}
+	}
+
+	versionInfo := lib.ModelVersion{
+		Version:      versionName,
+		Path:         contentFile,
+		Introduction: introText,
+		BaseModel:    baseModel,
+		CoverUrls:    coverUrlList,
+		Public:       public,
+	}
+	return &versionInfo, nil
+}
+
+func signAndCommit(client *lib.Client, fileToUpload *lib.FileToUpload, Type string) error {
+	// 1. calculate file hash
+	sha256sum, md5Hash, err := CalculateHash(fileToUpload.Path)
+	if err != nil {
+		return err
+	}
+
+	fileToUpload.Signature = sha256sum
+	fileToUpload.Md5Hash = md5Hash
+	logs.Debugf(fmt.Sprintf("file: %s, signature: %s", fileToUpload.RelPath, fileToUpload.Signature))
+
+	// 2. pass sha256sum to the server
+	ossCert, err := client.OssSign(sha256sum, Type)
+	if err != nil {
+		return err
+	}
+
+	fileIndex := fmt.Sprintf("%d/%d", 1, 1)
+
+	fileRecord := ossCert.Data.File
+	if fileRecord.Id == 0 {
+		// upload file
+		fileStorage := ossCert.Data.Storage
+		ossClient, err := lib.NewAliOssStorageClient(fileStorage.Region, fileStorage.Endpoint, fileStorage.Bucket, fileRecord.AccessKeyId, fileRecord.AccessKeySecret, fileRecord.SecurityToken)
+		if err != nil {
+			return err
+		}
+
+		_, err = ossClient.UploadFile(fileToUpload, fileRecord.ObjectKey, fileIndex)
+
+		// commit
+		_, err = client.CommitFileV2(fileToUpload.Signature, fileRecord.ObjectKey, fileToUpload.Md5Hash, Type)
+
+		if err != nil {
+			return err
+		}
+	} else {
+		// skip
+		fileToUpload.Id = fileRecord.Id
+		fileToUpload.RemoteKey = fileRecord.ObjectKey
+
+		fmt.Fprintln(os.Stdout, fmt.Sprintf("(%s) %s Already Uploaded", fileIndex, fileToUpload.RelPath))
+	}
+	return nil
+}
+
+// CalculateHash calculates the SHA256 hash of a file.
+func CalculateHash(filePath string) (string, string, error) {
 	// read file and calculate CRC64
 	tabECMA := crc64.MakeTable(crc64.ECMA)
 	hashCRC := crc64.New(tabECMA)

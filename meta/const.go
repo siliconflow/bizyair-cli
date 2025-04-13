@@ -7,20 +7,31 @@ import (
 )
 
 const (
-	CmdLogin   = "login"
-	CmdWhoami  = "whoami"
-	CmdLogout  = "logout"
-	CmdUpload  = "upload"
-	CmdModel   = "model"
-	CmdLs      = "ls"
-	CmdLsFiles = "ls-files"
-	CmdRm      = "rm"
-	CmdCommit  = "commit"
+	CmdLogin      = "login"
+	CmdWhoami     = "whoami"
+	CmdLogout     = "logout"
+	CmdUpload     = "upload"
+	CmdUploadFile = "upload-file"
+	CmdModel      = "model"
+	CmdLs         = "ls"
+	CmdLsFiles    = "ls-files"
+	CmdRm         = "rm"
+	CmdCommit     = "commit"
+)
+
+const (
+	ModelNameFileName = "name.txt"
+	ModelTypeFileName = "type.txt"
+	ContentFileName   = "content.*"
+	BaseModelFileName = "basemodel.*"
+	IntroFileName     = "description.*"
+	PublicFileName    = "public.*"
+	CoverFileName	  = "cover*.*"
 )
 
 const (
 	DefaultDomain = "https://bizyair-api.siliconflow.cn"
-	UATDomain	  = "https://uat-api.bizyair.cn/x/v1"
+	UATDomain     = "https://uat-api.bizyair.cn"
 	AuthDomain    = "https://api.siliconflow.cn"
 )
 
@@ -43,7 +54,8 @@ const (
 	TypeClipVision   UploadFileType = "bizyair/clip_vision"
 	TypeUpscale      UploadFileType = "bizyair/upscale"
 	TypeDataset      UploadFileType = "bizyair/dataset"
-	TypeOther        UploadFileType = "other"
+	TypeOther        UploadFileType = "Other"
+	TypeWorkflow     UploadFileType = "Workflow"
 )
 
 var ModelTypes = []UploadFileType{
@@ -51,6 +63,7 @@ var ModelTypes = []UploadFileType{
 	TypeLora,
 	TypeControlNet,
 	TypeOther,
+	TypeWorkflow,
 }
 
 var ModelTypesStr = func(arr []UploadFileType) string {

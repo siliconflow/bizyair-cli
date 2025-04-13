@@ -54,6 +54,7 @@ type FileToUpload struct {
 	Size      int64
 	Signature string
 	RemoteKey string
+	Md5Hash	  string
 }
 
 type OssProgressListener struct {
@@ -87,7 +88,9 @@ func (listener *OssProgressListener) ProgressChanged(event *oss.ProgressEvent) {
 	}
 }
 
-func NewAliOssStorageClient(endpoint, bucketName, accessKey, secretKey, securityToken string) (*AliOssStorageClient, error) {
+// FIXME: 这里ossRegion传入的值应该类似于`oss-cn-shanghai`，而实际传入了`oss-cn-shanghai.aliyun.com`，
+// 导致后面解析oss url失败，这里endpoint需要用于构造ossClient，所以这里多加一个入参region
+func NewAliOssStorageClient(region, endpoint, bucketName, accessKey, secretKey, securityToken string) (*AliOssStorageClient, error) {
 	provider := AliOssStorageProvider{
 		Cred: &AliOssStorageCred{
 			AccessKeyId:     accessKey,
@@ -109,7 +112,7 @@ func NewAliOssStorageClient(endpoint, bucketName, accessKey, secretKey, security
 		ossClient:        ossClient,
 		ossBucketName:    bucketName,
 		ossBucket:        bucket,
-		ossRegion:        endpoint,
+		ossRegion:        region,
 		ossSecurityToken: securityToken,
 	}
 

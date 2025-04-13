@@ -8,6 +8,7 @@ import (
 	"io/ioutil"
 	"net/http"
 	"net/url"
+	"os"
 	"reflect"
 	"strings"
 	"unicode"
@@ -195,6 +196,65 @@ func (c *Client) CheckModel(modelType string, modelName string) (*Response[Check
 		return nil, cli.Exit(handleError(body, statusCode), meta.ServerError)
 	}
 	return handleResponse[CheckModelResp](body)
+}
+
+func (c *Client) Get_upload_token(fileName string, fileType string) (*Response[FilesResp], error) {
+	serverUrl := fmt.Sprintf("%s/x/%s/upload/token?file_name=%s", c.Domain, meta.APIv1, fileName)
+	resp, statusCode, err := c.doGet(serverUrl, ModelQueryReq{Name:"nil", Type:"image",}, c.authHeader())
+	if err != nil {
+		return nil, cli.Exit(err, meta.ServerError)
+	}
+	
+	if statusCode != http.StatusOK {
+		return nil, cli.Exit(handleError(resp, statusCode), meta.ServerError)
+	}
+	return handleResponse[FilesResp](resp)
+}
+
+// upload local image to oss and return image url
+func (c *Client)UploadImageToOss(imagePath string) (string, error) {
+	_, webpImgName, _, err := ImageToWebp(imagePath)
+	if err != nil {
+		logs.Errorf("%v\n", err)
+		return "", err
+	}
+	stat, err := os.Stat(imagePath)
+	if err != nil {
+		logs.Errorf("failed to parse image path: %s", imagePath)
+		return "", err
+	}
+
+	fileUrl := url.PathEscape(webpImgName)
+	// serverUrl := fmt.Sprintf("%s/upload/token?file_name=%s", Domain, fileName)
+	resp, err := c.Get_upload_token(fileUrl, "image")
+	if err != nil {
+		logs.Errorf("failed to get upload token, %s", err)
+		return "",err
+	}
+	fileRecord := resp.Data.File
+	fileStorage := resp.Data.Storage
+	ossClient, err := NewAliOssStorageClient(fileStorage.Region,fileStorage.Endpoint, fileStorage.Bucket, fileRecord.AccessKeyId, fileRecord.AccessKeySecret, fileRecord.SecurityToken)
+	if err != nil {
+		return "",err
+	}
+	fileToUpload := FileToUpload{
+		Path:      webpImgName,
+		RelPath:   webpImgName,
+		Size:      stat.Size(),
+		RemoteKey: fileRecord.ObjectKey,
+	}
+	ossUrl, err := ossClient.UploadFile(&fileToUpload, fileRecord.ObjectKey, "1/1")
+	// delete temporary webp file
+	rmErr := os.Remove(webpImgName)
+	if rmErr != nil {
+		logs.Warnf("failed to remove temporary webp file:[%s], please remote manually!", webpImgName)
+	}
+	if err != nil {
+		logs.Warnf("failed to upload cover to oss from: [%s]", imagePath)
+		return "",nil
+	}
+	fmt.Println("get oss url:", ossUrl)
+	return ossUrl, nil
 }
 
 func (c *Client) authHeader() map[string]string {

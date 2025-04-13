@@ -14,7 +14,7 @@ var globalArgs = config.NewArgument()
 func Init() *cli.App {
 	// flags
 	verboseFlag := cli.BoolFlag{Name: "verbose,vv", Usage: "turn on verbose mode", Destination: &globalArgs.Verbose}
-	baseDomainFlag := cli.StringFlag{Name: "base_domain", Usage: "Specify the request domain.", Destination: &globalArgs.BaseDomain, Value: meta.UATDomain, Required: false}
+	baseDomainFlag := cli.StringFlag{Name: "base_domain", Usage: "Specify the request domain.", Destination: &globalArgs.BaseDomain, Value: meta.DefaultDomain, Required: false}
 	apiKeyFlag := cli.StringFlag{Name: "api_key", Aliases: []string{"k"}, Usage: "Specify the api key.", EnvVars: []string{meta.EnvAPIKey}, Destination: &globalArgs.ApiKey}
 	typeFlag := cli.StringFlag{Name: "type", Aliases: []string{"t"}, Usage: fmt.Sprintf("Specify the mode type. (Only works for %s)", meta.ModelTypesStr), Destination: &globalArgs.Type}
 	pathFlag := cli.StringSliceFlag{Name: "path", Aliases: []string{"p"}, Usage: "Specify the path to upload.", Destination: &cli.StringSlice{}}
@@ -29,7 +29,7 @@ func Init() *cli.App {
 	versionPublicFlag := cli.StringSliceFlag{Name: "vpub", Aliases: []string{"vp"}, Usage: "Set corresponding model version public.", Destination: &cli.StringSlice{}}
 	introFlag := cli.StringSliceFlag{Name: "intro", Aliases: []string{"i"}, Usage: "An introduction to the model version.", Destination: &cli.StringSlice{}}
 	coverUrlsFlag := cli.StringSliceFlag{Name: "cover", Usage: "Urls of model covers, use ';' as separator.", Destination: &cli.StringSlice{}}
-	baseModelFlag := cli.StringSliceFlag{Name: "base", Aliases: []string{"b"}, Usage: fmt.Sprintf("Specify the base model of uploaded model. (Only works for %s)",meta.BaseModelStr), Required: true, Destination: &cli.StringSlice{}}
+	baseModelFlag := cli.StringSliceFlag{Name: "base", Aliases: []string{"b"}, Usage: fmt.Sprintf("Specify the base model of uploaded model. (Only works for %s)", meta.BaseModelStr), Required: true, Destination: &cli.StringSlice{}}
 
 	app := cli.NewApp()
 	app.Name = meta.Name
@@ -69,8 +69,8 @@ func Init() *cli.App {
 			Action: Logout,
 		},
 		{
-			Name:  meta.CmdUpload,
-			Usage: "Upload a file or a folder to your model directory on BizyAir",
+			Name:  meta.CmdUploadFile,
+			Usage: "Upload a file to your model directory on BizyAir",
 			Flags: []cli.Flag{
 				&typeFlag,
 				&pathFlag,
@@ -84,7 +84,18 @@ func Init() *cli.App {
 				// &hostFlag,
 				// &portFlag,
 			},
-			Action: Upload,
+			Action: UploadFile,
+		},
+		{
+			Name:  meta.CmdUpload,
+			Usage: "Upload a structured folder to your model directory on BizyAir",
+			Flags: []cli.Flag{
+				&pathFlag,
+				&overwriteFlag,
+				// &hostFlag,
+				// &portFlag,
+			},
+			Action: upload,
 		},
 		{
 			Name:  meta.CmdModel,

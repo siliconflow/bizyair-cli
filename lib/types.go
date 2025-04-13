@@ -48,7 +48,6 @@ type FileCommitReqV2 struct {
 	ModelType string `json:"type,omitempty" form:"type" query:"type"`
 }
 
-
 type ModelCommitReqV2 struct {
 	Name     string          `json:"name,omitempty" form:"name" query:"name"`
 	Type     string          `json:"type,omitempty" form:"type" query:"type"`
