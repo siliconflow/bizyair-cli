@@ -123,7 +123,7 @@ func UploadFile(c *cli.Context) error {
 		}
 
 		fileToUpload.Signature = sha256sum
-		logs.Debugf(fmt.Sprintf("file: %s, signature: %s", fileToUpload.RelPath, fileToUpload.Signature))
+		logs.Debugf(fmt.Sprintf("file: %s, signature: %s\n", fileToUpload.RelPath, fileToUpload.Signature))
 
 		// pass sha256sum to the server
 		ossCert, err := client.OssSign(sha256sum, args.Type)
@@ -246,11 +246,7 @@ func upload(c *cli.Context) error {
 		return cli.Exit(fmt.Sprintf("Unsupported type [%s], only works for %s", args.Type, meta.ModelTypesStr), meta.LoadError)
 	}
 
-	// parse model versions	path/to/folder/{version name}	info: description.md, content.json, meta.json (if necessary)
-	err = filepath.Walk(modelPath, func(path string, info os.FileInfo, err error) error {
-		fmt.Printf("current path: %s, isDir: %t \n", path, info.IsDir())
-		return nil
-	})
+	// parse model versions:	path/to/folder/{version name}	info: description.md, content.json, basemodel.txt
 	candidateVersionDir, err := filepath.Glob(modelPath + "/*")
 	if err != nil {
 		return cli.Exit(fmt.Sprintf("failed to scan model versions, %s", err), meta.LoadError)
@@ -259,21 +255,35 @@ func upload(c *cli.Context) error {
 		relPath, _ := filepath.Rel(modelPath, versionDir)
 		stat, err := os.Stat(versionDir)
 		if err != nil {
-			logs.Warnf("skip: failed to read file or dir: %s, error: %s \n", versionDir, err)
+			logs.Warnf("skip: failed to read file or dir: %s, error: %s\n", versionDir, err)
 		}
 		if stat.IsDir() {
-			fmt.Printf("start to parse folder: %s", versionDir)
+			fmt.Printf("start to parse folder: %s\n", versionDir)
 			modelVersion, err := parseModelVersion(*client, modelPath, versionDir)
 			if err != nil {
-				logs.Warnf("skip folder: [%s]", relPath)
+				logs.Warnf("skip folder: [%s]\n", relPath)
 			} else {
-				logs.Debugf("add version folder: %s", versionDir)
+				logs.Debugf("added version folder: %s\n", versionDir)
 				modelVersionList = append(modelVersionList, *modelVersion)
 			}
 		}
 	}
 	if len(modelVersionList) == 0 {
-		return cli.Exit(fmt.Sprintf("no valid version fetched in path: %s", modelPath), meta.LoadError)
+		return cli.Exit(fmt.Sprintf("no valid version scanned in path: %s\n", modelPath), meta.LoadError)
+	}
+
+	// if cover exists in root dir, assign it to the first version
+	coverList, _ := filepath.Glob(fmt.Sprintf("%s/%s", modelPath, meta.CoverFileName))
+	if len(coverList) != 0 {
+		for idx, cover := range coverList {
+			logs.Debugf("uploading cover : %s, index: %d/%d\n", &cover, idx, len(coverList))
+			coverUrl, err := client.UploadImageToOss(cover)
+			if err != nil {
+				logs.Errorf("failed to upload cover to oss\n")
+				continue
+			}
+			modelVersionList[0].CoverUrls = append(modelVersionList[0].CoverUrls, coverUrl)
+		}
 	}
 
 	ValidVersions := make([]*lib.ModelVersion, 0)
@@ -282,13 +292,13 @@ func upload(c *cli.Context) error {
 	for _, modelVersion := range modelVersionList {
 		stat, err := os.Stat(modelVersion.Path)
 		if err != nil {
-			logs.Errorf("failed to upload version: [%s], error: %s", modelVersion.Version, err)
+			logs.Errorf("failed to upload version: [%s], error: %s\n", modelVersion.Version, err)
 			continue
 		}
 
 		relPath, err := filepath.Rel(filepath.Dir(modelVersion.Path), modelVersion.Path)
 		if err != nil {
-			logs.Errorf("failed to upload version: [%s], error: %s", modelVersion.Version, err)
+			logs.Errorf("failed to upload version: [%s], error: %s\n", modelVersion.Version, err)
 			continue
 		}
 		uploadFile := lib.FileToUpload{
@@ -299,7 +309,7 @@ func upload(c *cli.Context) error {
 
 		err = signAndCommit(client, &uploadFile, modelType)
 		if err != nil {
-			logs.Errorf("failed to upload version: [%s], error: %s", modelVersion.Version, err)
+			logs.Errorf("failed to upload version: [%s], error: %s\n", modelVersion.Version, err)
 			continue // skip current version
 		}
 		modelVersion.Sign = uploadFile.Signature
@@ -309,9 +319,9 @@ func upload(c *cli.Context) error {
 	// commit model
 	_, err = client.CommitModelV2(modelName, modelType, ValidVersions)
 	if err != nil {
-		return cli.Exit(fmt.Sprintf("failed to commit model, error: %s", err), meta.LoadError)
+		return cli.Exit(fmt.Sprintf("failed to commit model, error: %s\n", err), meta.LoadError)
 	}
-	logs.Debugf("successfully upload model: %s", modelName)
+	logs.Debugf("successfully upload model: %s\n", modelName)
 	return nil
 }
 
@@ -330,44 +340,44 @@ func parseModelVersion(client lib.Client, modelPath string, versionPath string) 
 	// get version name
 	versionName, err := filepath.Rel(modelPath, versionPath)
 	if err != nil {
-		logs.Warnf("failed to parse version name for path: %s", versionPath)
+		logs.Warnf("failed to parse version name for path: %s\n", versionPath)
 		return nil, err
 	}
 
 	// get version content
 	contentFileList, err := filepath.Glob(fmt.Sprintf("%s/%s", versionPath, meta.ContentFileName))
 	if err != nil {
-		logs.Warnf("failed to fetch version content in current path: %s", versionPath)
+		logs.Warnf("failed to fetch version content in current path: %s\n", versionPath)
 		return nil, err
 	}
 	if len(contentFileList) == 0 {
-		logs.Warnf("version content not found in current path: %s", versionPath)
+		logs.Warnf("version content not found in current path: %s\n", versionPath)
 		return nil, err
 	}
 	if len(contentFileList) > 1 {
-		logs.Warnf("multiple content files found in current path: %s ", versionPath)
+		logs.Warnf("multiple content files found in current path: %s\n", versionPath)
 		return nil, err
 	}
 	contentFile := contentFileList[0]
-	logs.Debugf("version: [%s] scanned", versionName)
+	logs.Debugf("version: [%s] scanned\n", versionName)
 
 	// parse BaseModel
 	baseModel := string(meta.TypeOther)
 	baseModelList, err := filepath.Glob(fmt.Sprintf("%s/%s", versionPath, meta.BaseModelFileName))
 	if err != nil {
-		logs.Warnf("failed to match basemodel file, set `other` by default")
+		logs.Warnf("failed to match basemodel file, set `other` by default\n")
 	}
 	if len(baseModelList) != 0 {
 		baseModelPath := baseModelList[0] // only use the first BaseModel file
 		readBaseModel, err := os.ReadFile(baseModelPath)
 		if err != nil {
-			logs.Warnf("failed to read base model file: %s", baseModelPath)
+			logs.Warnf("failed to read base model file: %s\n", baseModelPath)
 		} else {
 			baseModel = string(readBaseModel)
 		}
 		valid, exists := meta.SupportedBaseModels[baseModel]
 		if !exists || !valid {
-			logs.Errorf("unsupported base model: %s", baseModel)
+			logs.Errorf("unsupported base model: %s\n", baseModel)
 			return nil, err
 		}
 	}
@@ -376,13 +386,13 @@ func parseModelVersion(client lib.Client, modelPath string, versionPath string) 
 	introText := ""
 	introFileList, err := filepath.Glob(fmt.Sprintf("%s/%s", versionPath, meta.IntroFileName))
 	if err != nil {
-		logs.Warnf("failed to match introduction file for version: [%s], set empty by default", versionName)
+		logs.Warnf("failed to match introduction file for version: [%s], set empty by default\n", versionName)
 	}
 	if len(introFileList) != 0 {
 		introPath := introFileList[0] // only use the first description file
 		readIntro, err := os.ReadFile(introPath)
 		if err != nil {
-			logs.Warnf("failed to read intro file: %s", introPath)
+			logs.Warnf("failed to read intro file: %s\n", introPath)
 		} else {
 			introText = string(readIntro)
 		}
@@ -391,15 +401,15 @@ func parseModelVersion(client lib.Client, modelPath string, versionPath string) 
 	// parse covers
 	coverList, err := filepath.Glob(fmt.Sprintf("%s/%s", versionPath, meta.CoverFileName))
 	if err != nil {
-		logs.Warnf("failed to fetch cover for version: [%s]", versionName)
+		logs.Warnf("failed to fetch cover for version: [%s]\n", versionName)
 	}
 	coverUrlList := make([]string, 0)
 	// tempWebpList := make([]string, 0)
 	for idx, cover := range coverList {
-		logs.Debugf("uploading cover : %s, index: %d/%d", &cover, idx, len(coverList))
+		logs.Debugf("uploading cover : %s, index: %d/%d\n", &cover, idx, len(coverList))
 		coverUrl, err := client.UploadImageToOss(cover)
 		if err != nil {
-			logs.Error("failed to upload cover to oss")
+			logs.Errorf("failed to upload cover to oss\n")
 			continue
 		}
 		coverUrlList = append(coverUrlList, coverUrl)
@@ -408,15 +418,18 @@ func parseModelVersion(client lib.Client, modelPath string, versionPath string) 
 	// parse public flag
 	public := false
 	publicFiles, err := filepath.Glob(fmt.Sprintf("%s/%s", versionPath, meta.PublicFileName))
+	if err != nil {
+		logs.Warnf("failed to read public flag, set false by default\n")
+	}
 	if len(publicFiles) != 0 {
 		publicFile := publicFiles[0]
 		readPublic, err := os.ReadFile(publicFile)
 		if err != nil {
-			logs.Warnf("failed to read public flag, set false by default")
+			logs.Warnf("failed to read public flag, set false by default\n")
 		}
 		value, err := strconv.ParseBool(string(readPublic))
 		if err != nil {
-			logs.Warnf("failed to parse public flag: %s, set false by default", string(readPublic))
+			logs.Warnf("failed to parse public flag: %s, set false by default\n", string(readPublic))
 		} else {
 			public = value
 		}
@@ -424,7 +437,7 @@ func parseModelVersion(client lib.Client, modelPath string, versionPath string) 
 
 	versionInfo := lib.ModelVersion{
 		Version:      versionName,
-		Path:         contentFile,
+		Path:         contentFile, // remain abs path because here the file is not uploaded yet
 		Introduction: introText,
 		BaseModel:    baseModel,
 		CoverUrls:    coverUrlList,
@@ -442,7 +455,7 @@ func signAndCommit(client *lib.Client, fileToUpload *lib.FileToUpload, Type stri
 
 	fileToUpload.Signature = sha256sum
 	fileToUpload.Md5Hash = md5Hash
-	logs.Debugf(fmt.Sprintf("file: %s, signature: %s", fileToUpload.RelPath, fileToUpload.Signature))
+	logs.Debugf(fmt.Sprintf("file: %s, signature: %s\n", fileToUpload.RelPath, fileToUpload.Signature))
 
 	// 2. pass sha256sum to the server
 	ossCert, err := client.OssSign(sha256sum, Type)
@@ -648,10 +661,10 @@ func checkModelIntro(args *config.Argument, required bool) ([]string, error) {
 func isValidBaseModel(basemodel string) bool {
 	valid, exists := meta.SupportedBaseModels[basemodel]
 	if !exists {
-		logs.Debugf("Base model not exists: ", basemodel)
+		logs.Debugf("Base model not exists:%s\n", basemodel)
 	}
 	if exists && !valid {
-		logs.Debugf("Base model not valid: ", basemodel)
+		logs.Debugf("Base model not valid:%s\n", basemodel)
 	}
 	return valid
 }
