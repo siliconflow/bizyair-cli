@@ -26,7 +26,7 @@ func Init() *cli.App {
 	// hostFlag := cli.StringFlag{Name: "host", Usage: fmt.Sprintf("Specify the request host, default: %s", meta.DefaultHost), Destination: &globalArgs.Host, Value: meta.DefaultHost}
 	// portFlag := cli.StringFlag{Name: "port", Usage: fmt.Sprintf("Specify the request port, default: %s", meta.DefaultPort), Destination: &globalArgs.Port, Value: meta.DefaultPort}
 	versionFlag := cli.StringSliceFlag{Name: "version", Aliases: []string{"v", "V"}, Usage: "Specify the version of model.", Destination: &cli.StringSlice{}}
-	versionPublicFlag := cli.StringSliceFlag{Name: "vpub", Aliases: []string{"vp"}, Usage: "Set corresponding model version public.", Destination: &cli.StringSlice{}}
+	versionPublicFlag := cli.StringSliceFlag{Name: "version_public", Aliases: []string{"vp"}, Usage: "Set corresponding model version public.", Destination: &cli.StringSlice{}}
 	introFlag := cli.StringSliceFlag{Name: "intro", Aliases: []string{"i"}, Usage: "An introduction to the model version.", Destination: &cli.StringSlice{}}
 	coverUrlsFlag := cli.StringSliceFlag{Name: "cover", Usage: "Urls of model covers, use ';' as separator.", Destination: &cli.StringSlice{}}
 	baseModelFlag := cli.StringSliceFlag{Name: "base", Aliases: []string{"b"}, Usage: fmt.Sprintf("Specify the base model of uploaded model. (Only works for %s)", meta.BaseModelStr), Required: true, Destination: &cli.StringSlice{}}

@@ -253,7 +253,7 @@ func (c *Client)UploadImageToOss(imagePath string) (string, error) {
 		logs.Warnf("failed to upload cover to oss from: [%s]", imagePath)
 		return "",nil
 	}
-	fmt.Println("get oss url:", ossUrl)
+	logs.Debug("get oss url:", ossUrl)
 	return ossUrl, nil
 }
 

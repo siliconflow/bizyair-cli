@@ -244,7 +244,7 @@ func upload(c *cli.Context) error {
 	// check type
 	checkType := meta.UploadFileType(modelType)
 	if !lo.Contains[meta.UploadFileType](meta.ModelTypes, checkType) {
-		return cli.Exit(fmt.Sprintf("Unsupported type [%s], only works for %s", args.Type, meta.ModelTypesStr), meta.LoadError)
+		return cli.Exit(fmt.Sprintf("Unsupported type [%s], only works for %s", modelType, meta.ModelTypesStr), meta.LoadError)
 	}
 
 	// parse model versions:	path/to/folder/{version name}	info: description.md, content.json, basemodel.txt
@@ -256,15 +256,15 @@ func upload(c *cli.Context) error {
 		relPath, _ := filepath.Rel(modelPath, versionDir)
 		stat, err := os.Stat(versionDir)
 		if err != nil {
-			fmt.Printf("skip: failed to read file or dir: %s, error: %s\n", versionDir, err)
+			logs.Errorf("skip: failed to read file or dir: %s, error: %s\n", versionDir, err)
 		}
 		if stat.IsDir() {
 			fmt.Printf("start to parse folder: %s\n", versionDir)
 			modelVersion, err := parseModelVersion(*client, modelPath, versionDir)
 			if err != nil {
-				logs.Warnf("skip folder: [%s]\n", relPath)
+				logs.Errorf("skip folder: [%s], error: %s\n", relPath, err)
 			} else {
-				logs.Info("added version folder: %s\n", versionDir)
+				fmt.Printf("successfully added version folder: %s\n", versionDir)
 				modelVersionList = append(modelVersionList, *modelVersion)
 			}
 		}
@@ -323,7 +323,7 @@ func upload(c *cli.Context) error {
 	if err != nil {
 		return cli.Exit(fmt.Sprintf("failed to commit model, error: %s\n", err), meta.LoadError)
 	}
-	logs.Info("successfully upload model: %s\n", modelName)
+	fmt.Printf("successfully upload model: %s\n", modelName)
 	return nil
 }
 
@@ -342,22 +342,20 @@ func parseModelVersion(client lib.Client, modelPath string, versionPath string) 
 	// get version name
 	versionName, err := filepath.Rel(modelPath, versionPath)
 	if err != nil {
-		logs.Warnf("failed to parse version name for path: %s\n", versionPath)
+		logs.Info("[Warn]:failed to parse version name for path: %s\n", versionPath)
 		return nil, err
 	}
 
 	// get version content (required)
 	contentFileList, err := filepath.Glob(fmt.Sprintf("%s/%s", versionPath, meta.ContentFileName))
 	if err != nil {
-		logs.Warnf("failed to fetch version content in current path: %s\n", versionPath)
+		logs.Info("[Warn]:failed to fetch version content in current path: %s\n", versionPath)
 		return nil, err
 	}
 	if len(contentFileList) == 0 {
-		logs.Warnf("version content not found in current path: %s\n", versionPath)
 		return nil, fmt.Errorf("version content not found in current path: %s", versionPath)
 	}
 	if len(contentFileList) > 1 {
-		logs.Warnf("multiple content files found in current path: %s\n", versionPath)
 		return nil, fmt.Errorf("multiple content files found in current path: %s", versionPath)
 	}
 	contentFile := contentFileList[0]
@@ -367,19 +365,19 @@ func parseModelVersion(client lib.Client, modelPath string, versionPath string) 
 	baseModel := string(meta.TypeOther)
 	baseModelList, err := filepath.Glob(fmt.Sprintf("%s/%s", versionPath, meta.BaseModelFileName))
 	if err != nil {
-		logs.Warnf("failed to match basemodel file, set `other` by default\n")
+		logs.Info("failed to match basemodel file, set `other` by default\n")
 	}
 	if len(baseModelList) != 0 {
 		baseModelPath := baseModelList[0] // only use the first BaseModel file
 		readBaseModel, err := os.ReadFile(baseModelPath)
 		if err != nil {
-			logs.Warnf("failed to read base model file: %s\n", baseModelPath)
+			logs.Info("[Warn]:failed to read base model file: %s\n", baseModelPath)
 		} else {
 			baseModel = string(readBaseModel)
 		}
 		valid, exists := meta.SupportedBaseModels[baseModel]
 		if !exists || !valid {
-			return nil, fmt.Errorf("unsupported base model: %s", baseModel)
+			return nil, fmt.Errorf("unsupported base model: %s", readBaseModel)
 		}
 	}
 
@@ -387,13 +385,13 @@ func parseModelVersion(client lib.Client, modelPath string, versionPath string) 
 	introText := ""
 	introFileList, err := filepath.Glob(fmt.Sprintf("%s/%s", versionPath, meta.IntroFileName))
 	if err != nil {
-		logs.Warnf("failed to match introduction file for version: [%s], set empty by default\n", versionName)
+		logs.Info("[Warn]:failed to match introduction file for version: [%s], set empty by default\n", versionName)
 	}
 	if len(introFileList) != 0 {
 		introPath := introFileList[0] // only use the first description file
 		readIntro, err := os.ReadFile(introPath)
 		if err != nil {
-			logs.Warnf("failed to read intro file: %s\n", introPath)
+			logs.Info("[Warn]:failed to read intro file: %s\n", introPath)
 		} else {
 			introText = string(readIntro)
 		}
@@ -402,7 +400,7 @@ func parseModelVersion(client lib.Client, modelPath string, versionPath string) 
 	// parse covers
 	coverList, err := filepath.Glob(fmt.Sprintf("%s/%s", versionPath, meta.CoverFileName))
 	if err != nil {
-		logs.Warnf("failed to fetch cover for version: [%s]\n", versionName)
+		logs.Info("[Warn]:failed to fetch cover for version: [%s]\n", versionName)
 	}
 	coverUrlList := make([]string, 0)
 	// tempWebpList := make([]string, 0)
@@ -420,17 +418,17 @@ func parseModelVersion(client lib.Client, modelPath string, versionPath string) 
 	public := false
 	publicFiles, err := filepath.Glob(fmt.Sprintf("%s/%s", versionPath, meta.PublicFileName))
 	if err != nil {
-		logs.Warnf("failed to read public flag, set false by default\n")
+		logs.Info("[Warn]:failed to read public flag, set false by default\n")
 	}
 	if len(publicFiles) != 0 {
 		publicFile := publicFiles[0]
 		readPublic, err := os.ReadFile(publicFile)
 		if err != nil {
-			logs.Warnf("failed to read public flag, set false by default\n")
+			logs.Info("[Warn]:failed to read public flag, set false by default\n")
 		}
 		value, err := strconv.ParseBool(string(readPublic))
 		if err != nil {
-			logs.Warnf("failed to parse public flag: %s, set false by default\n", string(readPublic))
+			logs.Info("[Warn]:failed to parse public flag: %s, set false by default\n", string(readPublic))
 		} else {
 			public = value
 		}

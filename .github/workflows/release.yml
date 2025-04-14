@@ -43,11 +43,11 @@ jobs:
           DATE=`date -j -f "%s" ${SOURCE_DATE_EPOCH} +"%Y-%m-%dT%H:%M:%SZ"`
           PACKAGE=github.com/siliconflow/bizyair-cli
           # build for Linux amd64
-          CGO_ENABLED=0 GOOS=darwin GOARCH=amd64 go build -ldflags "-w -s -X '${PACKAGE}/meta.Version=${VERSION}' -X '${PACKAGE}/meta.Commit=${GIT_REV}' -X '${PACKAGE}/meta.BuildDate=${DATE}'" -o out/bizyair main.go
+          CGO_ENABLED=1 GOOS=darwin GOARCH=amd64 go build -ldflags "-w -s -X '${PACKAGE}/meta.Version=${VERSION}' -X '${PACKAGE}/meta.Commit=${GIT_REV}' -X '${PACKAGE}/meta.BuildDate=${DATE}'" -o out/bizyair main.go
           tar zcvf out/bizyair-cli-macosx-${VERSION}-amd64.tgz -C out bizyair
           bash tools/upload_asset.sh ${VERSION} out/bizyair-cli-macosx-${VERSION}-amd64.tgz
           # build for Linux arm64
-          CGO_ENABLED=0 GOOS=darwin GOARCH=arm64 go build -ldflags "-w -s -X '${PACKAGE}/meta.Version=${VERSION}' -X '${PACKAGE}/meta.Commit=${GIT_REV}' -X '${PACKAGE}/meta.BuildDate=${DATE}'" -o out/bizyair main.go
+          CGO_ENABLED=1 GOOS=darwin GOARCH=arm64 go build -ldflags "-w -s -X '${PACKAGE}/meta.Version=${VERSION}' -X '${PACKAGE}/meta.Commit=${GIT_REV}' -X '${PACKAGE}/meta.BuildDate=${DATE}'" -o out/bizyair main.go
           tar zcvf out/bizyair-cli-macosx-${VERSION}-arm64.tgz -C out bizyair
           bash tools/upload_asset.sh ${VERSION} out/bizyair-cli-macosx-${VERSION}-arm64.tgz
   build_for_linux:
@@ -74,11 +74,11 @@ jobs:
           DATE=`date -u -d @${SOURCE_DATE_EPOCH} +"%Y-%m-%dT%H:%M:%SZ"`
           PACKAGE=github.com/siliconflow/bizyair-cli
           # build for Linux amd64
-          CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags "-w -s -X '${PACKAGE}/meta.Version=${VERSION}' -X '${PACKAGE}/meta.Commit=${GIT_REV}' -X '${PACKAGE}/meta.BuildDate=${DATE}'" -o out/bizyair main.go
+          CGO_ENABLED=1 GOOS=linux GOARCH=amd64 go build -ldflags "-w -s -X '${PACKAGE}/meta.Version=${VERSION}' -X '${PACKAGE}/meta.Commit=${GIT_REV}' -X '${PACKAGE}/meta.BuildDate=${DATE}'" -o out/bizyair main.go
           tar zcvf out/bizyair-cli-linux-${VERSION}-amd64.tgz -C out bizyair
           bash tools/upload_asset.sh ${VERSION} out/bizyair-cli-linux-${VERSION}-amd64.tgz
           # build for Linux arm64
-          CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -ldflags "-w -s -X '${PACKAGE}/meta.Version=${VERSION}' -X '${PACKAGE}/meta.Commit=${GIT_REV}' -X '${PACKAGE}/meta.BuildDate=${DATE}'" -o out/bizyair main.go
+          CGO_ENABLED=1 GOOS=linux GOARCH=arm64 go build -ldflags "-w -s -X '${PACKAGE}/meta.Version=${VERSION}' -X '${PACKAGE}/meta.Commit=${GIT_REV}' -X '${PACKAGE}/meta.BuildDate=${DATE}'" -o out/bizyair main.go
           tar zcvf out/bizyair-cli-linux-${VERSION}-arm64.tgz -C out bizyair
           bash tools/upload_asset.sh ${VERSION} out/bizyair-cli-linux-${VERSION}-arm64.tgz
   build_for_windows:
@@ -106,7 +106,7 @@ jobs:
           $source_date = (Get-Date).ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ")
           $env:GOOS = "windows"
           $env:GOARCH = "amd64"
-          $env:CGO_ENABLED = "0"
+          $env:CGO_ENABLED = "1"
           go build -ldflags "-w -s -X '$package/meta.Version=$version' -X '$package/meta.Commit=$git_rev' -X '$package/meta.BuildDate=$source_date'" -o ./out/bizyair.exe main.go
           Compress-Archive -Path ./out/bizyair.exe -DestinationPath ./out/bizyair-cli-windows-${version}-amd64.zip
           bash ./tools/upload_asset.sh ${version} ./out/bizyair-cli-windows-${version}-amd64.zip
