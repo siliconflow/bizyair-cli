@@ -11,7 +11,7 @@ const (
 	CmdWhoami     = "whoami"
 	CmdLogout     = "logout"
 	CmdUpload     = "upload"
-	CmdUploadFile = "upload-file"
+	CmdUploadFile = "uploadFile"
 	CmdModel      = "model"
 	CmdLs         = "ls"
 	CmdLsFiles    = "ls-files"
@@ -22,7 +22,7 @@ const (
 const (
 	ModelNameFileName = "name.txt"
 	ModelTypeFileName = "type.txt"
-	ContentFileName   = "content.*"
+	ContentFileName   = "content*.*"
 	BaseModelFileName = "basemodel.*"
 	IntroFileName     = "description.*"
 	PublicFileName    = "public.*"
