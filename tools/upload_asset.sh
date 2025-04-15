@@ -2,7 +2,7 @@
 
 TAG=v$1
 ASSET=$2
-REPO=siliconflow/siliconcloud-cli
+REPO=siliconflow/bizyair-cli
 
 if [[ $ASSET == *.tgz ]]
 then
