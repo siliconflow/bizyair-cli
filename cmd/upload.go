@@ -160,6 +160,29 @@ func UploadFile(c *cli.Context) error {
 
 			fmt.Fprintln(os.Stdout, fmt.Sprintf("(%s) %s Already Uploaded", fileIndex, fileToUpload.RelPath))
 		}
+
+		// upload cover images to oss if necessary
+		validCoverUrlList := make([]string,0)
+		for _, url := range cover_urls[i]{
+			stat, err := os.Stat(url)
+			if err != nil {
+				// is not local file
+				validCoverUrlList = append(validCoverUrlList, url)
+				continue
+			} 
+			if stat.IsDir(){
+				logs.Errorf("expected image files or urls, but received directory: [%s]", url)
+				continue
+			}
+			// upload to oss
+			ossUrl,err := client.UploadImageToOss(url)
+			if err != nil {
+				logs.Errorf("failed to upload image [%s], error: %s", url, err)
+			} else {
+				validCoverUrlList = append(validCoverUrlList, ossUrl)
+			}
+		}
+		
 		versionInfo := lib.ModelVersion{
 			Version:      modelVersion[i],
 			BaseModel:    args.BaseModel[i],
@@ -167,7 +190,7 @@ func UploadFile(c *cli.Context) error {
 			Public:       versionPublic[i],
 			Sign:         sha256sum,
 			Path:         modelPath[i],
-			CoverUrls:    cover_urls[i],
+			CoverUrls:    validCoverUrlList,
 		}
 		versionList = append(versionList, &versionInfo)
 
@@ -248,7 +271,7 @@ func upload(c *cli.Context) error {
 	}
 
 	// parse model versions:	path/to/folder/{version name}	info: description.md, content.json, basemodel.txt
-	candidateVersionDir, err := filepath.Glob(modelPath + "/*")
+	candidateVersionDir, err := filepath.Glob(filepath.Join(modelPath,"*"))
 	if err != nil {
 		return cli.Exit(fmt.Sprintf("failed to scan model versions, %s", err), meta.LoadError)
 	}
@@ -260,7 +283,7 @@ func upload(c *cli.Context) error {
 		}
 		if stat.IsDir() {
 			fmt.Printf("start to parse folder: %s\n", versionDir)
-			modelVersion, err := parseModelVersion(*client, modelPath, versionDir)
+			modelVersion, err := parseModelVersion(*client, versionDir)
 			if err != nil {
 				logs.Errorf("skip folder: [%s], error: %s\n", relPath, err)
 			} else {
@@ -273,7 +296,7 @@ func upload(c *cli.Context) error {
 		return cli.Exit(fmt.Sprintf("no valid version scanned in path: %s\n", modelPath), meta.LoadError)
 	}
 
-	// if cover exists in root dir, assign it to the first version
+	// if cover images exist in root dir, assign images to the first version
 	coverList, _ := filepath.Glob(fmt.Sprintf("%s/%s", modelPath, meta.CoverFileName))
 	if len(coverList) != 0 {
 		for idx, cover := range coverList {
@@ -287,7 +310,7 @@ func upload(c *cli.Context) error {
 		}
 	}
 
-	ValidVersions := make([]*lib.ModelVersion, 0)
+	validVersions := make([]*lib.ModelVersion, 0)
 
 	// commit version content
 	for _, modelVersion := range modelVersionList {
@@ -315,11 +338,11 @@ func upload(c *cli.Context) error {
 		}
 		modelVersion.Sign = uploadFile.Signature
 		modelVersion.Path = relPath
-		ValidVersions = append(ValidVersions, &modelVersion)
+		validVersions = append(validVersions, &modelVersion)
 	}
 
 	// commit model
-	_, err = client.CommitModelV2(modelName, modelType, ValidVersions)
+	_, err = client.CommitModelV2(modelName, modelType, validVersions)
 	if err != nil {
 		return cli.Exit(fmt.Sprintf("failed to commit model, error: %s\n", err), meta.LoadError)
 	}
@@ -328,23 +351,18 @@ func upload(c *cli.Context) error {
 }
 
 // parse a folder, upload content and return version info.
-func parseModelVersion(client lib.Client, modelPath string, versionPath string) (*lib.ModelVersion, error) {
-	/**
+func parseModelVersion(client lib.Client, versionPath string) (*lib.ModelVersion, error) {
+	/** ModelVersion
 	Version:		${dirName}
 	Path:			./content.* (required)
 	Introduction:	./description.md
-	Sign:			(nil)
+	Sign:			(nil)			// performs after parsing all versions
 	BaseModel:		default: other
 	Public:			default: true
-	CoverUrls:
+	CoverUrls:		[]${oss_url}
 	*/
 
-	// get version name
-	versionName, err := filepath.Rel(modelPath, versionPath)
-	if err != nil {
-		logs.Info("[Warn]:failed to parse version name for path: %s\n", versionPath)
-		return nil, err
-	}
+	versionName := filepath.Base(versionPath)
 
 	// get version content (required)
 	contentFileList, err := filepath.Glob(fmt.Sprintf("%s/%s", versionPath, meta.ContentFileName))

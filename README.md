@@ -98,7 +98,7 @@ For `type.txt`, supported options are:
 For `basemodel.txt`, supported options are:
 `Flux.1 D`, `SDXL`, `SD 1.5`, `SD 3.5`, `Pony`, `Kolors`, `Hunyuan 1`, `Other`
 
-### Upload files
+### (Deprecated) Upload files
 To upload files to the silicon cloud, run the following CLI:
 
 ```bash
@@ -108,12 +108,12 @@ bizyair uploadFile -n mymodel -t [LoRA | Controlnet | Checkpoint] -p /local/path
 ~~You can specify overwrite flag to overwrite the model if it already exists in the silicon cloud.~~
 
 ```bash
-(Deprecated) bizyair uploadFile -n mymodel -t bizyair/checkpoint -p /local/path/file --overwrite
+bizyair uploadFile -n mymodel -t bizyair/checkpoint -p /local/path/file --overwrite
 ```
 
 You can specify model name, model type, base model and path to upload by using the `-n`, `-t`, `-b` and `-p` flags respectively.
 
-You can specify version names, introductions, and model cover urls using `-v`, `-i`, `-cover` flags respectively.
+You can specify version names, introductions, and model cover urls using `-v`, `-i`, `--cover` flags respectively. Image files are also supported, bizyair-cli will upload them to cloud.
 
 To upload multiple covers for one version, use ";" as a separator.
 
@@ -145,7 +145,7 @@ You can specify public flag `--public` to view all public models in the silicon 
 To view all files in a model, run the following CLI:
 
 ```bash
-bizyair model ls-files -n mymodel -t bizyair/checkpoint
+bizyair model ls-files -n mymodel -t Checkpoint
 ```
 
 You can specify public flag `--public` to view all public model files in the silicon cloud. By default, it will show only your private model files.
