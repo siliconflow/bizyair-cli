@@ -32,27 +32,27 @@ const (
 type UploadFileType string
 
 const (
-	TypeCheckpoint   UploadFileType = "Checkpoint"
-	TypeVae          UploadFileType = "VAE"
-	TypeUNet         UploadFileType = "UNet"
-	TypeLora         UploadFileType = "LoRA"
-	TypeControlNet   UploadFileType = "Controlnet"
-	TypeClip         UploadFileType = "CLIP"
-	TypeUpscale      UploadFileType = "Upscaler"
-	TypeDetection    UploadFileType = "Detection"
-	TypeOther        UploadFileType = "Other"
-	TypeWorkflow     UploadFileType = "Workflow"
+	TypeCheckpoint UploadFileType = "Checkpoint"
+	TypeVae        UploadFileType = "VAE"
+	TypeUNet       UploadFileType = "UNet"
+	TypeLora       UploadFileType = "LoRA"
+	TypeControlNet UploadFileType = "Controlnet"
+	TypeClip       UploadFileType = "CLIP"
+	TypeUpscale    UploadFileType = "Upscaler"
+	TypeDetection  UploadFileType = "Detection"
+	TypeOther      UploadFileType = "Other"
 )
 
 var ModelTypes = []UploadFileType{
 	TypeCheckpoint,
 	TypeVae,
+	TypeUNet,
 	TypeLora,
 	TypeControlNet,
 	TypeClip,
 	TypeUpscale,
+	TypeDetection,
 	TypeOther,
-	TypeWorkflow,
 }
 
 var ModelTypesStr = func(arr []UploadFileType) string {
@@ -98,6 +98,8 @@ var SupportedBaseModels = map[string]bool{
 	"Pony":           true,
 	"Kolors":         true,
 	"Hunyuan 1":      true,
+	"WAN Video":      true,
+	"Qwen-Image":     true,
 	"Other":          true,
 }
 

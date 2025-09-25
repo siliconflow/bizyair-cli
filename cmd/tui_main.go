@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"math"
 	"os"
@@ -9,7 +10,9 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"time"
 
+	"github.com/charmbracelet/bubbles/filepicker"
 	"github.com/charmbracelet/bubbles/list"
 	"github.com/charmbracelet/bubbles/spinner"
 	"github.com/charmbracelet/bubbles/textinput"
@@ -56,6 +59,9 @@ type actionDoneMsg struct {
 	err error
 }
 
+// 清除filepicker错误的消息
+type clearFilePickerErrorMsg struct{}
+
 // 菜单项
 type menuEntry struct {
 	listItem
@@ -87,6 +93,13 @@ type actionInputs struct {
 	lfTree    bool
 	lfExt     string
 	lfExtDone bool
+
+	// Filepicker state
+	useFilePicker bool
+	filePickerErr error
+
+	// 路径输入相关
+	pathInputFocused bool
 }
 
 type mainModel struct {
@@ -111,6 +124,10 @@ type mainModel struct {
 	inpCover textinput.Model
 	// 其他输入
 	inpExt textinput.Model
+
+	//文件选择器
+	filepicker   filepicker.Model
+	selectedFile string
 
 	// 动作输入
 	act actionInputs
@@ -144,7 +161,6 @@ func newMainModel() mainModel {
 		menuEntry{listItem{title: "退出程序", desc: "离开 BizyAir CLI"}, actionExit},
 	}
 
-	// Delegate 样式与 upload_tui 保持一致
 	d := list.NewDefaultDelegate()
 	cSel := lipgloss.Color("#04B575")
 	d.Styles.SelectedTitle = d.Styles.SelectedTitle.Foreground(cSel).BorderLeftForeground(cSel)
@@ -188,6 +204,10 @@ func newMainModel() mainModel {
 
 	inPath := textinput.New()
 	inPath.Placeholder = "请输入文件路径（仅文件）"
+	// 设置默认值为用户主目录
+	if homeDir, err := os.UserHomeDir(); err == nil {
+		inPath.SetValue(homeDir + "/")
+	}
 
 	inCover := textinput.New()
 	inCover.Placeholder = "可选，多地址以 ; 分隔"
@@ -195,21 +215,41 @@ func newMainModel() mainModel {
 	inExt := textinput.New()
 	inExt.Placeholder = "可选，文件扩展名（如 .safetensors）"
 
+	//文件选择器 - 配置为支持模型文件格式
+	fp := filepicker.New()
+	// 允许所有文件类型，让用户可以浏览
+	fp.AllowedTypes = []string{} // 空数组表示允许所有文件类型
+
+	// 设置起始目录为用户主目录
+	homeDir, err := os.UserHomeDir()
+	if err != nil {
+		homeDir = "."
+	}
+	fp.CurrentDirectory = homeDir
+	fp.ShowHidden = true // 显示隐藏文件，这样可以看到更多文件
+	fp.DirAllowed = true
+	fp.FileAllowed = true
+	fp.Height = 10 // 设置一个合理的高度
+	fp.AutoHeight = false
+
+	// 自定义样式，提供更友好的空目录消息
+	fp.Styles.EmptyDirectory = fp.Styles.EmptyDirectory.SetString("此目录为空。使用方向键导航到其他目录。")
+
 	// spinner
 	sp := spinner.New()
 	sp.Spinner = spinner.Dot
 
 	return mainModel{
-		step:     mainStepHome,
-		menu:     menuList,
-		inpApi:   inApi,
-		typeList: tp,
-		baseList: bl,
-		inpName:  inName,
-		inpPath:  inPath,
-		inpCover: inCover,
-		inpExt:   inExt,
-		// 样式同 upload_tui
+		step:       mainStepHome,
+		menu:       menuList,
+		inpApi:     inApi,
+		typeList:   tp,
+		baseList:   bl,
+		inpName:    inName,
+		inpPath:    inPath,
+		inpCover:   inCover,
+		inpExt:     inExt,
+		filepicker: fp,
 		titleStyle: lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("#36A3F7")),
 		hintStyle:  lipgloss.NewStyle().Faint(true).Foreground(lipgloss.Color("244")),
 		panelStyle: lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).BorderForeground(lipgloss.Color("63")).Padding(1, 2),
@@ -236,7 +276,40 @@ func newMainModel() mainModel {
 	}
 }
 
-func (m mainModel) Init() tea.Cmd { return m.sp.Tick }
+// 清除filepicker错误的命令
+func clearFilePickerErrorAfter(t time.Duration) tea.Cmd {
+	return tea.Tick(t, func(_ time.Time) tea.Msg {
+		return clearFilePickerErrorMsg{}
+	})
+}
+
+func (m mainModel) Init() tea.Cmd { return tea.Batch(m.sp.Tick, m.filepicker.Init()) }
+
+// 验证并设置路径的辅助方法
+func (m *mainModel) validateAndSetPath(path string) error {
+	// 验证文件扩展名
+	supportedExts := []string{".safetensors", ".bin", ".ckpt", ".pt", ".pth", ".pkl", ".h5", ".onnx", ".tflite", ".pb", ".json", ".txt", ".md", ".yaml", ".yml"}
+	isSupported := false
+	for _, ext := range supportedExts {
+		if strings.HasSuffix(strings.ToLower(path), ext) {
+			isSupported = true
+			break
+		}
+	}
+
+	if !isSupported {
+		return fmt.Errorf("不支持的文件格式，支持的格式：%s", strings.Join(supportedExts, ", "))
+	}
+
+	if err := validatePath(path); err != nil {
+		return err
+	}
+
+	m.act.u.path = absPath(path)
+	m.selectedFile = path
+	m.act.filePickerErr = nil
+	return nil
+}
 
 func (m mainModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
@@ -254,6 +327,13 @@ func (m mainModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.inpPath.Width = lw
 		m.inpCover.Width = lw
 		m.inpExt.Width = lw
+
+		// 设置filepicker的高度
+		if m.height > 15 {
+			m.filepicker.SetHeight(m.height - 15)
+		} else {
+			m.filepicker.SetHeight(5)
+		}
 		return m, nil
 	case tea.KeyMsg:
 		if m.err != nil {
@@ -296,7 +376,6 @@ func (m mainModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 						m.running = true
 						return m, runWhoami(m.apiKey)
 					case actionUpload:
-						// 进入上传参数收集：先类型
 						m.step = mainStepAction
 						m.act = actionInputs{}
 						return m, nil
@@ -322,6 +401,8 @@ func (m mainModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.output = ""
 				m.running = false
 				m.act = actionInputs{}
+				m.selectedFile = ""
+				m.filepicker.Path = ""
 				return m, nil
 			}
 		case "esc":
@@ -337,6 +418,8 @@ func (m mainModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.output = ""
 				m.running = false
 				m.act = actionInputs{}
+				m.selectedFile = ""
+				m.filepicker.Path = ""
 				return m, nil
 			}
 		default:
@@ -376,6 +459,9 @@ func (m mainModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		m.step = mainStepOutput
 		return m, nil
+	case clearFilePickerErrorMsg:
+		m.act.filePickerErr = nil
+		return m, nil
 	default:
 		// 转给 spinner
 		var cmd tea.Cmd
@@ -383,7 +469,17 @@ func (m mainModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if cmd != nil {
 			return m, cmd
 		}
+
+		// 更新filepicker
+		if m.step == mainStepAction && m.currentAction == actionUpload && m.act.useFilePicker {
+			var fpCmd tea.Cmd
+			m.filepicker, fpCmd = m.filepicker.Update(msg)
+			if fpCmd != nil {
+				return m, fpCmd
+			}
+		}
 	}
+
 	return m, nil
 }
 
@@ -517,6 +613,8 @@ func (m *mainModel) updateActionInputs(msg tea.Msg) tea.Cmd {
 				// 返回上级菜单
 				m.step = mainStepMenu
 				m.act = actionInputs{}
+				m.selectedFile = ""
+				m.filepicker.Path = ""
 				return nil
 			}
 			return cmd
@@ -529,7 +627,15 @@ func (m *mainModel) updateActionInputs(msg tea.Msg) tea.Cmd {
 					return nil
 				}
 				m.act.u.name = m.inpName.Value()
-				return m.inpPath.Focus()
+				m.act.useFilePicker = true
+				m.act.pathInputFocused = false // 默认filepicker有焦点
+
+				// 设置路径输入框的初始值为filepicker的当前目录
+				m.inpPath.SetValue(m.filepicker.CurrentDirectory + "/")
+
+				// 重新初始化filepicker以确保它正确读取目录，并让路径输入框失去焦点
+				m.inpPath.Blur()
+				return m.filepicker.Init()
 			} else if km, ok := msg.(tea.KeyMsg); ok && km.String() == "esc" {
 				// 回到选择类型
 				m.act.u = uploadInputs{}
@@ -538,20 +644,127 @@ func (m *mainModel) updateActionInputs(msg tea.Msg) tea.Cmd {
 			return cmd
 		}
 		if m.act.u.path == "" {
-			m.inpPath, cmd = m.inpPath.Update(msg)
-			if km, ok := msg.(tea.KeyMsg); ok && km.String() == "enter" {
-				p := m.inpPath.Value()
-				if err := validatePath(p); err != nil {
-					m.err = err
+			// 混合模式：路径输入框 + 文件选择器，类似官方示例
+			var pathCmd, fpCmd tea.Cmd
+
+			// 处理按键事件
+			if km, ok := msg.(tea.KeyMsg); ok {
+				switch km.String() {
+				case "esc":
+					// 返回上一步
+					m.act.u.name = ""
+					m.act.useFilePicker = false
+					m.act.pathInputFocused = false
+					m.act.filePickerErr = nil
+					m.filepicker.Path = ""
+					return m.inpName.Focus()
+				case "ctrl+r":
+					// 强制刷新：同步路径输入框到文件选择器
+					path := strings.TrimSpace(m.inpPath.Value())
+					if path != "" {
+						if info, err := os.Stat(path); err == nil && info.IsDir() {
+							m.filepicker.CurrentDirectory = path
+							return m.filepicker.Init()
+						} else {
+							m.act.filePickerErr = fmt.Errorf("路径无效或不是目录: %s", path)
+							return clearFilePickerErrorAfter(3 * time.Second)
+						}
+					}
 					return nil
+				case "tab":
+					// Tab键在路径输入框和文件选择器之间切换焦点
+					if m.act.pathInputFocused {
+						// 从路径输入框切换到文件选择器时，检查路径是否是目录
+						path := strings.TrimSpace(m.inpPath.Value())
+						if path != "" {
+							if info, err := os.Stat(path); err == nil && info.IsDir() {
+								// 如果路径是有效目录，更新filepicker
+								m.filepicker.CurrentDirectory = path
+								m.act.pathInputFocused = false
+								m.inpPath.Blur()
+								return m.filepicker.Init()
+							}
+						}
+						// 如果路径无效，仍然切换焦点但不更新目录
+						m.act.pathInputFocused = false
+						m.inpPath.Blur()
+						return nil
+					} else {
+						// 切换到路径输入框
+						m.act.pathInputFocused = true
+						return m.inpPath.Focus()
+					}
+				case "enter":
+					if m.act.pathInputFocused && m.inpPath.Value() != "" {
+						// 从输入框确认路径
+						path := strings.TrimSpace(m.inpPath.Value())
+
+						// 检查路径是否存在
+						info, err := os.Stat(path)
+						if err != nil {
+							m.act.filePickerErr = fmt.Errorf("路径不存在: %s", path)
+							return clearFilePickerErrorAfter(3 * time.Second)
+						}
+
+						if info.IsDir() {
+							// 如果是目录，更新filepicker到该目录
+							m.filepicker.CurrentDirectory = path
+							return m.filepicker.Init()
+						} else {
+							// 如果是文件，直接选择该文件
+							if err := m.validateAndSetPath(path); err != nil {
+								m.act.filePickerErr = err
+								return clearFilePickerErrorAfter(3 * time.Second)
+							}
+							return nil
+						}
+					}
 				}
-				m.act.u.path = absPath(p)
-			} else if km, ok := msg.(tea.KeyMsg); ok && km.String() == "esc" {
-				// 返回 name
-				m.act.u.name = ""
-				return m.inpName.Focus()
 			}
-			return cmd
+
+			// 更新路径输入框
+			if m.act.pathInputFocused {
+				m.inpPath, pathCmd = m.inpPath.Update(msg)
+			}
+
+			// 更新文件选择器 - 只有在文件选择器有焦点时才更新
+			if !m.act.pathInputFocused {
+				oldDir := m.filepicker.CurrentDirectory
+				m.filepicker, fpCmd = m.filepicker.Update(msg)
+
+				// 如果目录改变了，同步更新路径输入框
+				if m.filepicker.CurrentDirectory != oldDir {
+					m.inpPath.SetValue(m.filepicker.CurrentDirectory + "/")
+				}
+			}
+
+			// 检查文件选择 - 只有在文件选择器有焦点时才检查
+			if !m.act.pathInputFocused {
+				// 检查真正的文件选择（非文件夹）
+				if didSelect, path := m.filepicker.DidSelectFile(msg); didSelect {
+					// 使用stat检查是否为文件（而不是文件夹）
+					if info, err := os.Stat(path); err == nil && !info.IsDir() {
+						// 确认是文件才进行格式验证和选择
+						if err := m.validateAndSetPath(path); err != nil {
+							m.act.filePickerErr = err
+							return clearFilePickerErrorAfter(3 * time.Second)
+						}
+						return nil
+					}
+					// 如果是文件夹或无法访问，什么都不做，让filepicker正常处理
+				}
+
+				// 检查禁用文件选择
+				if didSelect, path := m.filepicker.DidSelectDisabledFile(msg); didSelect {
+					// 只对文件显示格式错误，文件夹不需要格式验证
+					if info, err := os.Stat(path); err == nil && !info.IsDir() {
+						m.act.filePickerErr = errors.New(path + " 文件格式不支持")
+						return clearFilePickerErrorAfter(3 * time.Second)
+					}
+				}
+			}
+
+			return tea.Batch(pathCmd, fpCmd)
 		}
 		if m.act.u.base == "" && !m.act.confirming {
 			m.baseList, cmd = m.baseList.Update(msg)
@@ -758,7 +971,69 @@ func (m *mainModel) renderActionView() string {
 			return m.titleStyle.Render("上传 · Step 2/6 · Name") + "\n\n" + m.inpName.View() + "\n" + m.hintStyle.Render("确认：Enter，返回：Esc，退出：q")
 		}
 		if m.act.u.path == "" {
-			return m.titleStyle.Render("上传 · Step 3/6 · Path（仅文件）") + "\n\n" + m.inpPath.View() + "\n" + m.hintStyle.Render("确认：Enter，返回：Esc，退出：q")
+			var content strings.Builder
+			content.WriteString(m.titleStyle.Render("上传 · Step 3/6 · 选择文件"))
+			content.WriteString("\n\n")
+
+			// 路径输入框部分
+			pathInputLabel := "路径输入："
+			if m.act.pathInputFocused {
+				pathInputLabel = m.titleStyle.Render("► 路径输入：（当前焦点）")
+			} else {
+				pathInputLabel = m.hintStyle.Render("路径输入：")
+			}
+			content.WriteString(pathInputLabel)
+			content.WriteString("\n")
+			content.WriteString(m.inpPath.View())
+			content.WriteString("\n\n")
+
+			// 文件选择器部分标题
+			filePickerLabel := "文件选择器："
+			if !m.act.pathInputFocused {
+				filePickerLabel = m.titleStyle.Render("► 文件选择器：（当前焦点）")
+			} else {
+				filePickerLabel = m.hintStyle.Render("文件选择器：")
+			}
+			content.WriteString(filePickerLabel)
+			content.WriteString("\n")
+
+			// 状态显示部分（类似官方示例）
+			if m.act.filePickerErr != nil {
+				content.WriteString(m.filepicker.Styles.DisabledFile.Render(m.act.filePickerErr.Error()))
+			} else if m.selectedFile == "" {
+				content.WriteString("选择一个文件:")
+			} else {
+				content.WriteString("已选择文件: " + m.filepicker.Styles.Selected.Render(m.selectedFile))
+			}
+			content.WriteString("\n")
+
+			// 文件选择器部分
+			content.WriteString(m.filepicker.View())
+			content.WriteString("\n")
+
+			// 操作提示 - 根据焦点状态给出不同的提示
+			if m.act.pathInputFocused {
+				content.WriteString(m.hintStyle.Render("Enter确认路径（目录会自动切换），Tab切换到文件选择器，Ctrl+R强制刷新，返回：Esc"))
+			} else {
+				// 检查路径输入框和filepicker目录是否同步
+				inputPath := strings.TrimSpace(m.inpPath.Value())
+				inputDir := inputPath
+				if !strings.HasSuffix(inputDir, "/") && inputDir != "" {
+					inputDir = inputDir + "/"
+				}
+				currentDir := m.filepicker.CurrentDirectory
+				if !strings.HasSuffix(currentDir, "/") {
+					currentDir = currentDir + "/"
+				}
+
+				if inputPath != "" && inputDir != currentDir {
+					content.WriteString(m.hintStyle.Render("方向键导航，Enter选择文件，Tab同步目录，Ctrl+R强制刷新，返回：Esc"))
+				} else {
+					content.WriteString(m.hintStyle.Render("方向键导航，Enter选择文件，Tab切换输入，Ctrl+R刷新，返回：Esc"))
+				}
+			}
+
+			return content.String()
 		}
 		if m.act.u.base == "" && !m.act.confirming {
 			if m.height > 0 {
