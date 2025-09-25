@@ -29,7 +29,7 @@ func Init() *cli.App {
 	versionPublicFlag := cli.StringSliceFlag{Name: "vpub", Aliases: []string{"vp"}, Usage: "Set corresponding model version public.", Destination: &cli.StringSlice{}}
 	introFlag := cli.StringSliceFlag{Name: "intro", Aliases: []string{"i"}, Usage: "An introduction to the model version.", Destination: &cli.StringSlice{}}
 	coverUrlsFlag := cli.StringSliceFlag{Name: "cover", Usage: "Urls of model covers, use ';' as separator.", Destination: &cli.StringSlice{}}
-	baseModelFlag := cli.StringSliceFlag{Name: "base", Aliases: []string{"b"}, Usage: fmt.Sprintf("Specify the base model of uploaded model. (Only works for %s)",meta.BaseModelStr), Required: true, Destination: &cli.StringSlice{}}
+	baseModelFlag := cli.StringSliceFlag{Name: "base", Aliases: []string{"b"}, Usage: fmt.Sprintf("Specify the base model of uploaded model. (Only works for %s)", meta.BaseModelStr), Required: false, Destination: &cli.StringSlice{}}
 
 	app := cli.NewApp()
 	app.Name = meta.Name
@@ -45,6 +45,9 @@ func Init() *cli.App {
 		&baseDomainFlag,
 		&apiKeyFlag,
 	}
+
+	// 默认无参进入主 TUI
+	app.Action = MainTUI
 
 	// Commands
 	app.Commands = []*cli.Command{

@@ -33,16 +33,15 @@ type UploadFileType string
 
 const (
 	TypeCheckpoint   UploadFileType = "Checkpoint"
-	TypeVae          UploadFileType = "bizyair/vae"
+	TypeVae          UploadFileType = "VAE"
+	TypeUNet         UploadFileType = "UNet"
 	TypeLora         UploadFileType = "LoRA"
 	TypeControlNet   UploadFileType = "Controlnet"
-	TypeEmbedding    UploadFileType = "bizyair/embedding"
-	TypeHyperNetwork UploadFileType = "bizyair/hypernetwork"
-	TypeClip         UploadFileType = "bizyair/clip"
-	TypeClipVision   UploadFileType = "bizyair/clip_vision"
-	TypeUpscale      UploadFileType = "bizyair/upscale"
-	TypeDataset      UploadFileType = "bizyair/dataset"
-	TypeOther        UploadFileType = "other"
+	TypeClip         UploadFileType = "CLIP"
+	TypeUpscale      UploadFileType = "Upscaler"
+	TypeDetection    UploadFileType = "Detection"
+	TypeOther        UploadFileType = "Other"
+	TypeWorkflow     UploadFileType = "Workflow"
 )
 
 var ModelTypes = []UploadFileType{
@@ -50,13 +49,10 @@ var ModelTypes = []UploadFileType{
 	TypeVae,
 	TypeLora,
 	TypeControlNet,
-	TypeEmbedding,
-	TypeHyperNetwork,
 	TypeClip,
-	TypeClipVision,
 	TypeUpscale,
-	TypeDataset,
 	TypeOther,
+	TypeWorkflow,
 }
 
 var ModelTypesStr = func(arr []UploadFileType) string {
@@ -94,14 +90,15 @@ var IgnoreUploadDirs = []string{
 }
 
 var SupportedBaseModels = map[string]bool{
-	"Flux.1 D":  true,
-	"SDXL":      true,
-	"SD 1.5":    true,
-	"SD 3.5":    true,
-	"Pony":      true,
-	"Kolors":    true,
-	"Hunyuan 1": true,
-	"Other":     true,
+	"Flux.1 D":       true,
+	"Flux.1 Kontext": true,
+	"SDXL":           true,
+	"SD 1.5":         true,
+	"SD 3.5":         true,
+	"Pony":           true,
+	"Kolors":         true,
+	"Hunyuan 1":      true,
+	"Other":          true,
 }
 
 var BaseModelStr = parseMapKey(SupportedBaseModels)
