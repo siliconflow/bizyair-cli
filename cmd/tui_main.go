@@ -7,6 +7,7 @@ import (
 	"math"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"sort"
 	"strconv"
 	"strings"
@@ -285,6 +286,29 @@ func clearFilePickerErrorAfter(t time.Duration) tea.Cmd {
 
 func (m mainModel) Init() tea.Cmd { return tea.Batch(m.sp.Tick, m.filepicker.Init()) }
 
+// 从文件路径提取文件名（不含扩展名）作为模型名
+func extractModelNameFromPath(filePath string) string {
+	// 获取文件名（含扩展名）
+	fileName := filepath.Base(filePath)
+	// 去除扩展名
+	nameWithoutExt := strings.TrimSuffix(fileName, filepath.Ext(fileName))
+	// 清理文件名，只保留字母、数字、下划线和短横线
+	var result strings.Builder
+	for _, r := range nameWithoutExt {
+		if (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9') || r == '_' || r == '-' {
+			result.WriteRune(r)
+		} else if r == ' ' || r == '.' {
+			result.WriteRune('_')
+		}
+	}
+	cleanName := result.String()
+	// 确保不为空，如果为空则使用默认名称
+	if cleanName == "" {
+		cleanName = "model"
+	}
+	return cleanName
+}
+
 // 验证并设置路径的辅助方法
 func (m *mainModel) validateAndSetPath(path string) error {
 	// 验证文件扩展名
@@ -308,6 +332,11 @@ func (m *mainModel) validateAndSetPath(path string) error {
 	m.act.u.path = absPath(path)
 	m.selectedFile = path
 	m.act.filePickerErr = nil
+
+	// 提取文件名作为name的默认值
+	defaultName := extractModelNameFromPath(path)
+	m.inpName.SetValue(defaultName)
+
 	return nil
 }
 
@@ -601,13 +630,22 @@ func (m *mainModel) updateActionInputs(msg tea.Msg) tea.Cmd {
 			// 让内部组件也能拿到 key 事件
 			_ = msg
 		}
-		// 依序：type -> name -> path -> base -> cover -> confirm -> run
+		// 新顺序：type -> path -> name -> base -> cover -> confirm -> run
 		if m.act.u.typ == "" {
 			m.typeList, cmd = m.typeList.Update(msg)
 			if km, ok := msg.(tea.KeyMsg); ok && km.String() == "enter" {
 				if it, ok := m.typeList.SelectedItem().(listItem); ok {
 					m.act.u.typ = it.title
-					return m.inpName.Focus()
+					// 选择类型后，直接跳转到文件选择
+					m.act.useFilePicker = true
+					m.act.pathInputFocused = false // 默认filepicker有焦点
+
+					// 设置路径输入框的初始值为filepicker的当前目录
+					m.inpPath.SetValue(m.filepicker.CurrentDirectory + "/")
+
+					// 重新初始化filepicker以确保它正确读取目录，并让路径输入框失去焦点
+					m.inpPath.Blur()
+					return m.filepicker.Init()
 				}
 			} else if km, ok := msg.(tea.KeyMsg); ok && km.String() == "esc" {
 				// 返回上级菜单
@@ -619,26 +657,30 @@ func (m *mainModel) updateActionInputs(msg tea.Msg) tea.Cmd {
 			}
 			return cmd
 		}
-		if m.act.u.name == "" {
+		if m.act.u.name == "" && m.act.u.path != "" {
+			// 文件已选择，现在输入name（使用文件名作为默认值）
 			m.inpName, cmd = m.inpName.Update(msg)
 			if km, ok := msg.(tea.KeyMsg); ok && km.String() == "enter" {
-				if err := validateName(m.inpName.Value()); err != nil {
+				name := strings.TrimSpace(m.inpName.Value())
+				if name == "" {
+					// 如果为空，使用从文件名提取的默认名称
+					name = extractModelNameFromPath(m.act.u.path)
+					m.inpName.SetValue(name)
+				}
+				if err := validateName(name); err != nil {
 					m.err = err
 					return nil
 				}
-				m.act.u.name = m.inpName.Value()
-				m.act.useFilePicker = true
-				m.act.pathInputFocused = false // 默认filepicker有焦点
-
-				// 设置路径输入框的初始值为filepicker的当前目录
-				m.inpPath.SetValue(m.filepicker.CurrentDirectory + "/")
-
-				// 重新初始化filepicker以确保它正确读取目录，并让路径输入框失去焦点
-				m.inpPath.Blur()
-				return m.filepicker.Init()
+				m.act.u.name = name
+				// name确认后，进入base选择步骤
+				return nil
 			} else if km, ok := msg.(tea.KeyMsg); ok && km.String() == "esc" {
-				// 回到选择类型
-				m.act.u = uploadInputs{}
+				// 返回文件选择步骤
+				m.act.u.path = ""
+				m.act.u.name = ""
+				m.selectedFile = ""
+				m.act.useFilePicker = true
+				m.act.pathInputFocused = false
 				return nil
 			}
 			return cmd
@@ -749,7 +791,8 @@ func (m *mainModel) updateActionInputs(msg tea.Msg) tea.Cmd {
 							m.act.filePickerErr = err
 							return clearFilePickerErrorAfter(3 * time.Second)
 						}
-						return nil
+						// 文件选择完成，跳转到name输入
+						return m.inpName.Focus()
 					}
 					// 如果是文件夹或无法访问，什么都不做，让filepicker正常处理
 				}
@@ -967,12 +1010,9 @@ func (m *mainModel) renderActionView() string {
 			}
 			return m.titleStyle.Render("上传 · Step 1/6 · 选择模型类型") + "\n\n" + m.typeList.View() + "\n" + m.hintStyle.Render("确认：Enter，返回：Esc，退出：q")
 		}
-		if m.act.u.name == "" {
-			return m.titleStyle.Render("上传 · Step 2/6 · Name") + "\n\n" + m.inpName.View() + "\n" + m.hintStyle.Render("确认：Enter，返回：Esc，退出：q")
-		}
 		if m.act.u.path == "" {
 			var content strings.Builder
-			content.WriteString(m.titleStyle.Render("上传 · Step 3/6 · 选择文件"))
+			content.WriteString(m.titleStyle.Render("上传 · Step 2/6 · 选择文件"))
 			content.WriteString("\n\n")
 
 			// 路径输入框部分
@@ -1033,6 +1073,20 @@ func (m *mainModel) renderActionView() string {
 				}
 			}
 
+			return content.String()
+		}
+		if m.act.u.name == "" && m.act.u.path != "" {
+			// 文件已选择，现在输入name
+			var content strings.Builder
+			content.WriteString(m.titleStyle.Render("上传 · Step 3/6 · 模型名称"))
+			content.WriteString("\n\n")
+			content.WriteString("已选择文件: " + m.filepicker.Styles.Selected.Render(m.selectedFile))
+			content.WriteString("\n\n")
+			content.WriteString("模型名称（默认从文件名提取）：")
+			content.WriteString("\n")
+			content.WriteString(m.inpName.View())
+			content.WriteString("\n\n")
+			content.WriteString(m.hintStyle.Render("Enter确认（空白使用默认名称），返回：Esc，退出：q"))
 			return content.String()
 		}
 		if m.act.u.base == "" && !m.act.confirming {
