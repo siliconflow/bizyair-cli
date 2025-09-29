@@ -1,50 +1,24 @@
 package lib
 
 import (
+	"context"
 	"fmt"
-	"github.com/aliyun/aliyun-oss-go-sdk/oss"
-	"github.com/cloudwego/hertz/cmd/hz/util/logs"
-	"github.com/schollz/progressbar/v3"
-	"github.com/siliconflow/bizyair-cli/meta"
-	"github.com/urfave/cli/v2"
+	"io"
 	"os"
-	"path/filepath"
-	"strconv"
+	"strings"
 	"time"
+
+	"github.com/aliyun/alibabacloud-oss-go-sdk-v2/oss"
+	"github.com/aliyun/alibabacloud-oss-go-sdk-v2/oss/credentials"
+	"github.com/cloudwego/hertz/cmd/hz/util/logs"
+	"github.com/siliconflow/bizyair-cli/meta"
 )
 
 type AliOssStorageClient struct {
 	ossClient        *oss.Client
 	ossBucketName    string
 	ossRegion        string
-	ossBucket        *oss.Bucket
 	ossSecurityToken string
-}
-
-type AliOssStorageProvider struct {
-	Cred oss.Credentials
-}
-
-func (a *AliOssStorageProvider) GetCredentials() oss.Credentials {
-	return a.Cred
-}
-
-type AliOssStorageCred struct {
-	AccessKeyId     string
-	AccessKeySecret string
-	SecurityToken   string
-}
-
-func (c *AliOssStorageCred) GetAccessKeyID() string {
-	return c.AccessKeyId
-}
-
-func (c *AliOssStorageCred) GetAccessKeySecret() string {
-	return c.AccessKeySecret
-}
-
-func (c *AliOssStorageCred) GetSecurityToken() string {
-	return c.SecurityToken
 }
 
 type FileToUpload struct {
@@ -56,60 +30,35 @@ type FileToUpload struct {
 	RemoteKey string
 }
 
-type OssProgressListener struct {
-	File      *FileToUpload
-	Bar       *progressbar.ProgressBar
-	Throttled func(x int)
-	FileIndex string
-}
-
-func (listener *OssProgressListener) ProgressChanged(event *oss.ProgressEvent) {
-	switch event.EventType {
-	case oss.TransferStartedEvent:
-		bar := progressbar.DefaultBytes(
-			event.TotalBytes,
-			fmt.Sprintf("(%s) %s", listener.FileIndex, filepath.Base(listener.File.RelPath)),
-		)
-		listener.Bar = bar
-		listener.Throttled = Throttle(func(x int) {
-			listener.Bar.Set(x)
-		}, time.Millisecond*500)
-		listener.Bar.Set(int(event.ConsumedBytes))
-	case oss.TransferDataEvent:
-		if event.TotalBytes != 0 {
-			listener.Throttled(int(event.ConsumedBytes))
+func parseRegionFromEndpoint(endpoint string) string {
+	// 假设 endpoint 是像 "oss-cn-hangzhou.aliyuncs.com"
+	// 解析出 "cn-hangzhou"
+	// 如果不匹配，返回默认或错误
+	if strings.Contains(endpoint, "oss-") && strings.Contains(endpoint, ".aliyuncs.com") {
+		start := strings.Index(endpoint, "oss-") + 4
+		end := strings.Index(endpoint[start:], ".")
+		if end != -1 {
+			return endpoint[start : start+end]
 		}
-	case oss.TransferCompletedEvent:
-		listener.Bar.Set(int(event.ConsumedBytes))
-	case oss.TransferFailedEvent:
-		listener.Bar.Set(int(event.ConsumedBytes))
-	default:
 	}
+	// 如果解析失败，返回一个默认值或记录错误
+	logs.Warnf("failed to parse region from endpoint: %s, using default", endpoint)
+	return "cn-hangzhou" // 默认值
 }
 
 func NewAliOssStorageClient(endpoint, bucketName, accessKey, secretKey, securityToken string) (*AliOssStorageClient, error) {
-	provider := AliOssStorageProvider{
-		Cred: &AliOssStorageCred{
-			AccessKeyId:     accessKey,
-			AccessKeySecret: secretKey,
-			SecurityToken:   securityToken,
-		},
-	}
-	ossClient, err := oss.New(endpoint, "", "", oss.SetCredentialsProvider(&provider))
-	if err != nil {
-		return nil, cli.Exit(fmt.Errorf("failed to init oss client: %s", err), meta.LoadError)
-	}
+	region := parseRegionFromEndpoint(endpoint)
 
-	bucket, err := ossClient.Bucket(bucketName)
-	if err != nil {
-		return nil, cli.Exit(fmt.Errorf("failed to get bucket: %s", err), meta.LoadError)
-	}
+	cfg := oss.LoadDefaultConfig().
+		WithCredentialsProvider(credentials.NewStaticCredentialsProvider(accessKey, secretKey, securityToken)).
+		WithRegion(region)
+
+	client := oss.NewClient(cfg)
 
 	ossStorageClient := &AliOssStorageClient{
-		ossClient:        ossClient,
+		ossClient:        client,
 		ossBucketName:    bucketName,
-		ossBucket:        bucket,
-		ossRegion:        endpoint,
+		ossRegion:        region,
 		ossSecurityToken: securityToken,
 	}
 
@@ -117,52 +66,79 @@ func NewAliOssStorageClient(endpoint, bucketName, accessKey, secretKey, security
 	return ossStorageClient, nil
 }
 
-func (a *AliOssStorageClient) UploadFile(file *FileToUpload, objectName string, fileIndex string) (string, error) {
-	err := a.ossBucket.PutObjectFromFile(objectName, file.Path, oss.ObjectACL(oss.ACLPublicRead), oss.Progress(&OssProgressListener{
-		File:      file,
-		FileIndex: fileIndex,
-	}))
+func (a *AliOssStorageClient) UploadFile(file *FileToUpload, objectName string, fileIndex string, progress func(int64, int64)) (string, error) {
+	return a.UploadFileCtx(context.TODO(), file, objectName, fileIndex, progress)
+}
 
+func (a *AliOssStorageClient) UploadFileCtx(ctx context.Context, file *FileToUpload, objectName string, fileIndex string, progress func(int64, int64)) (string, error) {
+	// 获取文件信息
+	fileInfo, err := os.Stat(file.Path)
 	if err != nil {
-		logs.Errorf("Failed to upload file", "error", err)
-		return "", err
+		return "", fmt.Errorf("failed to stat file %v", err)
 	}
+
+	totalSize := fileInfo.Size()
+	logs.Debugf("file size: %d\n", totalSize)
+
+	// 打开文件
+	f, err := os.Open(file.Path)
+	if err != nil {
+		return "", fmt.Errorf("failed to open local file %v", err)
+	}
+	defer f.Close()
+
+	// 创建进度追踪 reader
+	var reader io.Reader = f
+	if progress != nil {
+		reader = &progressReader{
+			reader:      f,
+			total:       totalSize,
+			progress:    progress,
+			lastTime:    time.Now(),
+			minInterval: 50 * time.Millisecond, // 更频繁的更新
+		}
+	}
+
+	// 使用 PutObject 直接上传，支持流式进度
+	putRequest := &oss.PutObjectRequest{
+		Bucket: oss.Ptr(a.ossBucketName),
+		Key:    oss.Ptr(objectName),
+		Body:   reader,
+	}
+
+	_, err = a.ossClient.PutObject(ctx, putRequest)
+	if err != nil {
+		return "", fmt.Errorf("failed to put object %v", err)
+	}
+
+	// 确保进度回调显示100%
+	if progress != nil {
+		progress(totalSize, totalSize)
+	}
+
+	logs.Debugf("put object completed for %s\n", objectName)
 	return fmt.Sprintf(meta.OSSObjectKey, a.ossBucketName, a.ossRegion, objectName), nil
 }
 
-func (a *AliOssStorageClient) MultipartUpload(filePath string, objectName string) (string, error) {
-	chunks, err := oss.SplitFileByPartSize(filePath, 1024*1024)
-	fd, err := os.Open(filePath)
-	defer fd.Close()
+// progressReader 包装 io.Reader 以提供进度回调
+type progressReader struct {
+	reader      io.Reader
+	total       int64
+	progress    func(int64, int64)
+	readBytes   int64
+	lastTime    time.Time
+	minInterval time.Duration
+}
 
-	imur, err := a.ossBucket.InitiateMultipartUpload(objectName)
-	var options []oss.Option
-	for _, chunk := range chunks {
-		options = append(options, oss.AddParam("partNumber", strconv.Itoa(chunk.Number)))
-		options = append(options, oss.AddParam("uploadId", imur.UploadID))
-		// 生成签名URL。
-		signedURL, err := a.ossBucket.SignURL(objectName, oss.HTTPPut, 600, options...)
-		if err != nil {
-			return "", cli.Exit(fmt.Errorf("failed to list uploaded parts: %s", err), meta.LoadError)
+func (pr *progressReader) Read(p []byte) (n int, err error) {
+	n, err = pr.reader.Read(p)
+	if n > 0 {
+		pr.readBytes += int64(n)
+		now := time.Now()
+		if now.Sub(pr.lastTime) >= pr.minInterval {
+			pr.progress(pr.readBytes, pr.total)
+			pr.lastTime = now
 		}
-		logs.Debugf("signature url: %s", signedURL)
 	}
-
-	lsRes, err := a.ossBucket.ListUploadedParts(imur)
-	if err != nil {
-		return "", cli.Exit(fmt.Errorf("failed to list uploaded parts: %s", err), meta.LoadError)
-	}
-
-	// 遍历分片，并填充ETag值。
-	var parts []oss.UploadPart
-	for _, p := range lsRes.UploadedParts {
-		parts = append(parts, oss.UploadPart{XMLName: p.XMLName, PartNumber: p.PartNumber, ETag: p.ETag})
-	}
-
-	_, err = a.ossBucket.CompleteMultipartUpload(imur, parts)
-	if err != nil {
-		return "", cli.Exit(fmt.Errorf("failed to complete multipart upload: %s", err), meta.LoadError)
-	}
-
-	return fmt.Sprintf(meta.OSSObjectKey, a.ossBucketName, a.ossRegion, objectName), nil
+	return n, err
 }

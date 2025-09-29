@@ -107,7 +107,6 @@ func Upload(c *cli.Context) error {
 
 	client := lib.NewClient(args.BaseDomain, apiKey)
 
-
 	// 	// TODO: overwrite model
 
 	// start to upload files
@@ -141,7 +140,25 @@ func Upload(c *cli.Context) error {
 				return err
 			}
 
-			_, err = ossClient.UploadFile(fileToUpload, fileRecord.ObjectKey, fileIndex)
+			// 使用简单的进度回调，直接输出到终端
+			_, err = ossClient.UploadFile(fileToUpload, fileRecord.ObjectKey, fileIndex,
+				func(consumed, total int64) {
+					if total > 0 {
+						percent := float64(consumed) / float64(total)
+						bar := renderProgressBar(percent)
+						fmt.Printf("\r(%s) %s %s %.1f%% (%s/%s)",
+							fileIndex,
+							filepath.Base(fileToUpload.RelPath),
+							bar,
+							percent*100,
+							formatBytes(consumed),
+							formatBytes(total))
+
+						if percent >= 1.0 {
+							fmt.Println() // 上传完成后换行
+						}
+					}
+				})
 			if err != nil {
 				return err
 			}

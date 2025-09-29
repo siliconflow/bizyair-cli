@@ -13,12 +13,16 @@ import (
 	"strings"
 	"time"
 
+	"context"
+
 	"github.com/charmbracelet/bubbles/filepicker"
 	"github.com/charmbracelet/bubbles/list"
+	"github.com/charmbracelet/bubbles/progress"
 	"github.com/charmbracelet/bubbles/spinner"
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/siliconflow/bizyair-cli/config"
 	"github.com/siliconflow/bizyair-cli/lib"
 	"github.com/siliconflow/bizyair-cli/meta"
 	"github.com/urfave/cli/v2"
@@ -48,6 +52,21 @@ const (
 	actionExit    actionKind = "exit"
 )
 
+// 上传步骤状态机
+type uploadStep int
+
+const (
+	stepName uploadStep = iota
+	stepType
+	stepVersion
+	stepBase
+	stepCover
+	stepIntro
+	stepPath
+	stepAskMore
+	stepConfirm
+)
+
 // 登录结果消息
 type loginDoneMsg struct {
 	ok  bool
@@ -60,6 +79,24 @@ type actionDoneMsg struct {
 	err error
 }
 
+// 上传开始（携带进度通道与取消函数）
+type uploadStartMsg struct {
+	ch     <-chan tea.Msg
+	cancel context.CancelFunc
+}
+
+// 上传进度
+type uploadProgMsg struct {
+	fileIndex string
+	fileName  string
+	consumed  int64
+	total     int64
+	verIdx    int
+}
+
+// 取消上传
+type uploadCancelMsg struct{}
+
 // 清除filepicker错误的消息
 type clearFilePickerErrorMsg struct{}
 
@@ -71,11 +108,17 @@ type menuEntry struct {
 
 // 上传所需输入
 type uploadInputs struct {
-	typ   string
-	name  string
-	path  string
-	base  string
-	cover string
+	typ  string
+	name string
+}
+
+// 单个版本输入
+type versionItem struct {
+	version string
+	base    string
+	cover   string
+	intro   string
+	path    string
 }
 
 // 针对不同动作的输入组件（尽量精简，必要时逐步扩展）
@@ -85,6 +128,9 @@ type actionInputs struct {
 
 	// Upload
 	u uploadInputs
+	// 多版本
+	versions []versionItem
+	cur      versionItem
 
 	// List Models
 	lsPublic bool
@@ -120,23 +166,33 @@ type mainModel struct {
 	// 上传子组件（选择/输入）
 	typeList list.Model
 	baseList list.Model
+	moreList list.Model
 	inpName  textinput.Model
 	inpPath  textinput.Model
 	inpCover textinput.Model
 	// 其他输入
 	inpExt textinput.Model
+	// 新增输入
+	inpVersion textinput.Model
+	inpIntro   textinput.Model
 
 	//文件选择器
 	filepicker   filepicker.Model
 	selectedFile string
 
 	// 动作输入
-	act actionInputs
+	act    actionInputs
+	upStep uploadStep
 
 	// 运行态
-	running bool
-	output  string
-	sp      spinner.Model
+	running  bool
+	output   string
+	sp       spinner.Model
+	progress progress.Model
+	// 多版本进度
+	verProgress []progress.Model
+	verConsumed []int64
+	verTotal    []int64
 
 	// 样式
 	titleStyle lipgloss.Style
@@ -148,6 +204,11 @@ type mainModel struct {
 	logo           string
 	logoStyle      lipgloss.Style
 	smallLogoStyle lipgloss.Style
+
+	// 上传进度
+	uploadCh   <-chan tea.Msg
+	uploadProg uploadProgMsg
+	cancelFn   context.CancelFunc
 }
 
 func newMainModel() mainModel {
@@ -196,12 +257,23 @@ func newMainModel() mainModel {
 	bl := list.New(bItems, d, 30, 12)
 	bl.Title = "选择 Base Model（可选）"
 
+	// 是否添加更多版本选择
+	moreItems := []list.Item{listItem{title: "是，继续添加版本"}, listItem{title: "否，进入确认"}}
+	ml := list.New(moreItems, d, 30, 4)
+	ml.Title = "是否继续添加版本？请按方向键进行选择，Enter确认"
+
 	// 输入框
 	inApi := textinput.New()
 	inApi.Placeholder = "请输入 API Key"
 
 	inName := textinput.New()
-	inName.Placeholder = "请输入 name（字母/数字/下划线/短横线）"
+	inName.Placeholder = "请输入模型名称（字母/数字/下划线/短横线）"
+
+	inVer := textinput.New()
+	inVer.Placeholder = "请输入版本名称（默认: v1.0）"
+
+	inIntro := textinput.New()
+	inIntro.Placeholder = "可选，输入模型介绍（回车跳过）"
 
 	inPath := textinput.New()
 	inPath.Placeholder = "请输入文件路径（仅文件）"
@@ -240,22 +312,29 @@ func newMainModel() mainModel {
 	sp := spinner.New()
 	sp.Spinner = spinner.Dot
 
+	// progress bar
+	pr := progress.New(progress.WithDefaultGradient())
+
 	return mainModel{
 		step:       mainStepHome,
 		menu:       menuList,
 		inpApi:     inApi,
 		typeList:   tp,
 		baseList:   bl,
+		moreList:   ml,
 		inpName:    inName,
 		inpPath:    inPath,
 		inpCover:   inCover,
 		inpExt:     inExt,
+		inpVersion: inVer,
+		inpIntro:   inIntro,
 		filepicker: fp,
 		titleStyle: lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("#36A3F7")),
 		hintStyle:  lipgloss.NewStyle().Faint(true).Foreground(lipgloss.Color("244")),
 		panelStyle: lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).BorderForeground(lipgloss.Color("63")).Padding(1, 2),
 		btnStyle:   lipgloss.NewStyle().Foreground(lipgloss.Color("#FFFFFF")).Background(lipgloss.Color("#04B575")).Padding(0, 1).Bold(true),
 		sp:         sp,
+		progress:   pr,
 		logo: strings.Join([]string{
 			"    ,---,.                                     ,---,                         ",
 			" ,'  .'  \\  ,--,                             '  .' \\        ,--,              ",
@@ -282,6 +361,20 @@ func clearFilePickerErrorAfter(t time.Duration) tea.Cmd {
 	return tea.Tick(t, func(_ time.Time) tea.Msg {
 		return clearFilePickerErrorMsg{}
 	})
+}
+
+// 等待上传事件（进度/完成）
+func waitForUploadEvent(ch <-chan tea.Msg) tea.Cmd {
+	return func() tea.Msg {
+		if ch == nil {
+			return nil
+		}
+		msg, ok := <-ch
+		if !ok {
+			return nil
+		}
+		return msg
+	}
 }
 
 func (m mainModel) Init() tea.Cmd { return tea.Batch(m.sp.Tick, m.filepicker.Init()) }
@@ -329,7 +422,7 @@ func (m *mainModel) validateAndSetPath(path string) error {
 		return err
 	}
 
-	m.act.u.path = absPath(path)
+	m.act.cur.path = absPath(path)
 	m.selectedFile = path
 	m.act.filePickerErr = nil
 
@@ -356,6 +449,23 @@ func (m mainModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.inpPath.Width = lw
 		m.inpCover.Width = lw
 		m.inpExt.Width = lw
+		m.inpIntro.Width = lw
+
+		// 进度条宽度自适应屏幕
+		m.progress.Width = msg.Width - 6
+		if m.progress.Width < 10 {
+			m.progress.Width = 10
+		}
+
+		// 多版本进度条宽度自适应
+		if len(m.verProgress) > 0 {
+			for i := range m.verProgress {
+				m.verProgress[i].Width = msg.Width - 6
+				if m.verProgress[i].Width < 10 {
+					m.verProgress[i].Width = 10
+				}
+			}
+		}
 
 		// 设置filepicker的高度
 		if m.height > 15 {
@@ -371,6 +481,13 @@ func (m mainModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		switch msg.String() {
 		case "ctrl+c", "q":
+			if m.running && m.currentAction == actionUpload && m.cancelFn != nil {
+				m.cancelFn()
+				// 停止等待更多上传事件
+				m.uploadCh = nil
+				m.running = false
+				return m, nil
+			}
 			return m, tea.Quit
 		case "enter":
 			switch m.step {
@@ -407,7 +524,9 @@ func (m mainModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					case actionUpload:
 						m.step = mainStepAction
 						m.act = actionInputs{}
-						return m, nil
+						m.upStep = stepName
+						// 聚焦到名称输入
+						return m, m.inpName.Focus()
 					case actionLsModel:
 						m.step = mainStepAction
 						m.act = actionInputs{}
@@ -487,16 +606,75 @@ func (m mainModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.err = msg.err
 		}
 		m.step = mainStepOutput
+		m.uploadCh = nil
+		m.uploadProg = uploadProgMsg{}
 		return m, nil
+	case uploadStartMsg:
+		m.uploadCh = msg.ch
+		m.cancelFn = msg.cancel
+		// 初始化多版本进度条集合
+		if len(m.act.versions) > 0 {
+			m.verProgress = make([]progress.Model, len(m.act.versions))
+			m.verConsumed = make([]int64, len(m.act.versions))
+			m.verTotal = make([]int64, len(m.act.versions))
+			for i := range m.verProgress {
+				m.verProgress[i] = progress.New(progress.WithDefaultGradient())
+				m.verProgress[i].Width = m.width - 6
+				if m.verProgress[i].Width < 10 {
+					m.verProgress[i].Width = 10
+				}
+			}
+		}
+		return m, waitForUploadEvent(m.uploadCh)
+	case uploadProgMsg:
+		m.uploadProg = msg
+		// 更新单/多版本进度
+		var cmds []tea.Cmd
+		if msg.total > 0 {
+			percent := float64(msg.consumed) / float64(msg.total)
+			if msg.verIdx >= 0 && msg.verIdx < len(m.verProgress) {
+				m.verConsumed[msg.verIdx] = msg.consumed
+				m.verTotal[msg.verIdx] = msg.total
+				cmds = append(cmds, m.verProgress[msg.verIdx].SetPercent(percent))
+			} else {
+				cmds = append(cmds, m.progress.SetPercent(percent))
+			}
+		}
+		cmds = append(cmds, waitForUploadEvent(m.uploadCh))
+		return m, tea.Batch(cmds...)
 	case clearFilePickerErrorMsg:
 		m.act.filePickerErr = nil
 		return m, nil
 	default:
-		// 转给 spinner
-		var cmd tea.Cmd
-		m.sp, cmd = m.sp.Update(msg)
-		if cmd != nil {
-			return m, cmd
+		// 转给 spinner 和所有 progress（组合返回动画命令）
+		var bat []tea.Cmd
+		var cmd1 tea.Cmd
+		m.sp, cmd1 = m.sp.Update(msg)
+		if cmd1 != nil {
+			bat = append(bat, cmd1)
+		}
+		// 单进度
+		if pModel, pCmd := m.progress.Update(msg); true {
+			if pm, ok := pModel.(progress.Model); ok {
+				m.progress = pm
+			}
+			if pCmd != nil {
+				bat = append(bat, pCmd)
+			}
+		}
+		// 多版本进度
+		for i := range m.verProgress {
+			if pModel, pCmd := m.verProgress[i].Update(msg); true {
+				if pm, ok := pModel.(progress.Model); ok {
+					m.verProgress[i] = pm
+				}
+				if pCmd != nil {
+					bat = append(bat, pCmd)
+				}
+			}
+		}
+		if len(bat) > 0 {
+			return m, tea.Batch(bat...)
 		}
 
 		// 更新filepicker
@@ -550,8 +728,31 @@ func (m mainModel) View() string {
 		return header + "\n" + panel.Render(m.titleStyle.Render("错误")+"\n"+fmt.Sprintf("%v", m.err)+"\n\n"+m.hintStyle.Render("按任意键返回继续…"))
 	}
 
-	// 全局运行中覆盖视图：无论当前处于哪个步骤，统一展示等待界面
+	// 运行中：优先在"上传确认页"内联展示进度条，其它情况走通用覆盖
 	if m.running {
+		if m.currentAction == actionUpload && m.step == mainStepAction {
+			// 构造确认摘要
+			var summaryBuilder strings.Builder
+			summaryBuilder.WriteString(fmt.Sprintf("- type: %s\n- name: %s\n", dash(m.act.u.typ), dash(m.act.u.name)))
+			for i, v := range m.act.versions {
+				summaryBuilder.WriteString(fmt.Sprintf("  [%d] version=%s base=%s cover=%s path=%s intro=%s\n", i+1, dash(v.version), dash(v.base), dash(v.cover), dash(v.path), dash(v.intro)))
+			}
+			summary := summaryBuilder.String()
+			// 构造进度显示
+			var fileLine string
+			var progLine string
+			if m.uploadProg.total > 0 {
+				percent := float64(m.uploadProg.consumed) / float64(m.uploadProg.total)
+				fileLine = fmt.Sprintf("(%s) %s", m.uploadProg.fileIndex, m.uploadProg.fileName)
+				progLine = fmt.Sprintf("%s %.1f%% (%s/%s)", m.progress.View(), percent*100, formatBytes(m.uploadProg.consumed), formatBytes(m.uploadProg.total))
+			} else {
+				fileLine = "准备上传…"
+				progLine = m.progress.View()
+			}
+
+			content := m.titleStyle.Render("上传中 · 请稍候") + "\n\n" + summary + "\n\n" + fileLine + "\n" + progLine
+			return header + "\n" + panel.Render(content)
+		}
 		spin := m.sp.View()
 		return header + "\n" + panel.Render(m.titleStyle.Render("执行中")+"\n\n"+spin+" 正在等待 API 返回…")
 	}
@@ -625,67 +826,123 @@ func (m *mainModel) updateActionInputs(msg tea.Msg) tea.Cmd {
 	switch m.currentAction {
 	case actionUpload:
 		var cmd tea.Cmd
-		switch msg := msg.(type) {
-		case tea.KeyMsg:
-			// 让内部组件也能拿到 key 事件
-			_ = msg
-		}
-		// 新顺序：type -> path -> name -> base -> cover -> confirm -> run
-		if m.act.u.typ == "" {
-			m.typeList, cmd = m.typeList.Update(msg)
-			if km, ok := msg.(tea.KeyMsg); ok && km.String() == "enter" {
-				if it, ok := m.typeList.SelectedItem().(listItem); ok {
-					m.act.u.typ = it.title
-					// 选择类型后，直接跳转到文件选择
-					m.act.useFilePicker = true
-					m.act.pathInputFocused = false // 默认filepicker有焦点
-
-					// 设置路径输入框的初始值为filepicker的当前目录
-					m.inpPath.SetValue(m.filepicker.CurrentDirectory + "/")
-
-					// 重新初始化filepicker以确保它正确读取目录，并让路径输入框失去焦点
-					m.inpPath.Blur()
-					return m.filepicker.Init()
-				}
-			} else if km, ok := msg.(tea.KeyMsg); ok && km.String() == "esc" {
-				// 返回上级菜单
-				m.step = mainStepMenu
-				m.act = actionInputs{}
-				m.selectedFile = ""
-				m.filepicker.Path = ""
-				return nil
-			}
-			return cmd
-		}
-		if m.act.u.name == "" && m.act.u.path != "" {
-			// 文件已选择，现在输入name（使用文件名作为默认值）
+		switch m.upStep {
+		case stepName:
 			m.inpName, cmd = m.inpName.Update(msg)
-			if km, ok := msg.(tea.KeyMsg); ok && km.String() == "enter" {
-				name := strings.TrimSpace(m.inpName.Value())
-				if name == "" {
-					// 如果为空，使用从文件名提取的默认名称
-					name = extractModelNameFromPath(m.act.u.path)
-					m.inpName.SetValue(name)
-				}
-				if err := validateName(name); err != nil {
-					m.err = err
+			if km, ok := msg.(tea.KeyMsg); ok {
+				switch km.String() {
+				case "enter":
+					name := strings.TrimSpace(m.inpName.Value())
+					if err := validateName(name); err != nil {
+						m.err = err
+						return nil
+					}
+					m.act.u.name = name
+					m.upStep = stepType
+					return nil
+				case "esc":
+					m.step = mainStepMenu
+					m.act = actionInputs{}
 					return nil
 				}
-				m.act.u.name = name
-				// name确认后，进入base选择步骤
-				return nil
-			} else if km, ok := msg.(tea.KeyMsg); ok && km.String() == "esc" {
-				// 返回文件选择步骤
-				m.act.u.path = ""
-				m.act.u.name = ""
-				m.selectedFile = ""
-				m.act.useFilePicker = true
-				m.act.pathInputFocused = false
-				return nil
 			}
 			return cmd
-		}
-		if m.act.u.path == "" {
+		case stepType:
+			m.typeList, cmd = m.typeList.Update(msg)
+			if km, ok := msg.(tea.KeyMsg); ok {
+				switch km.String() {
+				case "enter":
+					if it, ok := m.typeList.SelectedItem().(listItem); ok {
+						m.act.u.typ = it.title
+						// 版本默认 v1.0
+						m.inpVersion.SetValue("v1.0")
+						m.upStep = stepVersion
+						return nil
+					}
+				case "esc":
+					m.upStep = stepName
+					return m.inpName.Focus()
+				}
+			}
+			return cmd
+		case stepVersion:
+			m.inpVersion, cmd = m.inpVersion.Update(msg)
+			if km, ok := msg.(tea.KeyMsg); ok {
+				switch km.String() {
+				case "enter":
+					v := strings.TrimSpace(m.inpVersion.Value())
+					if v == "" {
+						v = "v1.0"
+						m.inpVersion.SetValue(v)
+					}
+					m.act.cur.version = v
+					m.upStep = stepBase
+					return nil
+				case "esc":
+					m.upStep = stepType
+					return nil
+				}
+			}
+			return cmd
+		case stepBase:
+			m.baseList, cmd = m.baseList.Update(msg)
+			if km, ok := msg.(tea.KeyMsg); ok {
+				switch km.String() {
+				case "enter":
+					if it, ok := m.baseList.SelectedItem().(listItem); ok {
+						if it.title != "(跳过)" {
+							if !meta.SupportedBaseModels[it.title] {
+								m.err = fmt.Errorf("不支持的 Base Model: %s", it.title)
+								return nil
+							}
+							m.act.cur.base = it.title
+						} else {
+							m.act.cur.base = ""
+						}
+						m.upStep = stepCover
+						return m.inpCover.Focus()
+					}
+				case "esc":
+					m.upStep = stepVersion
+					return nil
+				}
+			}
+			return cmd
+		case stepCover:
+			var inputCmd tea.Cmd
+			m.inpCover, inputCmd = m.inpCover.Update(msg)
+			if km, ok := msg.(tea.KeyMsg); ok {
+				switch km.String() {
+				case "enter":
+					m.act.cur.cover = strings.TrimSpace(m.inpCover.Value())
+					m.upStep = stepIntro
+					return m.inpIntro.Focus()
+				case "esc":
+					m.upStep = stepBase
+					return nil
+				}
+			}
+			return inputCmd
+		case stepIntro:
+			m.inpIntro, cmd = m.inpIntro.Update(msg)
+			if km, ok := msg.(tea.KeyMsg); ok {
+				switch km.String() {
+				case "enter":
+					// 允许为空
+					m.act.cur.intro = strings.TrimSpace(m.inpIntro.Value())
+					// 进入文件选择
+					m.act.useFilePicker = true
+					m.act.pathInputFocused = false
+					m.inpPath.SetValue(m.filepicker.CurrentDirectory + "/")
+					m.upStep = stepPath
+					return m.filepicker.Init()
+				case "esc":
+					m.upStep = stepCover
+					return m.inpCover.Focus()
+				}
+			}
+			return cmd
+		case stepPath:
 			// 混合模式：路径输入框 + 文件选择器，类似官方示例
 			var pathCmd, fpCmd tea.Cmd
 
@@ -693,13 +950,13 @@ func (m *mainModel) updateActionInputs(msg tea.Msg) tea.Cmd {
 			if km, ok := msg.(tea.KeyMsg); ok {
 				switch km.String() {
 				case "esc":
-					// 返回上一步
-					m.act.u.name = ""
+					// 返回上一步（intro）
 					m.act.useFilePicker = false
 					m.act.pathInputFocused = false
 					m.act.filePickerErr = nil
 					m.filepicker.Path = ""
-					return m.inpName.Focus()
+					m.upStep = stepIntro
+					return m.inpIntro.Focus()
 				case "ctrl+r":
 					// 强制刷新：同步路径输入框到文件选择器
 					path := strings.TrimSpace(m.inpPath.Value())
@@ -712,6 +969,10 @@ func (m *mainModel) updateActionInputs(msg tea.Msg) tea.Cmd {
 							return clearFilePickerErrorAfter(3 * time.Second)
 						}
 					}
+					// 记录路径并继续
+					m.act.cur.path = absPath(path)
+					// 完成本版本，进入是否添加更多版本
+					m.upStep = stepAskMore
 					return nil
 				case "tab":
 					// Tab键在路径输入框和文件选择器之间切换焦点
@@ -786,13 +1047,14 @@ func (m *mainModel) updateActionInputs(msg tea.Msg) tea.Cmd {
 				if didSelect, path := m.filepicker.DidSelectFile(msg); didSelect {
 					// 使用stat检查是否为文件（而不是文件夹）
 					if info, err := os.Stat(path); err == nil && !info.IsDir() {
-						// 确认是文件才进行格式验证和选择
-						if err := m.validateAndSetPath(path); err != nil {
+						// 确认是文件才进行格式验证
+						if err := validatePath(path); err != nil {
 							m.act.filePickerErr = err
 							return clearFilePickerErrorAfter(3 * time.Second)
 						}
-						// 文件选择完成，跳转到name输入
-						return m.inpName.Focus()
+						m.act.cur.path = absPath(path)
+						m.upStep = stepAskMore
+						return nil
 					}
 					// 如果是文件夹或无法访问，什么都不做，让filepicker正常处理
 				}
@@ -808,48 +1070,53 @@ func (m *mainModel) updateActionInputs(msg tea.Msg) tea.Cmd {
 			}
 
 			return tea.Batch(pathCmd, fpCmd)
-		}
-		if m.act.u.base == "" && !m.act.confirming {
-			m.baseList, cmd = m.baseList.Update(msg)
+		case stepAskMore:
+			var cmd tea.Cmd
+			m.moreList, cmd = m.moreList.Update(msg)
 			if km, ok := msg.(tea.KeyMsg); ok && km.String() == "enter" {
-				if it, ok := m.baseList.SelectedItem().(listItem); ok {
-					if it.title != "(跳过)" {
-						if !meta.SupportedBaseModels[it.title] {
-							m.err = fmt.Errorf("不支持的 Base Model: %s", it.title)
-							return nil
-						}
-						m.act.u.base = it.title
+				if it, ok := m.moreList.SelectedItem().(listItem); ok {
+					title := it.title
+					if strings.HasPrefix(title, "是") {
+						// 保存当前版本，继续添加
+						m.act.versions = append(m.act.versions, m.act.cur)
+						next := fmt.Sprintf("v%d.0", len(m.act.versions)+1)
+						m.act.cur = versionItem{}
+						m.inpVersion.SetValue(next)
+						m.inpCover.SetValue("")
+						m.inpIntro.SetValue("")
+						m.upStep = stepVersion
+						return nil
 					}
-					return m.inpCover.Focus()
+					// 否，进入确认
+					m.act.versions = append(m.act.versions, m.act.cur)
+					m.upStep = stepConfirm
+					m.act.confirming = true
+					return nil
 				}
 			} else if km, ok := msg.(tea.KeyMsg); ok && km.String() == "esc" {
-				// 返回 path
-				m.act.u.path = ""
-				return m.inpPath.Focus()
-			}
-			return cmd
-		}
-		if !m.act.confirming {
-			m.inpCover, cmd = m.inpCover.Update(msg)
-			if km, ok := msg.(tea.KeyMsg); ok && km.String() == "enter" {
-				m.act.u.cover = m.inpCover.Value()
-				m.act.confirming = true
-			} else if km, ok := msg.(tea.KeyMsg); ok && km.String() == "esc" {
-				// 返回 base 选择
-				m.act.u.base = ""
+				m.upStep = stepPath
+				m.act.useFilePicker = true
 				return nil
 			}
 			return cmd
+		case stepConfirm:
+			if km, ok := msg.(tea.KeyMsg); ok {
+				switch km.String() {
+				case "enter":
+					m.running = true
+					// 启动多版本上传
+					return runUploadActionMulti(m.act.u, m.act.versions)
+				case "esc":
+					// 返回"是否继续添加版本"
+					m.act.confirming = false
+					m.upStep = stepAskMore
+					return nil
+				}
+			}
+			return nil
+		default:
+			return nil
 		}
-		if km, ok := msg.(tea.KeyMsg); ok && km.String() == "enter" {
-			m.running = true
-			return runUploadAction(m.act.u)
-		} else if km, ok := msg.(tea.KeyMsg); ok && km.String() == "esc" {
-			// 返回 cover 输入
-			m.act.confirming = false
-			return m.inpCover.Focus()
-		}
-		return nil
 	case actionLsModel:
 		// 直接调用现有命令，需先选择类型
 		if m.act.u.typ == "" {
@@ -1000,7 +1267,10 @@ func (m *mainModel) updateActionInputs(msg tea.Msg) tea.Cmd {
 func (m *mainModel) renderActionView() string {
 	switch m.currentAction {
 	case actionUpload:
-		if m.act.u.typ == "" {
+		switch m.upStep {
+		case stepName:
+			return m.titleStyle.Render("上传 · Step 1/8 · 模型名称") + "\n\n" + m.inpName.View() + "\n" + m.hintStyle.Render("确认：Enter，返回：Esc，退出：q")
+		case stepType:
 			if m.height > 0 {
 				h := m.height - 10
 				if h < 5 {
@@ -1008,11 +1278,25 @@ func (m *mainModel) renderActionView() string {
 				}
 				m.typeList.SetHeight(h)
 			}
-			return m.titleStyle.Render("上传 · Step 1/6 · 选择模型类型") + "\n\n" + m.typeList.View() + "\n" + m.hintStyle.Render("确认：Enter，返回：Esc，退出：q")
-		}
-		if m.act.u.path == "" {
+			return m.titleStyle.Render("上传 · Step 2/8 · 选择模型类型") + "\n\n" + m.typeList.View() + "\n" + m.hintStyle.Render("确认：Enter，返回：Esc，退出：q")
+		case stepVersion:
+			return m.titleStyle.Render("上传 · Step 3/8 · 版本名称（默认 v1.0）") + "\n\n" + m.inpVersion.View() + "\n" + m.hintStyle.Render("确认：Enter，返回：Esc，退出：q")
+		case stepBase:
+			if m.height > 0 {
+				h := m.height - 10
+				if h < 5 {
+					h = 5
+				}
+				m.baseList.SetHeight(h)
+			}
+			return m.titleStyle.Render("上传 · Step 4/8 · Base Model（可选）") + "\n\n" + m.baseList.View() + "\n" + m.hintStyle.Render("(可选) 选择后 Enter，或直接 Enter 跳过")
+		case stepCover:
+			return m.titleStyle.Render("上传 · Step 5/8 · Cover（可选；多个用 ; 分隔）") + "\n\n" + m.inpCover.View() + "\n" + m.hintStyle.Render("确认：Enter，返回：Esc，退出：q")
+		case stepIntro:
+			return m.titleStyle.Render("上传 · Step 6/8 · 模型介绍（可为空，回车跳过）") + "\n\n" + m.inpIntro.View() + "\n" + m.hintStyle.Render("确认：Enter（可空），返回：Esc，退出：q")
+		case stepPath:
 			var content strings.Builder
-			content.WriteString(m.titleStyle.Render("上传 · Step 2/6 · 选择文件"))
+			content.WriteString(m.titleStyle.Render("上传 · Step 7/8 · 选择文件"))
 			content.WriteString("\n\n")
 
 			// 路径输入框部分
@@ -1074,36 +1358,35 @@ func (m *mainModel) renderActionView() string {
 			}
 
 			return content.String()
-		}
-		if m.act.u.name == "" && m.act.u.path != "" {
-			// 文件已选择，现在输入name
-			var content strings.Builder
-			content.WriteString(m.titleStyle.Render("上传 · Step 3/6 · 模型名称"))
-			content.WriteString("\n\n")
-			content.WriteString("已选择文件: " + m.filepicker.Styles.Selected.Render(m.selectedFile))
-			content.WriteString("\n\n")
-			content.WriteString("模型名称（默认从文件名提取）：")
-			content.WriteString("\n")
-			content.WriteString(m.inpName.View())
-			content.WriteString("\n\n")
-			content.WriteString(m.hintStyle.Render("Enter确认（空白使用默认名称），返回：Esc，退出：q"))
-			return content.String()
-		}
-		if m.act.u.base == "" && !m.act.confirming {
-			if m.height > 0 {
-				h := m.height - 10
-				if h < 5 {
-					h = 5
+		case stepAskMore:
+			var b strings.Builder
+			b.WriteString(m.titleStyle.Render("上传 · Step 8/8 · 是否继续添加版本？"))
+			b.WriteString("\n\n")
+			if len(m.act.versions) > 0 {
+				b.WriteString("已添加版本：\n")
+				for i, v := range m.act.versions {
+					b.WriteString(fmt.Sprintf("  - [%d] %s  base=%s  cover=%s  path=%s\n", i+1, dash(v.version), dash(v.base), dash(v.cover), dash(v.path)))
 				}
-				m.baseList.SetHeight(h)
+				b.WriteString("\n")
 			}
-			return m.titleStyle.Render("上传 · Step 4/6 · Base Model（可选）") + "\n\n" + m.baseList.View() + "\n" + m.hintStyle.Render("(可选) 选择后 Enter，或直接 Enter 跳过")
+			cur := m.act.cur
+			b.WriteString("当前版本：\n")
+			b.WriteString(fmt.Sprintf("  - %s  base=%s  cover=%s  path=%s\n\n", dash(cur.version), dash(cur.base), dash(cur.cover), dash(cur.path)))
+			// 在下方渲染选择列表
+			return b.String() + "\n" + m.moreList.View() + "\n" + m.hintStyle.Render("Enter 确认选择，Esc 返回上一页")
+		case stepConfirm:
+			var b strings.Builder
+			b.WriteString(m.titleStyle.Render("上传 · 确认所有版本"))
+			b.WriteString("\n\n")
+			b.WriteString(fmt.Sprintf("模型名称：%s\n类型：%s\n\n", m.act.u.name, m.act.u.typ))
+			for i, v := range m.act.versions {
+				b.WriteString(fmt.Sprintf("[%d] 版本=%s  base=%s\n", i+1, dash(v.version), dash(v.base)))
+				b.WriteString(fmt.Sprintf("cover=%s\npath=%s\nintro=%s\n\n", dash(v.cover), dash(v.path), dash(v.intro)))
+			}
+			b.WriteString(m.hintStyle.Render("按 Enter 开始上传；Esc 返回上一步；q 退出"))
+			return b.String()
 		}
-		if !m.act.confirming {
-			return m.titleStyle.Render("上传 · Step 5/6 · Cover（可选，多个用 ; 分隔）") + "\n\n" + m.inpCover.View() + "\n" + m.hintStyle.Render("确认：Enter，返回：Esc，退出：q")
-		}
-		summary := fmt.Sprintf("- type: %s\n- name: %s\n- path: %s\n- base: %s\n- cover: %s", dash(m.act.u.typ), dash(m.act.u.name), dash(m.act.u.path), dash(m.act.u.base), dash(m.act.u.cover))
-		return m.titleStyle.Render("上传 · Step 6/6 · 确认") + "\n\n" + summary + "\n\n" + m.hintStyle.Render("按 Enter 开始，q 退出")
+		return ""
 	case actionLsModel:
 		if m.act.u.typ == "" {
 			if m.height > 0 {
@@ -1216,27 +1499,122 @@ func runLogout() tea.Cmd {
 }
 
 // 运行上传（调用现有 upload 子命令）
-func runUploadAction(in uploadInputs) tea.Cmd {
+// obsolete single-version uploader removed (replaced by runUploadActionMulti)
+
+// 多版本上传
+func runUploadActionMulti(u uploadInputs, versions []versionItem) tea.Cmd {
 	return func() tea.Msg {
-		exe, _ := os.Executable()
-		args := []string{
-			"upload",
-			"--type", in.typ,
-			"--name", in.name,
-			"--path", in.path,
-		}
-		if in.base != "" {
-			args = append(args, "--base", in.base)
-		}
-		if in.cover != "" {
-			args = append(args, "--cover", in.cover)
-		}
-		cmd := exec.Command(exe, args...)
-		var buf bytes.Buffer
-		cmd.Stdout = &buf
-		cmd.Stderr = &buf
-		err := cmd.Run()
-		return actionDoneMsg{out: buf.String(), err: err}
+		ch := make(chan tea.Msg, 64)
+		ctx, cancel := context.WithCancel(context.Background())
+		go func() {
+			defer close(ch)
+
+			args := config.NewArgument()
+			args.Type = u.typ
+			args.Name = u.name
+
+			if err := checkType(args, true); err != nil {
+				ch <- actionDoneMsg{err: err}
+				return
+			}
+			if err := checkName(args, true); err != nil {
+				ch <- actionDoneMsg{err: err}
+				return
+			}
+
+			apiKey, err := lib.NewSfFolder().GetKey()
+			if err != nil || apiKey == "" {
+				ch <- actionDoneMsg{out: "", err: fmt.Errorf("未登录或缺少 API Key，请先登录")}
+				return
+			}
+			client := lib.NewClient(meta.DefaultDomain, apiKey)
+
+			// 逐版本上传
+			mvList := make([]*lib.ModelVersion, 0, len(versions))
+			for i, v := range versions {
+				// 准备 FileToUpload
+				st, err := os.Stat(v.path)
+				if err != nil {
+					ch <- actionDoneMsg{err: err}
+					return
+				}
+				if st.IsDir() {
+					ch <- actionDoneMsg{err: fmt.Errorf("仅支持文件上传: %s", v.path)}
+					return
+				}
+
+				relPath, err := filepath.Rel(filepath.Dir(v.path), v.path)
+				if err != nil {
+					ch <- actionDoneMsg{err: err}
+					return
+				}
+				f := &lib.FileToUpload{Path: filepath.ToSlash(v.path), RelPath: filepath.ToSlash(relPath), Size: st.Size()}
+
+				sha256sum, md5Hash, err := calculateHash(f.Path)
+				if err != nil {
+					ch <- actionDoneMsg{err: err}
+					return
+				}
+				f.Signature = sha256sum
+
+				ossCert, err := client.OssSign(sha256sum, u.typ)
+				if err != nil {
+					ch <- actionDoneMsg{err: err}
+					return
+				}
+				fileIndex := fmt.Sprintf("%d/%d", i+1, len(versions))
+				fileRecord := ossCert.Data.File
+
+				if fileRecord.Id == 0 {
+					storage := ossCert.Data.Storage
+					ossClient, err := lib.NewAliOssStorageClient(storage.Endpoint, storage.Bucket, fileRecord.AccessKeyId, fileRecord.AccessKeySecret, fileRecord.SecurityToken)
+					if err != nil {
+						ch <- actionDoneMsg{err: err}
+						return
+					}
+					_, err = ossClient.UploadFileCtx(ctx, f, fileRecord.ObjectKey, fileIndex, func(consumed, total int64) {
+						select {
+						case ch <- uploadProgMsg{fileIndex: fileIndex, fileName: filepath.Base(f.RelPath), consumed: consumed, total: total, verIdx: i}:
+						default:
+						}
+					})
+					if err != nil {
+						if errors.Is(err, context.Canceled) {
+							ch <- actionDoneMsg{out: "上传已取消\n", err: nil}
+							return
+						}
+						ch <- actionDoneMsg{err: err}
+						return
+					}
+					if _, err = client.CommitFileV2(f.Signature, fileRecord.ObjectKey, md5Hash, u.typ); err != nil {
+						ch <- actionDoneMsg{err: err}
+						return
+					}
+				} else {
+					f.Id = fileRecord.Id
+					f.RemoteKey = fileRecord.ObjectKey
+					select {
+					case ch <- uploadProgMsg{fileIndex: fileIndex, fileName: filepath.Base(f.RelPath), consumed: f.Size, total: f.Size, verIdx: i}:
+					default:
+					}
+				}
+
+				// 组装版本
+				mv := &lib.ModelVersion{Version: v.version, BaseModel: v.base, Introduction: v.intro, Public: false, Sign: f.Signature, Path: v.path}
+				if v.cover != "" {
+					mv.CoverUrls = strings.Split(v.cover, ";")
+				}
+				mvList = append(mvList, mv)
+			}
+
+			// 提交模型（所有版本）
+			if _, err := client.CommitModelV2(u.name, u.typ, mvList); err != nil {
+				ch <- actionDoneMsg{err: err}
+				return
+			}
+			ch <- actionDoneMsg{out: "Uploaded successfully\n", err: nil}
+		}()
+		return uploadStartMsg{ch: ch, cancel: cancel}
 	}
 }
 
