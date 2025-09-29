@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"context"
+	"sync"
 
 	"github.com/charmbracelet/bubbles/filepicker"
 	"github.com/charmbracelet/bubbles/list"
@@ -250,17 +251,19 @@ func newMainModel() mainModel {
 		bases = append(bases, k)
 	}
 	sort.Strings(bases)
-	bItems := []list.Item{listItem{title: "(跳过)", desc: "可不选择 Base Model"}}
+	bItems := []list.Item{}
 	for _, b := range bases {
 		bItems = append(bItems, listItem{title: b})
 	}
 	bl := list.New(bItems, d, 30, 12)
-	bl.Title = "选择 Base Model（可选）"
+	bl.Title = "选择 Base Model（必选）"
 
 	// 是否添加更多版本选择
 	moreItems := []list.Item{listItem{title: "是，继续添加版本"}, listItem{title: "否，进入确认"}}
-	ml := list.New(moreItems, d, 30, 4)
-	ml.Title = "是否继续添加版本？请按方向键进行选择，Enter确认"
+	ml := list.New(moreItems, d, 30, 12)
+	ml.Title = "是否继续添加版本？"
+	ml.SetShowStatusBar(false)
+	ml.SetShowPagination(false)
 
 	// 输入框
 	inApi := textinput.New()
@@ -738,19 +741,55 @@ func (m mainModel) View() string {
 				summaryBuilder.WriteString(fmt.Sprintf("  [%d] version=%s base=%s cover=%s path=%s intro=%s\n", i+1, dash(v.version), dash(v.base), dash(v.cover), dash(v.path), dash(v.intro)))
 			}
 			summary := summaryBuilder.String()
-			// 构造进度显示
-			var fileLine string
-			var progLine string
-			if m.uploadProg.total > 0 {
-				percent := float64(m.uploadProg.consumed) / float64(m.uploadProg.total)
-				fileLine = fmt.Sprintf("(%s) %s", m.uploadProg.fileIndex, m.uploadProg.fileName)
-				progLine = fmt.Sprintf("%s %.1f%% (%s/%s)", m.progress.View(), percent*100, formatBytes(m.uploadProg.consumed), formatBytes(m.uploadProg.total))
+
+			// 构造进度显示（单/多版本）
+			var progressSection strings.Builder
+			if len(m.verProgress) > 0 {
+				// 顶部显示当前文件
+				if m.uploadProg.total > 0 {
+					progressSection.WriteString(fmt.Sprintf("当前: (%s) %s\n", m.uploadProg.fileIndex, m.uploadProg.fileName))
+				} else {
+					progressSection.WriteString("准备上传…\n")
+				}
+				for i := range m.verProgress {
+					versionLabel := ""
+					if i >= 0 && i < len(m.act.versions) {
+						versionLabel = m.act.versions[i].version
+					}
+					consumed := m.verConsumed[i]
+					total := m.verTotal[i]
+					percent := 0.0
+					if total > 0 {
+						percent = float64(consumed) / float64(total)
+					}
+					bar := m.verProgress[i].View()
+					prefix := "  "
+					if i == m.uploadProg.verIdx {
+						prefix = "▶ "
+					}
+					progressSection.WriteString(fmt.Sprintf("%s[%d/%d] 版本=%s\n", prefix, i+1, len(m.verProgress), dash(versionLabel)))
+					if total > 0 {
+						progressSection.WriteString(fmt.Sprintf("%s%s %.1f%% (%s/%s)\n", prefix, bar, percent*100, formatBytes(consumed), formatBytes(total)))
+					} else {
+						progressSection.WriteString(fmt.Sprintf("%s%s\n", prefix, bar))
+					}
+				}
 			} else {
-				fileLine = "准备上传…"
-				progLine = m.progress.View()
+				// 单版本回退显示
+				var fileLine string
+				var progLine string
+				if m.uploadProg.total > 0 {
+					percent := float64(m.uploadProg.consumed) / float64(m.uploadProg.total)
+					fileLine = fmt.Sprintf("(%s) %s", m.uploadProg.fileIndex, m.uploadProg.fileName)
+					progLine = fmt.Sprintf("%s %.1f%% (%s/%s)", m.progress.View(), percent*100, formatBytes(m.uploadProg.consumed), formatBytes(m.uploadProg.total))
+				} else {
+					fileLine = "准备上传…"
+					progLine = m.progress.View()
+				}
+				progressSection.WriteString(fileLine + "\n" + progLine)
 			}
 
-			content := m.titleStyle.Render("上传中 · 请稍候") + "\n\n" + summary + "\n\n" + fileLine + "\n" + progLine
+			content := m.titleStyle.Render("上传中 · 请稍候") + "\n\n" + summary + "\n\n" + progressSection.String()
 			return header + "\n" + panel.Render(content)
 		}
 		spin := m.sp.View()
@@ -890,15 +929,11 @@ func (m *mainModel) updateActionInputs(msg tea.Msg) tea.Cmd {
 				switch km.String() {
 				case "enter":
 					if it, ok := m.baseList.SelectedItem().(listItem); ok {
-						if it.title != "(跳过)" {
-							if !meta.SupportedBaseModels[it.title] {
-								m.err = fmt.Errorf("不支持的 Base Model: %s", it.title)
-								return nil
-							}
-							m.act.cur.base = it.title
-						} else {
-							m.act.cur.base = ""
+						if !meta.SupportedBaseModels[it.title] {
+							m.err = fmt.Errorf("不支持的 Base Model: %s", it.title)
+							return nil
 						}
+						m.act.cur.base = it.title
 						m.upStep = stepCover
 						return m.inpCover.Focus()
 					}
@@ -1028,6 +1063,17 @@ func (m *mainModel) updateActionInputs(msg tea.Msg) tea.Cmd {
 			// 更新路径输入框
 			if m.act.pathInputFocused {
 				m.inpPath, pathCmd = m.inpPath.Update(msg)
+				// 实时同步：当输入为有效目录时，自动刷新下方文件选择器
+				typedPath := strings.TrimSpace(m.inpPath.Value())
+				if typedPath != "" {
+					if info, err := os.Stat(typedPath); err == nil && info.IsDir() {
+						// 仅在目录变化时刷新，避免无谓刷新
+						if filepath.Clean(m.filepicker.CurrentDirectory) != filepath.Clean(typedPath) {
+							m.filepicker.CurrentDirectory = typedPath
+							fpCmd = m.filepicker.Init()
+						}
+					}
+				}
 			}
 
 			// 更新文件选择器 - 只有在文件选择器有焦点时才更新
@@ -1289,7 +1335,7 @@ func (m *mainModel) renderActionView() string {
 				}
 				m.baseList.SetHeight(h)
 			}
-			return m.titleStyle.Render("上传 · Step 4/8 · Base Model（可选）") + "\n\n" + m.baseList.View() + "\n" + m.hintStyle.Render("(可选) 选择后 Enter，或直接 Enter 跳过")
+			return m.titleStyle.Render("上传 · Step 4/8 · Base Model（必选）") + "\n\n" + m.baseList.View() + "\n" + m.hintStyle.Render("选择后 Enter，返回：Esc，退出：q")
 		case stepCover:
 			return m.titleStyle.Render("上传 · Step 5/8 · Cover（可选；多个用 ; 分隔）") + "\n\n" + m.inpCover.View() + "\n" + m.hintStyle.Render("确认：Enter，返回：Esc，退出：q")
 		case stepIntro:
@@ -1302,7 +1348,7 @@ func (m *mainModel) renderActionView() string {
 			// 路径输入框部分
 			pathInputLabel := "路径输入："
 			if m.act.pathInputFocused {
-				pathInputLabel = m.titleStyle.Render("► 路径输入：（当前焦点）")
+				pathInputLabel = m.titleStyle.Render("► 路径输入：（当前焦点，按Tab切换至文件选择器）")
 			} else {
 				pathInputLabel = m.hintStyle.Render("路径输入：")
 			}
@@ -1314,7 +1360,7 @@ func (m *mainModel) renderActionView() string {
 			// 文件选择器部分标题
 			filePickerLabel := "文件选择器："
 			if !m.act.pathInputFocused {
-				filePickerLabel = m.titleStyle.Render("► 文件选择器：（当前焦点）")
+				filePickerLabel = m.titleStyle.Render("► 文件选择器：（当前焦点，按Tab切换至路径输入框）")
 			} else {
 				filePickerLabel = m.hintStyle.Render("文件选择器：")
 			}
@@ -1337,7 +1383,7 @@ func (m *mainModel) renderActionView() string {
 
 			// 操作提示 - 根据焦点状态给出不同的提示
 			if m.act.pathInputFocused {
-				content.WriteString(m.hintStyle.Render("Enter确认路径（目录会自动切换），Tab切换到文件选择器，Ctrl+R强制刷新，返回：Esc"))
+				content.WriteString(m.hintStyle.Render("输入有效目录将自动同步下方文件列表；Enter确认文件或切换目录；Tab切换焦点；Esc返回"))
 			} else {
 				// 检查路径输入框和filepicker目录是否同步
 				inputPath := strings.TrimSpace(m.inpPath.Value())
@@ -1351,9 +1397,9 @@ func (m *mainModel) renderActionView() string {
 				}
 
 				if inputPath != "" && inputDir != currentDir {
-					content.WriteString(m.hintStyle.Render("方向键导航，Enter选择文件，Tab同步目录，Ctrl+R强制刷新，返回：Esc"))
+					content.WriteString(m.hintStyle.Render("方向键导航，Enter选择文件，Tab切换输入（输入框实时同步），Esc返回"))
 				} else {
-					content.WriteString(m.hintStyle.Render("方向键导航，Enter选择文件，Tab切换输入，Ctrl+R刷新，返回：Esc"))
+					content.WriteString(m.hintStyle.Render("方向键导航，Enter选择文件，Tab切换输入（输入框实时同步），Esc返回"))
 				}
 			}
 
@@ -1529,90 +1575,172 @@ func runUploadActionMulti(u uploadInputs, versions []versionItem) tea.Cmd {
 			}
 			client := lib.NewClient(meta.DefaultDomain, apiKey)
 
-			// 逐版本上传
-			mvList := make([]*lib.ModelVersion, 0, len(versions))
+			// 并行上传各版本文件，限制并发度
+			mvList := make([]*lib.ModelVersion, len(versions))
+			var wg sync.WaitGroup
+			sem := make(chan struct{}, 3) // 默认并发 3，可调整
+			var mu sync.Mutex
+			var anyCanceled bool
+			var errs []error
+
 			for i, v := range versions {
-				// 准备 FileToUpload
-				st, err := os.Stat(v.path)
-				if err != nil {
-					ch <- actionDoneMsg{err: err}
-					return
-				}
-				if st.IsDir() {
-					ch <- actionDoneMsg{err: fmt.Errorf("仅支持文件上传: %s", v.path)}
-					return
-				}
+				wg.Add(1)
+				idx := i
+				ver := v
+				go func() {
+					defer wg.Done()
+					sem <- struct{}{}
+					defer func() { <-sem }()
 
-				relPath, err := filepath.Rel(filepath.Dir(v.path), v.path)
-				if err != nil {
-					ch <- actionDoneMsg{err: err}
-					return
-				}
-				f := &lib.FileToUpload{Path: filepath.ToSlash(v.path), RelPath: filepath.ToSlash(relPath), Size: st.Size()}
-
-				sha256sum, md5Hash, err := calculateHash(f.Path)
-				if err != nil {
-					ch <- actionDoneMsg{err: err}
-					return
-				}
-				f.Signature = sha256sum
-
-				ossCert, err := client.OssSign(sha256sum, u.typ)
-				if err != nil {
-					ch <- actionDoneMsg{err: err}
-					return
-				}
-				fileIndex := fmt.Sprintf("%d/%d", i+1, len(versions))
-				fileRecord := ossCert.Data.File
-
-				if fileRecord.Id == 0 {
-					storage := ossCert.Data.Storage
-					ossClient, err := lib.NewAliOssStorageClient(storage.Endpoint, storage.Bucket, fileRecord.AccessKeyId, fileRecord.AccessKeySecret, fileRecord.SecurityToken)
-					if err != nil {
-						ch <- actionDoneMsg{err: err}
+					// 统计与校验文件
+					// 校验版本号，避免后端将空版本映射为 v0
+					verVersion := strings.TrimSpace(ver.version)
+					if verVersion == "" {
+						mu.Lock()
+						errs = append(errs, fmt.Errorf("版本[%d] 的版本号为空，请检查输入", idx+1))
+						mu.Unlock()
 						return
 					}
-					_, err = ossClient.UploadFileCtx(ctx, f, fileRecord.ObjectKey, fileIndex, func(consumed, total int64) {
-						select {
-						case ch <- uploadProgMsg{fileIndex: fileIndex, fileName: filepath.Base(f.RelPath), consumed: consumed, total: total, verIdx: i}:
-						default:
-						}
-					})
+
+					st, err := os.Stat(ver.path)
 					if err != nil {
-						if errors.Is(err, context.Canceled) {
-							ch <- actionDoneMsg{out: "上传已取消\n", err: nil}
+						mu.Lock()
+						errs = append(errs, err)
+						mu.Unlock()
+						return
+					}
+					if st.IsDir() {
+						mu.Lock()
+						errs = append(errs, fmt.Errorf("仅支持文件上传: %s", ver.path))
+						mu.Unlock()
+						return
+					}
+
+					relPath, err := filepath.Rel(filepath.Dir(ver.path), ver.path)
+					if err != nil {
+						mu.Lock()
+						errs = append(errs, err)
+						mu.Unlock()
+						return
+					}
+					f := &lib.FileToUpload{Path: filepath.ToSlash(ver.path), RelPath: filepath.ToSlash(relPath), Size: st.Size()}
+
+					sha256sum, md5Hash, err := calculateHash(f.Path)
+					if err != nil {
+						mu.Lock()
+						errs = append(errs, err)
+						mu.Unlock()
+						return
+					}
+					f.Signature = sha256sum
+
+					ossCert, err := client.OssSign(sha256sum, u.typ)
+					if err != nil {
+						mu.Lock()
+						errs = append(errs, err)
+						mu.Unlock()
+						return
+					}
+					fileIndex := fmt.Sprintf("%d/%d", idx+1, len(versions))
+					fileRecord := ossCert.Data.File
+
+					if fileRecord.Id == 0 {
+						storage := ossCert.Data.Storage
+						ossClient, err := lib.NewAliOssStorageClient(storage.Endpoint, storage.Bucket, fileRecord.AccessKeyId, fileRecord.AccessKeySecret, fileRecord.SecurityToken)
+						if err != nil {
+							mu.Lock()
+							errs = append(errs, err)
+							mu.Unlock()
 							return
 						}
-						ch <- actionDoneMsg{err: err}
-						return
+						_, err = ossClient.UploadFileCtx(ctx, f, fileRecord.ObjectKey, fileIndex, func(consumed, total int64) {
+							select {
+							case ch <- uploadProgMsg{fileIndex: fileIndex, fileName: filepath.Base(f.RelPath), consumed: consumed, total: total, verIdx: idx}:
+							default:
+							}
+						})
+						if err != nil {
+							if errors.Is(err, context.Canceled) {
+								mu.Lock()
+								anyCanceled = true
+								mu.Unlock()
+								return
+							}
+							mu.Lock()
+							errs = append(errs, err)
+							mu.Unlock()
+							return
+						}
+						if _, err = client.CommitFileV2(f.Signature, fileRecord.ObjectKey, md5Hash, u.typ); err != nil {
+							mu.Lock()
+							errs = append(errs, err)
+							mu.Unlock()
+							return
+						}
+					} else {
+						f.Id = fileRecord.Id
+						f.RemoteKey = fileRecord.ObjectKey
+						select {
+						case ch <- uploadProgMsg{fileIndex: fileIndex, fileName: filepath.Base(f.RelPath), consumed: f.Size, total: f.Size, verIdx: idx}:
+						default:
+						}
 					}
-					if _, err = client.CommitFileV2(f.Signature, fileRecord.ObjectKey, md5Hash, u.typ); err != nil {
-						ch <- actionDoneMsg{err: err}
-						return
-					}
-				} else {
-					f.Id = fileRecord.Id
-					f.RemoteKey = fileRecord.ObjectKey
-					select {
-					case ch <- uploadProgMsg{fileIndex: fileIndex, fileName: filepath.Base(f.RelPath), consumed: f.Size, total: f.Size, verIdx: i}:
-					default:
-					}
-				}
 
-				// 组装版本
-				mv := &lib.ModelVersion{Version: v.version, BaseModel: v.base, Introduction: v.intro, Public: false, Sign: f.Signature, Path: v.path}
-				if v.cover != "" {
-					mv.CoverUrls = strings.Split(v.cover, ";")
-				}
-				mvList = append(mvList, mv)
+					// 组装版本（成功的才入列）
+					mv := &lib.ModelVersion{Version: verVersion, BaseModel: ver.base, Introduction: ver.intro, Public: false, Sign: f.Signature, Path: ver.path}
+					if ver.cover != "" {
+						mv.CoverUrls = strings.Split(ver.cover, ";")
+					}
+					mvList[idx] = mv
+				}()
 			}
 
-			// 提交模型（所有版本）
-			if _, err := client.CommitModelV2(u.name, u.typ, mvList); err != nil {
+			wg.Wait()
+
+			// 若被取消，直接返回已取消
+			if anyCanceled {
+				ch <- actionDoneMsg{out: "上传已取消\n", err: nil}
+				return
+			}
+
+			// 过滤成功的版本
+			finalVersions := make([]*lib.ModelVersion, 0, len(mvList))
+			for _, mv := range mvList {
+				if mv != nil {
+					finalVersions = append(finalVersions, mv)
+				}
+			}
+
+			if len(finalVersions) == 0 {
+				// 全部失败
+				var sb strings.Builder
+				sb.WriteString("所有版本上传失败\n")
+				for _, e := range errs {
+					sb.WriteString("- ")
+					sb.WriteString(e.Error())
+					sb.WriteString("\n")
+				}
+				ch <- actionDoneMsg{out: sb.String(), err: fmt.Errorf("上传失败")}
+				return
+			}
+
+			// 发布模型（仅包含成功的版本）
+			if _, err := client.CommitModelV2(u.name, u.typ, finalVersions); err != nil {
 				ch <- actionDoneMsg{err: err}
 				return
 			}
-			ch <- actionDoneMsg{out: "Uploaded successfully\n", err: nil}
+
+			var out strings.Builder
+			out.WriteString("Uploaded successfully\n")
+			if len(finalVersions) != len(versions) {
+				out.WriteString(fmt.Sprintf("部分版本失败：成功 %d / %d\n", len(finalVersions), len(versions)))
+				for _, e := range errs {
+					out.WriteString("- ")
+					out.WriteString(e.Error())
+					out.WriteString("\n")
+				}
+			}
+			ch <- actionDoneMsg{out: out.String(), err: nil}
 		}()
 		return uploadStartMsg{ch: ch, cancel: cancel}
 	}
