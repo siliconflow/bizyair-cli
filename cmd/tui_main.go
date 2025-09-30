@@ -218,6 +218,10 @@ type mainModel struct {
 	panelStyle lipgloss.Style
 	btnStyle   lipgloss.Style
 
+	// 外框内边距（用于全屏外边框内的留白）
+	framePadX int
+	framePadY int
+
 	// 品牌
 	logo           string
 	logoStyle      lipgloss.Style
@@ -244,8 +248,10 @@ func newMainModel() mainModel {
 	d.Styles.SelectedTitle = d.Styles.SelectedTitle.Foreground(cSel).BorderLeftForeground(cSel)
 	d.Styles.SelectedDesc = d.Styles.SelectedDesc.Foreground(cSel)
 
-	menuList := list.New(mItems, d, 30, len(mItems))
+	menuList := list.New(mItems, d, 30, len(mItems)*8 )
 	menuList.Title = "请选择功能"
+	menuList.SetShowStatusBar(false)
+	menuList.SetShowPagination(false)
 
 	// 上传/通用：类型列表
 	tItems := make([]list.Item, 0, len(meta.ModelTypes))
@@ -365,7 +371,7 @@ func newMainModel() mainModel {
 		Bold(false)
 	modelTable.SetStyles(s)
 
-	return mainModel{
+	m := mainModel{
 		step:       mainStepHome,
 		menu:       menuList,
 		inpApi:     inApi,
@@ -387,24 +393,148 @@ func newMainModel() mainModel {
 		sp:         sp,
 		progress:   pr,
 		logo: strings.Join([]string{
-			"    ,---,.                                     ,---,                         ",
-			" ,'  .'  \\  ,--,                             '  .' \\        ,--,              ",
-			",---.' .' |,--.'|          ,----,            /  ;    '.    ,--.'|    __  ,-. ",
-			"|   |  |: ||  |,         .'   .`|           :  :       \\   |  |,   ,' ,'/ /| ",
-			";   :  :  /`--'_      .'   .'  .'      .--, :  |   /\\   \\  `--'_   '  | |' | ",
-			";   |    ; ,' ,'|   ,---, '   ./     /_ ./| |  :  ' ;.   : ,' ,'|  |  |   ,' ",
-			"|   :     \\  | |   ;   | .'  /   , ' , ' : |  |  ;/  \\   \\  | |  '  :  /   ",
-			"|   |   . ||  | :   `---' /  ;--,/___/ \\: | '  :  | \\  \\ ,'|  | :  |  | '    ",
-			"'   :  '; |'  : |__   /  /  / .`| .  \\  ' | |  |  '  '--'  '  : |__;  : |    ",
-			"|   |  | ; |  | '.'|./__;     .'   \\  ;   : |  :  :        |  | '.'|  , ;    ",
-			"|   :   /  ;  :    ;;   |  .'       \\  \\  ; |  | ,'        ;  :    ;---'     ",
-			"|   | ,'   |  ,   / `---'            :  \\  \\`--''          |  ,   /          ",
-			"`----'      ---`-'                    \\  ' ;                ---`-'           ",
-			"                                        `--`                                     ",
+			` .-. .-')              .-') _              ('-.             _  .-')   `,
+			` \  ( OO )            (  OO) )            ( OO ).-.        ( \( -O )  `,
+			`  ;-----.\   ,-.-') ,(_)----.  ,--.   ,--./ . --. /  ,-.-') ,------.  `,
+			`  | .-.  |   |  |OO)|       |   \  ` + "`" + `.'  / | \-.  \   |  |OO)|   /` + "`" + `. ' `,
+			`  | '-' /_)  |  |  \'--.   /  .-')     /.-'-'  |  |  |  |  \|  /  | | `,
+			`  | .-. ` + "`" + `.   |  |(_/(_/   /  (OO  \   /  \| |_.'  |  |  |(_/|  |_.' | `,
+			`  | |  \  | ,|  |_.' /   /___ |   /  /\_  |  .-.  | ,|  |_.'|  .  '.' `,
+			`  | '--'  /(_|  |   |        |` + "`" + `-./  /.__) |  | |  |(_|  |   |  |\  \  `,
+			`  ` + "`" + `------'   ` + "`" + `--'   ` + "`" + `--------'  ` + "`" + `--'      ` + "`" + `--' ` + "`" + `--'  ` + "`" + `--'   ` + "`" + `--' '--' `,
 		}, "\n"),
 		logoStyle:      lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("#8B5CF6")),
 		smallLogoStyle: lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("#EC4899")),
+		// 外框默认内边距：左右 2、上下 1
+		framePadX: 2,
+		framePadY: 1,
 	}
+
+	// 启动即合并首页与菜单页：若已登录则直接进入菜单；否则进入登录
+	if key, err := lib.NewSfFolder().GetKey(); err == nil && key != "" {
+		m.loggedIn = true
+		m.apiKey = key
+		m.step = mainStepMenu
+	} else {
+		m.step = mainStepLogin
+	}
+
+	return m
+}
+
+// 计算指定屏幕宽高下的内层区域尺寸（去除外框边框与外框内边距）
+func (m *mainModel) computeInnerSizeFor(totalW, totalH int) (int, int) {
+	iw := totalW - 2 - m.framePadX*2
+	ih := totalH - 2 - m.framePadY*2
+	if iw < 1 {
+		iw = 1
+	}
+	if ih < 1 {
+		ih = 1
+	}
+	return iw, ih
+}
+
+// 当前内层尺寸
+func (m *mainModel) innerSize() (int, int) {
+	return m.computeInnerSizeFor(m.width, m.height)
+}
+
+// 将字符串裁剪/填充为固定宽度（兼容 ANSI 宽度）
+func clipToWidth(s string, width int) string {
+	return lipgloss.NewStyle().Width(width).Render(s)
+}
+
+// 渐变外框渲染：在整屏绘制蓝紫(#8B5CF6)->粉色(#EC4899)的边框，并在内侧使用内边距包裹内容
+func (m *mainModel) renderFrame(inner string) string {
+	w, h := m.width, m.height
+	if w <= 0 || h <= 0 {
+		return inner
+	}
+
+	iw, ih := m.innerSize()
+	padX, padY := m.framePadX, m.framePadY
+
+	// 拆分内层内容成行，并限制到内层高度
+	lines := strings.Split(inner, "\n")
+	contentLines := make([]string, ih)
+	for i := 0; i < ih; i++ {
+		if i < len(lines) {
+			contentLines[i] = clipToWidth(lines[i], iw)
+		} else {
+			contentLines[i] = clipToWidth("", iw)
+		}
+	}
+
+	// 渐变颜色（纵向）：顶端为紫色，底部为粉色
+	sr, sg, sb := hexToRGB("#8B5CF6")
+	er, eg, eb := hexToRGB("#EC4899")
+
+	var b strings.Builder
+
+	// 顶部边框（使用顶端颜色）
+	if h >= 1 {
+		tColor := rgbToHex(sr, sg, sb)
+		tStyle := lipgloss.NewStyle().Foreground(lipgloss.Color(tColor))
+		if w >= 2 {
+			b.WriteString(tStyle.Render("╭" + strings.Repeat("─", w-2) + "╮"))
+		} else {
+			b.WriteString(tStyle.Render("╭"))
+		}
+		b.WriteString("\n")
+	}
+
+	// 中间区域行（包含左右竖边框、内边距与内容）
+	innerStartY := padY
+	innerEndY := padY + ih
+	for y := 1; y <= h-2; y++ {
+		// y 从 1 到 h-2
+		t := 0.0
+		if h > 1 {
+			t = float64(y) / float64(h-1)
+		}
+		r := lerpInt(sr, er, t)
+		g := lerpInt(sg, eg, t)
+		bl := lerpInt(sb, eb, t)
+		c := rgbToHex(r, g, bl)
+		s := lipgloss.NewStyle().Foreground(lipgloss.Color(c))
+
+		// 内部空白或内容
+		middle := ""
+		if w >= 2 {
+			if y-1 < innerStartY || y-1 >= innerEndY {
+				// 处于上/下内边距区域
+				middle = strings.Repeat(" ", w-2)
+			} else {
+				row := y - 1 - innerStartY
+				if row >= 0 && row < len(contentLines) {
+					middle = strings.Repeat(" ", padX) + clipToWidth(contentLines[row], iw) + strings.Repeat(" ", padX)
+				} else {
+					middle = strings.Repeat(" ", w-2)
+				}
+			}
+		}
+
+		if w >= 2 {
+			b.WriteString(s.Render("│") + middle + s.Render("│"))
+		} else {
+			b.WriteString(s.Render("│"))
+		}
+		b.WriteString("\n")
+	}
+
+	// 底部边框（使用底部颜色）
+	if h >= 2 {
+		bColor := rgbToHex(er, eg, eb)
+		bStyle := lipgloss.NewStyle().Foreground(lipgloss.Color(bColor))
+		if w >= 2 {
+			b.WriteString(bStyle.Render("╰" + strings.Repeat("─", w-2) + "╯"))
+		} else {
+			b.WriteString(bStyle.Render("╰"))
+		}
+	}
+
+	return b.String()
 }
 
 // 动态调整模型列表列宽以占满面板宽度
@@ -575,22 +705,26 @@ func (m mainModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
 		m.width, m.height = msg.Width, msg.Height
-		lw := msg.Width - 6
+		// 使用外框后的内层宽高
+		innerW, innerH := m.computeInnerSizeFor(msg.Width, msg.Height)
+		lw := innerW - 6
 		if lw < 20 {
 			lw = 20
 		}
 		m.menu.SetWidth(lw)
 		m.typeList.SetWidth(lw)
 		m.baseList.SetWidth(lw)
+		m.moreList.SetWidth(lw)
 		m.inpApi.Width = lw
 		m.inpName.Width = lw
+		m.inpVersion.Width = lw
 		m.inpPath.Width = lw
 		m.inpCover.Width = lw
 		m.inpExt.Width = lw
 		m.inpIntro.Width = lw
 
 		// 进度条宽度自适应屏幕
-		m.progress.Width = msg.Width - 6
+		m.progress.Width = innerW - 6
 		if m.progress.Width < 10 {
 			m.progress.Width = 10
 		}
@@ -598,7 +732,7 @@ func (m mainModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// 多版本进度条宽度自适应
 		if len(m.verProgress) > 0 {
 			for i := range m.verProgress {
-				m.verProgress[i].Width = msg.Width - 6
+				m.verProgress[i].Width = innerW - 6
 				if m.verProgress[i].Width < 10 {
 					m.verProgress[i].Width = 10
 				}
@@ -606,14 +740,14 @@ func (m mainModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 
 		// 设置filepicker的高度
-		if m.height > 15 {
-			m.filepicker.SetHeight(m.height - 15)
+		if innerH > 15 {
+			m.filepicker.SetHeight(innerH - 15)
 		} else {
 			m.filepicker.SetHeight(5)
 		}
 
 		// 动态调整模型表格列宽以占满可用宽度
-		m.resizeModelTable(msg.Width)
+		m.resizeModelTable(innerW)
 		return m, nil
 	case tea.KeyMsg:
 		if m.err != nil {
@@ -632,16 +766,6 @@ func (m mainModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, tea.Quit
 		case "enter":
 			switch m.step {
-			case mainStepHome:
-				// 检测登录
-				if key, err := lib.NewSfFolder().GetKey(); err == nil && key != "" {
-					m.loggedIn = true
-					m.apiKey = key
-					m.step = mainStepMenu
-					return m, nil
-				}
-				m.step = mainStepLogin
-				return m, m.inpApi.Focus()
 			case mainStepLogin:
 				api := m.inpApi.Value()
 				if api == "" {
@@ -893,40 +1017,28 @@ func (m mainModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (m mainModel) View() string {
-	panelW := m.width - 4
+	innerW, innerH := m.innerSize()
+	if innerW < 10 {
+		innerW = 10
+	}
+	if innerH < 5 {
+		innerH = 5
+	}
+	panelW := innerW - 4
 	if panelW < 40 {
 		panelW = 40
 	}
 	panel := m.panelStyle.Width(panelW)
 
-	if m.step == mainStepHome {
-		var homeBuilder strings.Builder
-		lines := strings.Split(m.logo, "\n")
-		n := len(lines)
-		sr, sg, sb := hexToRGB("#8B5CF6") // 紫色
-		er, eg, eb := hexToRGB("#EC4899") // 粉色
-		for i, line := range lines {
-			var t float64
-			if n > 1 {
-				t = float64(i) / float64(n-1)
-			}
-			r := lerpInt(sr, er, t)
-			g := lerpInt(sg, eg, t)
-			b := lerpInt(sb, eb, t)
-			color := rgbToHex(r, g, b)
-			style := lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color(color))
-			homeBuilder.WriteString(style.Render(line))
-			homeBuilder.WriteString("\n")
-		}
-		homeBuilder.WriteString(lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("#EC4899")).Render("欢迎使用 BizyAir CLI 工具"))
-		return strings.TrimRight(homeBuilder.String(), "\n") + "\n" + panel.Render(m.hintStyle.Render("按 Enter 进入 ››"))
-	}
+	var viewStr string
 
-	header := lipgloss.PlaceHorizontal(m.width, lipgloss.Left, m.smallLogoStyle.Render("BizyAir CLI"))
+	// 合并 Logo + 菜单：在菜单页顶部渲染大 Logo 渐变
+	header := lipgloss.PlaceHorizontal(innerW, lipgloss.Left, m.smallLogoStyle.Render("BizyAir CLI"))
 
 	if m.err != nil && m.step != mainStepOutput {
 		defer func() { m.err = nil }()
-		return header + "\n" + panel.Render(m.titleStyle.Render("错误")+"\n"+fmt.Sprintf("%v", m.err)+"\n\n"+m.hintStyle.Render("按任意键返回继续…"))
+		viewStr = header + "\n" + panel.Render(m.titleStyle.Render("错误")+"\n"+fmt.Sprintf("%v", m.err)+"\n\n"+m.hintStyle.Render("按任意键返回继续…"))
+		return m.renderFrame(viewStr)
 	}
 
 	// 运行中：优先在"上传确认页"内联展示进度条，其它情况走通用覆盖
@@ -988,37 +1100,69 @@ func (m mainModel) View() string {
 			}
 
 			content := m.titleStyle.Render("上传中 · 请稍候") + "\n\n" + summary + "\n\n" + progressSection.String()
-			return header + "\n" + panel.Render(content)
+			viewStr = header + "\n" + panel.Render(content)
+			return m.renderFrame(viewStr)
 		}
 		spin := m.sp.View()
-		return header + "\n" + panel.Render(m.titleStyle.Render("执行中")+"\n\n"+spin+" 正在等待 API 返回…")
+		viewStr = header + "\n" + panel.Render(m.titleStyle.Render("执行中")+"\n\n"+spin+" 正在等待 API 返回…")
+		return m.renderFrame(viewStr)
 	}
 
 	switch m.step {
 	case mainStepLogin:
-		return header + "\n" + panel.Render(m.titleStyle.Render("登录 · 请输入 API Key")+"\n\n"+m.inpApi.View()+"\n"+m.hintStyle.Render("确认：Enter，返回：Esc，退出：q"))
+		viewStr = header + "\n" + panel.Render(m.titleStyle.Render("登录 · 请输入 API Key")+"\n\n"+m.inpApi.View()+"\n"+m.hintStyle.Render("确认：Enter，返回：Esc，退出：q"))
+		return m.renderFrame(viewStr)
 	case mainStepMenu:
-		if m.height > 0 {
-			h := m.height - 10
-			if h < 6 {
-				h = 6
+		// 构造顶部大 Logo 渐变
+		var logoB strings.Builder
+		lines := strings.Split(m.logo, "\n")
+		n := len(lines)
+		sr, sg, sb := hexToRGB("#8B5CF6")
+		er, eg, eb := hexToRGB("#EC4899")
+		for i, line := range lines {
+			var t float64
+			if n > 1 {
+				t = float64(i) / float64(n-1)
 			}
-			m.menu.SetHeight(h)
+			r := lerpInt(sr, er, t)
+			g := lerpInt(sg, eg, t)
+			b := lerpInt(sb, eb, t)
+			color := rgbToHex(r, g, b)
+			style := lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color(color))
+			logoB.WriteString(style.Render(line))
+			logoB.WriteString("\n")
 		}
-		return header + "\n" + panel.Render(m.titleStyle.Render("功能选择")+"\n\n"+m.menu.View()+"\n"+m.hintStyle.Render("确认：Enter，返回：Esc，退出：q"))
+		logoStr := strings.TrimRight(logoB.String(), "\n")
+
+		// 菜单高度为内层高度 - logo 占用行数 - 标题与边距
+		menuTop := strings.Count(logoStr, "\n") + 2 // 预估顶部占用
+		h := innerH - menuTop - 6
+		if h < 6 {
+			h = 6
+		}
+		m.menu.SetHeight(h)
+
+		// 取消 panel 边框，仅保留外层全屏渐变外框
+		viewStr = logoStr + "\n\n" + m.titleStyle.Render("功能选择") + "\n\n" + m.menu.View() + "\n" + m.hintStyle.Render("确认：Enter，返回：Esc，退出：q")
+		return m.renderFrame(viewStr)
 	case mainStepAction:
-		return header + "\n" + panel.Render(m.renderActionView())
+		viewStr = header + "\n" + panel.Render(m.renderActionView())
+		return m.renderFrame(viewStr)
 	case mainStepOutput:
 		if m.err != nil {
-			return header + "\n" + panel.Render(m.titleStyle.Render("执行完成（含错误）")+"\n\n"+m.output+"\n\n"+m.hintStyle.Render("按 Enter 返回菜单"))
+			viewStr = header + "\n" + panel.Render(m.titleStyle.Render("执行完成（含错误）")+"\n\n"+m.output+"\n\n"+m.hintStyle.Render("按 Enter 返回菜单"))
+			return m.renderFrame(viewStr)
 		}
-		return header + "\n" + panel.Render(m.titleStyle.Render("执行完成")+"\n\n"+m.output+"\n\n"+m.hintStyle.Render("按 Enter 返回菜单"))
+		viewStr = header + "\n" + panel.Render(m.titleStyle.Render("执行完成")+"\n\n"+m.output+"\n\n"+m.hintStyle.Render("按 Enter 返回菜单"))
+		return m.renderFrame(viewStr)
 	default:
 		if m.running {
 			spin := m.sp.View()
-			return header + "\n" + panel.Render(m.titleStyle.Render("执行中")+"\n\n"+spin+" 正在等待 API 返回…")
+			viewStr = header + "\n" + panel.Render(m.titleStyle.Render("执行中")+"\n\n"+spin+" 正在等待 API 返回…")
+			return m.renderFrame(viewStr)
 		}
-		return header
+		viewStr = header
+		return m.renderFrame(viewStr)
 	}
 }
 
@@ -1453,8 +1597,8 @@ func (m *mainModel) renderActionView() string {
 		case stepName:
 			return m.titleStyle.Render("上传 · Step 1/8 · 模型名称") + "\n\n" + m.inpName.View() + "\n" + m.hintStyle.Render("确认：Enter，返回：Esc，退出：q")
 		case stepType:
-			if m.height > 0 {
-				h := m.height - 10
+			if _, ih := m.innerSize(); ih > 0 {
+				h := ih - 10
 				if h < 5 {
 					h = 5
 				}
@@ -1464,8 +1608,8 @@ func (m *mainModel) renderActionView() string {
 		case stepVersion:
 			return m.titleStyle.Render("上传 · Step 3/8 · 版本名称（默认 v1.0）") + "\n\n" + m.inpVersion.View() + "\n" + m.hintStyle.Render("确认：Enter，返回：Esc，退出：q")
 		case stepBase:
-			if m.height > 0 {
-				h := m.height - 10
+			if _, ih := m.innerSize(); ih > 0 {
+				h := ih - 10
 				if h < 5 {
 					h = 5
 				}
@@ -1554,6 +1698,14 @@ func (m *mainModel) renderActionView() string {
 			cur := m.act.cur
 			b.WriteString("当前版本：\n")
 			b.WriteString(fmt.Sprintf("  - %s  base=%s  cover=%s  path=%s\n\n", dash(cur.version), dash(cur.base), dash(cur.cover), dash(cur.path)))
+			// 动态设置 moreList 高度
+			if _, ih := m.innerSize(); ih > 0 {
+				h := ih - 12
+				if h < 5 {
+					h = 5
+				}
+				m.moreList.SetHeight(h)
+			}
 			// 在下方渲染选择列表
 			return b.String() + "\n" + m.moreList.View() + "\n" + m.hintStyle.Render("Enter 确认选择，Esc 返回上一页")
 		case stepConfirm:
@@ -1637,15 +1789,17 @@ func (m *mainModel) renderActionView() string {
 				m.hintStyle.Render("返回：Esc/q，刷新：r")
 		}
 		// 调整 table 高度
-		if m.height > 0 {
-			h := m.height - 12
+		if _, ih := m.innerSize(); ih > 0 {
+			h := ih - 12
 			if h < 5 {
 				h = 5
 			}
 			m.modelTable.SetHeight(h)
 		}
 		// 确保列宽在渲染前与当前可用宽度一致
-		m.resizeModelTable(m.width)
+		if w, _ := m.innerSize(); w > 0 {
+			m.resizeModelTable(w)
+		}
 		return m.titleStyle.Render(fmt.Sprintf("列出模型（共 %d 个）", m.modelListTotal)) + "\n\n" +
 			m.modelTable.View() + "\n\n" +
 			m.hintStyle.Render("导航：↑↓，进入详情：Enter，删除：Ctrl+D，返回：Esc/q，刷新：r")
