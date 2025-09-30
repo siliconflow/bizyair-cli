@@ -20,6 +20,7 @@ import (
 	"github.com/charmbracelet/bubbles/list"
 	"github.com/charmbracelet/bubbles/progress"
 	"github.com/charmbracelet/bubbles/spinner"
+	"github.com/charmbracelet/bubbles/table"
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
@@ -46,7 +47,6 @@ type actionKind string
 const (
 	actionUpload  actionKind = "upload"
 	actionLsModel actionKind = "ls_model"
-	actionLsFiles actionKind = "ls_files"
 	actionRmModel actionKind = "rm_model"
 	actionWhoami  actionKind = "whoami"
 	actionLogout  actionKind = "logout"
@@ -101,6 +101,13 @@ type uploadCancelMsg struct{}
 // 清除filepicker错误的消息
 type clearFilePickerErrorMsg struct{}
 
+// 模型列表加载完成消息
+type modelListLoadedMsg struct {
+	models []*lib.BizyModelInfo
+	total  int
+	err    error
+}
+
 // 菜单项
 type menuEntry struct {
 	listItem
@@ -132,15 +139,6 @@ type actionInputs struct {
 	// 多版本
 	versions []versionItem
 	cur      versionItem
-
-	// List Models
-	lsPublic bool
-
-	// List Files
-	lfPublic  bool
-	lfTree    bool
-	lfExt     string
-	lfExtDone bool
 
 	// Filepicker state
 	useFilePicker bool
@@ -181,6 +179,12 @@ type mainModel struct {
 	filepicker   filepicker.Model
 	selectedFile string
 
+	// 模型列表 table
+	modelTable       table.Model
+	modelList        []*lib.BizyModelInfo
+	modelListTotal   int
+	loadingModelList bool
+
 	// 动作输入
 	act    actionInputs
 	upStep uploadStep
@@ -217,7 +221,6 @@ func newMainModel() mainModel {
 	mItems := []list.Item{
 		menuEntry{listItem{title: "上传模型", desc: "交互式收集参数并上传"}, actionUpload},
 		menuEntry{listItem{title: "列出模型", desc: "按类型浏览模型"}, actionLsModel},
-		menuEntry{listItem{title: "查看模型文件", desc: "按类型与名称查看文件"}, actionLsFiles},
 		menuEntry{listItem{title: "删除模型", desc: "按类型与名称删除模型"}, actionRmModel},
 		menuEntry{listItem{title: "当前账户信息", desc: "显示 whoami"}, actionWhoami},
 		menuEntry{listItem{title: "退出登录", desc: "清除本地 API Key"}, actionLogout},
@@ -316,6 +319,35 @@ func newMainModel() mainModel {
 	// progress bar
 	pr := progress.New(progress.WithDefaultGradient())
 
+	// 模型列表 table
+	columns := []table.Column{
+		{Title: "ID", Width: 10},
+		{Title: "名称", Width: 25},
+		{Title: "类型", Width: 12},
+		{Title: "版本数", Width: 8},
+		{Title: "Base Model", Width: 15},
+		{Title: "文件名", Width: 60},
+	}
+
+	modelTable := table.New(
+		table.WithColumns(columns),
+		table.WithFocused(true),
+		table.WithHeight(10),
+	)
+
+	s := table.DefaultStyles()
+	s.Header = s.Header.
+		BorderStyle(lipgloss.NormalBorder()).
+		BorderForeground(lipgloss.Color("240")).
+		BorderBottom(true).
+		Bold(true).
+		Foreground(lipgloss.Color("#36A3F7"))
+	s.Selected = s.Selected.
+		Foreground(lipgloss.Color("229")).
+		Background(lipgloss.Color("57")).
+		Bold(false)
+	modelTable.SetStyles(s)
+
 	return mainModel{
 		step:       mainStepHome,
 		menu:       menuList,
@@ -330,6 +362,7 @@ func newMainModel() mainModel {
 		inpVersion: inVer,
 		inpIntro:   inIntro,
 		filepicker: fp,
+		modelTable: modelTable,
 		titleStyle: lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("#36A3F7")),
 		hintStyle:  lipgloss.NewStyle().Faint(true).Foreground(lipgloss.Color("244")),
 		panelStyle: lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).BorderForeground(lipgloss.Color("63")).Padding(1, 2),
@@ -504,11 +537,9 @@ func (m mainModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					case actionLsModel:
 						m.step = mainStepAction
 						m.act = actionInputs{}
-						return m, nil
-					case actionLsFiles:
-						m.step = mainStepAction
-						m.act = actionInputs{}
-						return m, nil
+						m.loadingModelList = true
+						// 直接加载模型列表
+						return m, loadModelList(m.apiKey)
 					case actionRmModel:
 						m.step = mainStepAction
 						m.act = actionInputs{}
@@ -572,6 +603,65 @@ func (m mainModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.loggedIn = true
 		m.apiKey = m.inpApi.Value()
 		m.step = mainStepMenu
+		return m, nil
+	case modelListLoadedMsg:
+		m.loadingModelList = false
+		if msg.err != nil {
+			m.err = msg.err
+			m.step = mainStepOutput
+			m.output = fmt.Sprintf("加载模型列表失败: %v", msg.err)
+			return m, nil
+		}
+		m.modelList = msg.models
+		m.modelListTotal = msg.total
+		// 更新 table 数据
+		rows := []table.Row{}
+		for _, model := range msg.models {
+			versionCount := fmt.Sprintf("%d", len(model.Versions))
+
+			// 收集所有版本的 base_model 和文件名
+			baseModels := []string{}
+			fileNames := []string{}
+
+			for _, version := range model.Versions {
+				if version.BaseModel != "" {
+					baseModels = append(baseModels, version.BaseModel)
+				}
+				if version.FileName != "" {
+					fileNames = append(fileNames, version.FileName)
+				}
+			}
+
+			// 去重并拼接
+			baseModelStr := "-"
+			if len(baseModels) > 0 {
+				uniqueBaseModels := uniqueStrings(baseModels)
+				if len(uniqueBaseModels) == 1 {
+					baseModelStr = uniqueBaseModels[0]
+				} else {
+					baseModelStr = fmt.Sprintf("%s (共%d个)", uniqueBaseModels[0], len(uniqueBaseModels))
+				}
+			}
+
+			fileNameStr := "-"
+			if len(fileNames) > 0 {
+				if len(fileNames) == 1 {
+					fileNameStr = fileNames[0]
+				} else {
+					fileNameStr = fmt.Sprintf("%s (共%d个)", fileNames[0], len(fileNames))
+				}
+			}
+
+			rows = append(rows, table.Row{
+				fmt.Sprintf("%d", model.Id),
+				truncateString(model.Name, 23),
+				model.Type,
+				versionCount,
+				baseModelStr,
+				truncateString(fileNameStr, 58),
+			})
+		}
+		m.modelTable.SetRows(rows)
 		return m, nil
 	case actionDoneMsg:
 		m.running = false
@@ -659,6 +749,13 @@ func (m mainModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return m, fpCmd
 			}
 		}
+	}
+
+	// 更新 spinner（当加载模型列表时）
+	if m.loadingModelList {
+		var cmd tea.Cmd
+		m.sp, cmd = m.sp.Update(msg)
+		return m, cmd
 	}
 
 	return m, nil
@@ -1133,110 +1230,26 @@ func (m *mainModel) updateActionInputs(msg tea.Msg) tea.Cmd {
 			return nil
 		}
 	case actionLsModel:
-		// 直接调用现有命令，需先选择类型
-		if m.act.u.typ == "" {
-			var cmd tea.Cmd
-			m.typeList, cmd = m.typeList.Update(msg)
-			if km, ok := msg.(tea.KeyMsg); ok && km.String() == "enter" {
-				if it, ok := m.typeList.SelectedItem().(listItem); ok {
-					m.act.u.typ = it.title
-					// 选择完类型后，进入是否公开的选择（toggle）
-					return nil
-				}
-			} else if km, ok := msg.(tea.KeyMsg); ok && km.String() == "esc" {
-				m.step = mainStepMenu
-				m.act = actionInputs{}
-				return nil
-			}
-			return cmd
-		}
-		// 在 lsPublic 上增加空格切换/Enter 执行
+		// 使用 table 展示模型列表
 		if km, ok := msg.(tea.KeyMsg); ok {
 			switch km.String() {
-			case " ":
-				m.act.lsPublic = !m.act.lsPublic
-				return nil
-			case "enter":
-				m.running = true
-				return runListModelsWithPublic(m.act.u.typ, m.act.lsPublic)
-			case "esc":
-				m.act.u.typ = ""
-				return nil
-			}
-		}
-		return nil
-	case actionLsFiles:
-		// 选择类型 -> 输入 name -> 输入 ext（可选，Esc跳过）-> 是否树形/是否公开 -> 执行
-		if m.act.u.typ == "" {
-			var cmd tea.Cmd
-			m.typeList, cmd = m.typeList.Update(msg)
-			if km, ok := msg.(tea.KeyMsg); ok && km.String() == "enter" {
-				if it, ok := m.typeList.SelectedItem().(listItem); ok {
-					m.act.u.typ = it.title
-					return m.inpName.Focus()
-				}
-			} else if km, ok := msg.(tea.KeyMsg); ok && km.String() == "esc" {
+			case "esc", "q":
+				// 返回菜单
 				m.step = mainStepMenu
 				m.act = actionInputs{}
+				m.loadingModelList = false
+				m.modelList = nil
 				return nil
-			}
-			return cmd
-		}
-		if m.act.u.name == "" {
-			var cmd tea.Cmd
-			m.inpName, cmd = m.inpName.Update(msg)
-			if km, ok := msg.(tea.KeyMsg); ok && km.String() == "enter" {
-				if err := validateName(m.inpName.Value()); err != nil {
-					m.err = err
-					return nil
-				}
-				m.act.u.name = m.inpName.Value()
-				return m.inpExt.Focus()
-			} else if km, ok := msg.(tea.KeyMsg); ok && km.String() == "esc" {
-				// 返回选择类型
-				m.act.u.typ = ""
-				return nil
-			}
-			return cmd
-		}
-		// 输入 ext（可空）。Enter 确认，Esc 跳过
-		if !m.act.lfExtDone {
-			var cmd tea.Cmd
-			m.inpExt, cmd = m.inpExt.Update(msg)
-			if km, ok := msg.(tea.KeyMsg); ok {
-				switch km.String() {
-				case "enter":
-					// 回车：若为空则跳过，否则确认
-					m.act.lfExt = m.inpExt.Value()
-					m.act.lfExtDone = true
-				}
-			}
-			// 当确认后，进入开关选择
-			if km, ok := msg.(tea.KeyMsg); ok && km.String() == "enter" {
-				return nil
-			}
-			return cmd
-		}
-
-		// 在 lfTree/lfPublic 开关：空格切换树形，tab 切换到 public，enter 执行，esc 返回
-		if km, ok := msg.(tea.KeyMsg); ok {
-			switch km.String() {
-			case " ":
-				m.act.lfTree = !m.act.lfTree
-				return nil
-			case "tab":
-				m.act.lfPublic = !m.act.lfPublic
-				return nil
-			case "enter":
-				m.running = true
-				return runListFilesWithOptions(m.act.u.typ, m.act.u.name, m.act.lfExt, m.act.lfTree, m.act.lfPublic)
-			case "esc":
-				// 返回 ext 输入
-				m.act.lfExtDone = false
-				return m.inpExt.Focus()
+			case "r", "ctrl+r":
+				// 刷新列表
+				m.loadingModelList = true
+				return loadModelList(m.apiKey)
 			}
 		}
-		return nil
+		// 更新 table
+		var cmd tea.Cmd
+		m.modelTable, cmd = m.modelTable.Update(msg)
+		return cmd
 	case actionRmModel:
 		// 选择类型 -> 输入 name -> 执行
 		if m.act.u.typ == "" {
@@ -1403,53 +1416,27 @@ func (m *mainModel) renderActionView() string {
 		}
 		return ""
 	case actionLsModel:
-		if m.act.u.typ == "" {
-			if m.height > 0 {
-				h := m.height - 10
-				if h < 5 {
-					h = 5
-				}
-				m.typeList.SetHeight(h)
+		if m.loadingModelList {
+			return m.titleStyle.Render("列出模型") + "\n\n" +
+				m.sp.View() + " 加载中...\n\n" +
+				m.hintStyle.Render("请稍候")
+		}
+		if len(m.modelList) == 0 {
+			return m.titleStyle.Render("列出模型") + "\n\n" +
+				"暂无模型数据\n\n" +
+				m.hintStyle.Render("返回：Esc/q，刷新：r")
+		}
+		// 调整 table 高度
+		if m.height > 0 {
+			h := m.height - 12
+			if h < 5 {
+				h = 5
 			}
-			return m.titleStyle.Render("列出模型 · 选择类型") + "\n\n" + m.typeList.View() + "\n" + m.hintStyle.Render("确认：Enter，返回：Esc，退出：q")
+			m.modelTable.SetHeight(h)
 		}
-		// 公共开关提示
-		publicStr := "否"
-		if m.act.lsPublic {
-			publicStr = "是"
-		}
-		return m.titleStyle.Render("列出模型 · 是否仅显示公开模型？") + "\n\n" +
-			"当前设置：" + publicStr + "  （切换：空格，确认：Enter，返回：Esc）"
-	case actionLsFiles:
-		if m.act.u.typ == "" {
-			if m.height > 0 {
-				h := m.height - 10
-				if h < 5 {
-					h = 5
-				}
-				m.typeList.SetHeight(h)
-			}
-			return m.titleStyle.Render("查看文件 · 选择类型") + "\n\n" + m.typeList.View() + "\n" + m.hintStyle.Render("确认：Enter，返回：Esc，退出：q")
-		}
-		if m.act.u.name == "" {
-			return m.titleStyle.Render("查看文件 · 输入模型名") + "\n\n" + m.inpName.View() + "\n" + m.hintStyle.Render("确认：Enter，返回：Esc，退出：q")
-		}
-		if !m.act.lfExtDone {
-			return m.titleStyle.Render("查看文件 · 过滤扩展名（可选）") + "\n\n" + m.inpExt.View() + "\n" + m.hintStyle.Render("确认：Enter（输入为空则跳过），退出：q")
-		}
-		// 显示开关状态
-		treeStr := "否"
-		if m.act.lfTree {
-			treeStr = "是"
-		}
-		pubStr := "否"
-		if m.act.lfPublic {
-			pubStr = "是"
-		}
-		return m.titleStyle.Render("查看文件 · 选项") + "\n\n" +
-			"树形显示：" + treeStr + "  （切换：空格）\n" +
-			"仅公开：" + pubStr + "  （切换：Tab）\n\n" +
-			m.hintStyle.Render("确认：Enter，返回：Esc，退出：q")
+		return m.titleStyle.Render(fmt.Sprintf("列出模型（共 %d 个）", m.modelListTotal)) + "\n\n" +
+			m.modelTable.View() + "\n\n" +
+			m.hintStyle.Render("导航：↑↓，返回：Esc/q，刷新：r")
 	case actionRmModel:
 		if m.act.u.typ == "" {
 			if m.height > 0 {
@@ -1726,7 +1713,54 @@ func runListModels(typ string) tea.Cmd {
 	}
 }
 
-// 运行列出模型（含 public 开关）
+// 截断字符串辅助函数
+func truncateString(s string, maxLen int) string {
+	if len(s) <= maxLen {
+		return s
+	}
+	return s[:maxLen-3] + "..."
+}
+
+// 字符串数组去重
+func uniqueStrings(strings []string) []string {
+	seen := make(map[string]bool)
+	result := []string{}
+	for _, str := range strings {
+		if !seen[str] {
+			seen[str] = true
+			result = append(result, str)
+		}
+	}
+	return result
+}
+
+// 加载模型列表（直接调用API）
+func loadModelList(apiKey string) tea.Cmd {
+	return func() tea.Msg {
+		// 创建客户端（使用默认域名）
+		client := lib.NewClient(meta.DefaultDomain, apiKey)
+
+		// 构建所有模型类型
+		var modelTypes []string
+		for _, t := range meta.ModelTypes {
+			modelTypes = append(modelTypes, string(t))
+		}
+
+		// 调用 API（current=1, pageSize=100, keyword="", sort="Recently"）
+		resp, err := client.ListModel(1, 100, "", "Recently", modelTypes, []string{})
+		if err != nil {
+			return modelListLoadedMsg{err: err}
+		}
+
+		return modelListLoadedMsg{
+			models: resp.Data.List,
+			total:  resp.Data.Total,
+			err:    nil,
+		}
+	}
+}
+
+// 运行列出模型（含 public 开关）- 保留用于命令行模式
 func runListModelsWithPublic(typ string, public bool) tea.Cmd {
 	return func() tea.Msg {
 		exe, _ := os.Executable()
@@ -1748,29 +1782,6 @@ func runListFiles(typ, name string) tea.Cmd {
 	return func() tea.Msg {
 		exe, _ := os.Executable()
 		args := []string{"model", "ls-files", "--type", typ, "--name", name}
-		cmd := exec.Command(exe, args...)
-		var buf bytes.Buffer
-		cmd.Stdout = &buf
-		cmd.Stderr = &buf
-		err := cmd.Run()
-		return actionDoneMsg{out: buf.String(), err: err}
-	}
-}
-
-// 运行列出文件（带 ext/tree/public）
-func runListFilesWithOptions(typ, name, ext string, tree, public bool) tea.Cmd {
-	return func() tea.Msg {
-		exe, _ := os.Executable()
-		args := []string{"model", "ls-files", "--type", typ, "--name", name}
-		if ext != "" {
-			args = append(args, "--ext", ext)
-		}
-		if tree {
-			args = append(args, "--tree")
-		}
-		if public {
-			args = append(args, "--public")
-		}
 		cmd := exec.Command(exe, args...)
 		var buf bytes.Buffer
 		cmd.Stdout = &buf

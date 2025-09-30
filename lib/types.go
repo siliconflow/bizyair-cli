@@ -127,6 +127,7 @@ type BizyModelVersion struct {
 	Version      string       `json:"version,omitempty"`
 	CoverUrls    []string     `json:"cover_urls,omitempty"`
 	FileUrl      string       `json:"file_url,omitempty"`
+	FileName     string       `json:"file_name,omitempty"`
 	FileSize     int64        `json:"file_size,omitempty"`
 	Public       bool         `json:"public,omitempty"`
 	DraftId      string       `json:"draft_id,omitempty"`
