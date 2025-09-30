@@ -180,3 +180,40 @@ type ModelDeleteResp struct {
 type CheckModelResp struct {
 	Exists bool `json:"exists,omitempty" form:"exists" query:"exists"`
 }
+
+// 详情页：模型版本（与列表版本字段略有不同，按接口保持独立定义）
+type BizyModelDetailVersion struct {
+	Id          int64        `json:"id,omitempty"`
+	Version     string       `json:"version,omitempty"`
+	BaseModel   string       `json:"base_model,omitempty"`
+	Intro       string       `json:"intro,omitempty"`
+	Sign        string       `json:"sign,omitempty"`
+	Path        string       `json:"path,omitempty"`
+	Available   bool         `json:"available,omitempty"`
+	FileName    string       `json:"file_name,omitempty"`
+	BizyModelId int64        `json:"bizy_model_id,omitempty"`
+	UserId      string       `json:"user_id,omitempty"`
+	UserName    string       `json:"user_name,omitempty"`
+	UserAvatar  string       `json:"user_avatar,omitempty"`
+	Counter     ModelCounter `json:"counter,omitempty"`
+	ModelId     int64        `json:"model_id,omitempty"`
+	FileSize    int64        `json:"file_size,omitempty"`
+	CreatedAt   string       `json:"created_at,omitempty"`
+	UpdatedAt   string       `json:"updated_at,omitempty"`
+	CoverUrls   []string     `json:"cover_urls,omitempty"`
+}
+
+// 详情页：模型详情
+type BizyModelDetail struct {
+	Id         int64                    `json:"id,omitempty"`
+	Name       string                   `json:"name,omitempty"`
+	Type       string                   `json:"type,omitempty"`
+	UserId     string                   `json:"user_id,omitempty"`
+	UserName   string                   `json:"user_name,omitempty"`
+	UserAvatar string                   `json:"user_avatar,omitempty"`
+	Versions   []BizyModelDetailVersion `json:"versions,omitempty"`
+	Counter    ModelCounter             `json:"counter,omitempty"`
+	CreatedAt  string                   `json:"created_at,omitempty"`
+	UpdatedAt  string                   `json:"updated_at,omitempty"`
+	Source     string                   `json:"source,omitempty"`
+}

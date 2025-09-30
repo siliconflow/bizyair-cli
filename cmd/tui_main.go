@@ -47,7 +47,6 @@ type actionKind string
 const (
 	actionUpload  actionKind = "upload"
 	actionLsModel actionKind = "ls_model"
-	actionRmModel actionKind = "rm_model"
 	actionWhoami  actionKind = "whoami"
 	actionLogout  actionKind = "logout"
 	actionExit    actionKind = "exit"
@@ -185,6 +184,20 @@ type mainModel struct {
 	modelListTotal   int
 	loadingModelList bool
 
+	// 模型列表列宽（随窗口自适应，供截断使用）
+	nameColWidth int
+	fileColWidth int
+
+	// 模型详情
+	viewingModelDetail bool
+	modelDetail        *lib.BizyModelDetail
+	loadingModelDetail bool
+
+	// 删除确认
+	confirmingDelete bool
+	deleteTargetId   int64
+	deleteTargetName string
+
 	// 动作输入
 	act    actionInputs
 	upStep uploadStep
@@ -220,8 +233,7 @@ func newMainModel() mainModel {
 	// 菜单项
 	mItems := []list.Item{
 		menuEntry{listItem{title: "上传模型", desc: "交互式收集参数并上传"}, actionUpload},
-		menuEntry{listItem{title: "列出模型", desc: "按类型浏览模型"}, actionLsModel},
-		menuEntry{listItem{title: "删除模型", desc: "按类型与名称删除模型"}, actionRmModel},
+		menuEntry{listItem{title: "我的模型", desc: "浏览我的模型"}, actionLsModel},
 		menuEntry{listItem{title: "当前账户信息", desc: "显示 whoami"}, actionWhoami},
 		menuEntry{listItem{title: "退出登录", desc: "清除本地 API Key"}, actionLogout},
 		menuEntry{listItem{title: "退出程序", desc: "离开 BizyAir CLI"}, actionExit},
@@ -342,6 +354,11 @@ func newMainModel() mainModel {
 		BorderBottom(true).
 		Bold(true).
 		Foreground(lipgloss.Color("#36A3F7"))
+	// 移除默认左右内边距，避免列宽之外的额外宽度
+	s.Cell = s.Cell.PaddingLeft(0).PaddingRight(0)
+	s.Header = s.Header.PaddingLeft(0).PaddingRight(0)
+	s.Selected = s.Selected.PaddingLeft(0).PaddingRight(0)
+
 	s.Selected = s.Selected.
 		Foreground(lipgloss.Color("229")).
 		Background(lipgloss.Color("57")).
@@ -388,6 +405,120 @@ func newMainModel() mainModel {
 		logoStyle:      lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("#8B5CF6")),
 		smallLogoStyle: lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("#EC4899")),
 	}
+}
+
+// 动态调整模型列表列宽以占满面板宽度
+func (m *mainModel) resizeModelTable(totalWidth int) {
+	if totalWidth <= 0 {
+		return
+	}
+	// 计算实际可用宽度：
+	// 顶层有 panel 边框与 Padding(1,2)，以及 header 行等文本宽度与 PlaceHorizontal 不影响 panel 内宽；
+	// 为安全起见，保守扣减 8 列，避免全屏时溢出（边框2 + 左右内边距4 + 余量2）
+	usable := totalWidth - 8
+	if usable < 60 {
+		usable = 60
+	}
+
+	// 固定列（ID、类型、版本数、Base Model）分配最小宽度
+	idW := 10
+	typeW := 12
+	verW := 8
+	baseMin := 15
+
+	// 余量给可变列（名称、文件名、Base Model 部分可增长）
+	// 初始给名称 20，文件名 40，Base 最小 15
+	remaining := usable - (idW + typeW + verW)
+	if remaining < 20+15+20 {
+		// 最小兜底
+		remaining = 20 + 15 + 20
+	}
+
+	// 比例分配：名称 28%，Base 18%，文件名 54%（更偏向长文件名，减少右侧溢出）
+	nameW := int(float64(remaining) * 0.28)
+	baseW := int(float64(remaining) * 0.18)
+	fileW := remaining - nameW - baseW
+	if baseW < baseMin {
+		// 不足则从文件名列借
+		deficit := baseMin - baseW
+		baseW = baseMin
+		if fileW > deficit+10 {
+			fileW -= deficit
+		} else if nameW > deficit+10 {
+			nameW -= deficit
+		}
+	}
+
+	// 保存供截断使用（预留 1 列作为冗余，避免字符宽度误差换行）
+	m.nameColWidth = maxInt(5, nameW-1)
+	m.fileColWidth = maxInt(8, fileW-1)
+
+	cols := []table.Column{
+		{Title: "ID", Width: idW},
+		{Title: "名称", Width: nameW},
+		{Title: "类型", Width: typeW},
+		{Title: "版本数", Width: verW},
+		{Title: "Base Model", Width: baseW},
+		{Title: "文件名", Width: fileW},
+	}
+	m.modelTable.SetColumns(cols)
+
+	// 列宽变更后重建行，使内容按新宽度截断
+	if len(m.modelList) > 0 {
+		m.rebuildModelTableRows()
+	}
+}
+
+// 根据当前列宽重建表格行
+func (m *mainModel) rebuildModelTableRows() {
+	rows := []table.Row{}
+	for _, model := range m.modelList {
+		versionCount := fmt.Sprintf("%d", len(model.Versions))
+		baseModels := []string{}
+		fileNames := []string{}
+		for _, version := range model.Versions {
+			if version.BaseModel != "" {
+				baseModels = append(baseModels, version.BaseModel)
+			}
+			if version.FileName != "" {
+				fileNames = append(fileNames, version.FileName)
+			}
+		}
+		baseModelStr := "-"
+		if len(baseModels) > 0 {
+			uniqueBaseModels := uniqueStrings(baseModels)
+			if len(uniqueBaseModels) == 1 {
+				baseModelStr = uniqueBaseModels[0]
+			} else {
+				baseModelStr = fmt.Sprintf("%s (共%d个)", uniqueBaseModels[0], len(uniqueBaseModels))
+			}
+		}
+		fileNameStr := "-"
+		if len(fileNames) > 0 {
+			if len(fileNames) == 1 {
+				fileNameStr = fileNames[0]
+			} else {
+				fileNameStr = fmt.Sprintf("%s (共%d个)", fileNames[0], len(fileNames))
+			}
+		}
+
+		rows = append(rows, table.Row{
+			fmt.Sprintf("%d", model.Id),
+			truncateString(model.Name, maxInt(5, m.nameColWidth)),
+			model.Type,
+			versionCount,
+			baseModelStr,
+			truncateString(fileNameStr, maxInt(8, m.fileColWidth)),
+		})
+	}
+	m.modelTable.SetRows(rows)
+}
+
+func maxInt(a, b int) int {
+	if a > b {
+		return a
+	}
+	return b
 }
 
 // 清除filepicker错误的命令
@@ -480,6 +611,9 @@ func (m mainModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		} else {
 			m.filepicker.SetHeight(5)
 		}
+
+		// 动态调整模型表格列宽以占满可用宽度
+		m.resizeModelTable(msg.Width)
 		return m, nil
 	case tea.KeyMsg:
 		if m.err != nil {
@@ -540,13 +674,31 @@ func (m mainModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 						m.loadingModelList = true
 						// 直接加载模型列表
 						return m, loadModelList(m.apiKey)
-					case actionRmModel:
-						m.step = mainStepAction
-						m.act = actionInputs{}
-						return m, nil
+
 					}
 				}
 			case mainStepAction:
+				// 如果在模型列表页，Enter 进入详情（删除确认期间禁止）
+				if m.currentAction == actionLsModel && !m.loadingModelList && len(m.modelList) > 0 && !m.viewingModelDetail && !m.confirmingDelete {
+					selectedRow := m.modelTable.SelectedRow()
+					if len(selectedRow) > 0 {
+						// 第一列为 ID
+						idStr := selectedRow[0]
+						if idStr != "" {
+							if id64, err := strconv.ParseInt(idStr, 10, 64); err == nil {
+								// 在 modelList 中查找该 ID 对应的模型（稳妥）
+								var targetId int64 = id64
+								for _, mInfo := range m.modelList {
+									if mInfo.Id == targetId {
+										m.loadingModelDetail = true
+										m.viewingModelDetail = true
+										return m, loadModelDetail(m.apiKey, targetId)
+									}
+								}
+							}
+						}
+					}
+				}
 				return m, m.updateActionInputs(msg)
 			case mainStepOutput:
 				// 回菜单
@@ -614,55 +766,34 @@ func (m mainModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		m.modelList = msg.models
 		m.modelListTotal = msg.total
-		// 更新 table 数据
-		rows := []table.Row{}
-		for _, model := range msg.models {
-			versionCount := fmt.Sprintf("%d", len(model.Versions))
-
-			// 收集所有版本的 base_model 和文件名
-			baseModels := []string{}
-			fileNames := []string{}
-
-			for _, version := range model.Versions {
-				if version.BaseModel != "" {
-					baseModels = append(baseModels, version.BaseModel)
-				}
-				if version.FileName != "" {
-					fileNames = append(fileNames, version.FileName)
-				}
-			}
-
-			// 去重并拼接
-			baseModelStr := "-"
-			if len(baseModels) > 0 {
-				uniqueBaseModels := uniqueStrings(baseModels)
-				if len(uniqueBaseModels) == 1 {
-					baseModelStr = uniqueBaseModels[0]
-				} else {
-					baseModelStr = fmt.Sprintf("%s (共%d个)", uniqueBaseModels[0], len(uniqueBaseModels))
-				}
-			}
-
-			fileNameStr := "-"
-			if len(fileNames) > 0 {
-				if len(fileNames) == 1 {
-					fileNameStr = fileNames[0]
-				} else {
-					fileNameStr = fmt.Sprintf("%s (共%d个)", fileNames[0], len(fileNames))
-				}
-			}
-
-			rows = append(rows, table.Row{
-				fmt.Sprintf("%d", model.Id),
-				truncateString(model.Name, 23),
-				model.Type,
-				versionCount,
-				baseModelStr,
-				truncateString(fileNameStr, 58),
-			})
-		}
-		m.modelTable.SetRows(rows)
+		// 更新表格数据（使用动态列宽截断）
+		m.rebuildModelTableRows()
 		return m, nil
+	case modelDetailLoadedMsg:
+		m.loadingModelDetail = false
+		if msg.err != nil {
+			m.err = msg.err
+			// 回到列表视图但保持列表数据
+			m.viewingModelDetail = false
+			return m, nil
+		}
+		m.modelDetail = msg.detail
+		return m, nil
+	case deleteModelDoneMsg:
+		m.running = false
+		m.confirmingDelete = false
+		m.deleteTargetId = 0
+		m.deleteTargetName = ""
+		// 确保处于列表态
+		m.viewingModelDetail = false
+		m.modelDetail = nil
+		if msg.err != nil {
+			m.err = msg.err
+			return m, nil
+		}
+		// 成功后刷新列表
+		m.loadingModelList = true
+		return m, loadModelList(m.apiKey)
 	case actionDoneMsg:
 		m.running = false
 		m.output = msg.out
@@ -1230,62 +1361,85 @@ func (m *mainModel) updateActionInputs(msg tea.Msg) tea.Cmd {
 			return nil
 		}
 	case actionLsModel:
-		// 使用 table 展示模型列表
+		// 列表与详情的双态
 		if km, ok := msg.(tea.KeyMsg); ok {
 			switch km.String() {
 			case "esc", "q":
+				// 优先取消删除确认
+				if m.confirmingDelete {
+					m.confirmingDelete = false
+					m.deleteTargetId = 0
+					m.deleteTargetName = ""
+					return nil
+				}
+				if m.viewingModelDetail {
+					// 从详情返回列表
+					m.viewingModelDetail = false
+					m.modelDetail = nil
+					return nil
+				}
 				// 返回菜单
 				m.step = mainStepMenu
 				m.act = actionInputs{}
 				m.loadingModelList = false
 				m.modelList = nil
+				m.viewingModelDetail = false
+				m.modelDetail = nil
 				return nil
 			case "r", "ctrl+r":
-				// 刷新列表
+				if m.viewingModelDetail {
+					// 详情页触发删除确认
+					if m.modelDetail != nil {
+						m.confirmingDelete = true
+						m.deleteTargetId = m.modelDetail.Id
+						m.deleteTargetName = m.modelDetail.Name
+					}
+					return nil
+				}
+				// 列表态刷新
 				m.loadingModelList = true
 				return loadModelList(m.apiKey)
+			case "ctrl+d":
+				// 仅在列表态允许删除
+				if !m.viewingModelDetail && !m.loadingModelList && len(m.modelList) > 0 {
+					selectedRow := m.modelTable.SelectedRow()
+					if len(selectedRow) > 0 {
+						idStr := selectedRow[0]
+						nameStr := ""
+						if len(selectedRow) > 1 {
+							nameStr = selectedRow[1]
+						}
+						if idStr != "" {
+							if id64, err := strconv.ParseInt(idStr, 10, 64); err == nil {
+								m.confirmingDelete = true
+								m.deleteTargetId = id64
+								m.deleteTargetName = nameStr
+								return nil
+							}
+						}
+					}
+				}
+			case "enter":
+				// 在删除确认界面按 Enter 确认删除
+				if m.confirmingDelete && m.deleteTargetId > 0 {
+					m.running = true
+					return deleteBizyModel(m.apiKey, m.deleteTargetId)
+				}
 			}
 		}
-		// 更新 table
+		if m.viewingModelDetail {
+			// 详情页不需要 table 更新
+			return nil
+		}
+		if m.confirmingDelete {
+			// 确认界面不更新表格
+			return nil
+		}
+		// 列表态：更新 table
 		var cmd tea.Cmd
 		m.modelTable, cmd = m.modelTable.Update(msg)
 		return cmd
-	case actionRmModel:
-		// 选择类型 -> 输入 name -> 执行
-		if m.act.u.typ == "" {
-			var cmd tea.Cmd
-			m.typeList, cmd = m.typeList.Update(msg)
-			if km, ok := msg.(tea.KeyMsg); ok && km.String() == "enter" {
-				if it, ok := m.typeList.SelectedItem().(listItem); ok {
-					m.act.u.typ = it.title
-					return m.inpName.Focus()
-				}
-			} else if km, ok := msg.(tea.KeyMsg); ok && km.String() == "esc" {
-				m.step = mainStepMenu
-				m.act = actionInputs{}
-				return nil
-			}
-			return cmd
-		}
-		if m.act.u.name == "" {
-			var cmd tea.Cmd
-			m.inpName, cmd = m.inpName.Update(msg)
-			if km, ok := msg.(tea.KeyMsg); ok && km.String() == "enter" {
-				if err := validateName(m.inpName.Value()); err != nil {
-					m.err = err
-					return nil
-				}
-				m.act.u.name = m.inpName.Value()
-				m.running = true
-				return runRemoveModel(m.act.u.typ, m.act.u.name)
-			} else if km, ok := msg.(tea.KeyMsg); ok && km.String() == "esc" {
-				// 返回选择类型
-				m.act.u.typ = ""
-				return nil
-			}
-			return cmd
-		}
-		return nil
+
 	default:
 		return nil
 	}
@@ -1416,6 +1570,62 @@ func (m *mainModel) renderActionView() string {
 		}
 		return ""
 	case actionLsModel:
+		// 删除确认视图（优先级最高）
+		if m.confirmingDelete {
+			var b strings.Builder
+			title := "删除确认"
+			if m.deleteTargetName != "" {
+				title = title + " · " + m.deleteTargetName
+			}
+			b.WriteString(m.titleStyle.Render(title))
+			b.WriteString("\n\n")
+			b.WriteString(fmt.Sprintf("确定删除模型 #%d 吗？此操作不可恢复。\n\n", m.deleteTargetId))
+			b.WriteString(m.hintStyle.Render("确认：Enter，取消：Esc"))
+			return b.String()
+		}
+
+		if m.viewingModelDetail {
+			// 详情视图
+			if m.loadingModelDetail {
+				return m.titleStyle.Render("模型详情") + "\n\n" + m.sp.View() + " 加载中...\n\n" + m.hintStyle.Render("返回：Esc/q")
+			}
+			if m.modelDetail == nil {
+				return m.titleStyle.Render("模型详情") + "\n\n" + "未加载到数据" + "\n\n" + m.hintStyle.Render("返回：Esc/q")
+			}
+			// 渲染详情（按版本分块）
+			var b strings.Builder
+			b.WriteString(m.titleStyle.Render(fmt.Sprintf("%s (#%d) · %s", m.modelDetail.Name, m.modelDetail.Id, m.modelDetail.Type)))
+			b.WriteString("\n")
+			b.WriteString(fmt.Sprintf("作者：%s\n创建：%s  更新：%s\n", dash(m.modelDetail.UserName), dash(m.modelDetail.CreatedAt), dash(m.modelDetail.UpdatedAt)))
+			b.WriteString("\n")
+			if len(m.modelDetail.Versions) == 0 {
+				b.WriteString("暂无版本\n")
+			} else {
+				for i, v := range m.modelDetail.Versions {
+					b.WriteString(m.hintStyle.Render(fmt.Sprintf("[%d] 版本 %s", i+1, dash(v.Version))))
+					b.WriteString("\n")
+					b.WriteString(fmt.Sprintf("  BaseModel: %s\n", dash(v.BaseModel)))
+					if v.FileSize > 0 {
+						b.WriteString(fmt.Sprintf("  文件: %s (%s)\n", dash(v.FileName), formatBytes(v.FileSize)))
+					} else {
+						b.WriteString(fmt.Sprintf("  文件: %s\n", dash(v.FileName)))
+					}
+					if v.Intro != "" {
+						b.WriteString(fmt.Sprintf("  介绍: %s\n", v.Intro))
+					}
+					// 显示 model_id
+					if v.ModelId > 0 {
+						b.WriteString(fmt.Sprintf("  model_id: %d\n", v.ModelId))
+					}
+					b.WriteString(fmt.Sprintf("  创建: %s  更新: %s\n", dash(v.CreatedAt), dash(v.UpdatedAt)))
+					b.WriteString("\n")
+				}
+			}
+			b.WriteString(m.hintStyle.Render("返回：Esc/q，删除：Ctrl+R，列表：Enter 选择前需回退到列表"))
+			return b.String()
+		}
+
+		// 列表视图
 		if m.loadingModelList {
 			return m.titleStyle.Render("列出模型") + "\n\n" +
 				m.sp.View() + " 加载中...\n\n" +
@@ -1434,24 +1644,11 @@ func (m *mainModel) renderActionView() string {
 			}
 			m.modelTable.SetHeight(h)
 		}
+		// 确保列宽在渲染前与当前可用宽度一致
+		m.resizeModelTable(m.width)
 		return m.titleStyle.Render(fmt.Sprintf("列出模型（共 %d 个）", m.modelListTotal)) + "\n\n" +
 			m.modelTable.View() + "\n\n" +
-			m.hintStyle.Render("导航：↑↓，返回：Esc/q，刷新：r")
-	case actionRmModel:
-		if m.act.u.typ == "" {
-			if m.height > 0 {
-				h := m.height - 10
-				if h < 5 {
-					h = 5
-				}
-				m.typeList.SetHeight(h)
-			}
-			return m.titleStyle.Render("删除模型 · 选择类型") + "\n\n" + m.typeList.View() + "\n" + m.hintStyle.Render("确认：Enter，返回：Esc，退出：q")
-		}
-		if m.act.u.name == "" {
-			return m.titleStyle.Render("删除模型 · 输入模型名") + "\n\n" + m.inpName.View() + "\n" + m.hintStyle.Render("确认：Enter，返回：Esc，退出：q")
-		}
-		return m.hintStyle.Render("执行中…（返回：Esc）")
+			m.hintStyle.Render("导航：↑↓，进入详情：Enter，删除：Ctrl+D，返回：Esc/q，刷新：r")
 	default:
 		return ""
 	}

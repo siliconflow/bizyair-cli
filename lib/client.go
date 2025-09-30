@@ -147,6 +147,19 @@ func (c *Client) ListModelFiles(modelType string, modelName string, extName stri
 	return handleResponse[ModelListFilesResp](body)
 }
 
+// GetBizyModelDetail 根据 bizy_model_id 获取模型详情
+func (c *Client) GetBizyModelDetail(bizyModelId int64) (*Response[BizyModelDetail], error) {
+	serverUrl := fmt.Sprintf("%s/x/%s/bizy_models/%d/detail", c.Domain, meta.APIv1, bizyModelId)
+	body, statusCode, err := c.doGet(serverUrl, nil, c.authHeader())
+	if err != nil {
+		return nil, cli.Exit(err, meta.ServerError)
+	}
+	if statusCode != http.StatusOK {
+		return nil, cli.Exit(handleError(body, statusCode), meta.ServerError)
+	}
+	return handleResponse[BizyModelDetail](body)
+}
+
 func (c *Client) RemoveModel(modelType string, modelName string) (*Response[ModelDeleteResp], error) {
 	serverUrl := fmt.Sprintf("%s/x/%s/models", c.Domain, meta.APIv1)
 	body, statusCode, err := c.doDelete(serverUrl, ModelDeleteReq{
@@ -161,6 +174,19 @@ func (c *Client) RemoveModel(modelType string, modelName string) (*Response[Mode
 		return nil, cli.Exit(handleError(body, statusCode), meta.ServerError)
 	}
 	return handleResponse[ModelDeleteResp](body)
+}
+
+// DeleteBizyModelById 通过 bizy_model_id 删除模型
+func (c *Client) DeleteBizyModelById(bizyModelId int64) (*Response[interface{}], error) {
+	serverUrl := fmt.Sprintf("%s/x/%s/bizy_models/%d", c.Domain, meta.APIv1, bizyModelId)
+	body, statusCode, err := c.doDelete(serverUrl, nil, c.authHeader())
+	if err != nil {
+		return nil, cli.Exit(err, meta.ServerError)
+	}
+	if statusCode != http.StatusOK {
+		return nil, cli.Exit(handleError(body, statusCode), meta.ServerError)
+	}
+	return handleResponse[interface{}](body)
 }
 
 func (c *Client) CheckModel(modelType string, modelName string) (*Response[CheckModelResp], error) {
