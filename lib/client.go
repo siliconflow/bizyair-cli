@@ -55,7 +55,6 @@ func (c *Client) UserInfo() (*Response[UserInfo], error) {
 	return handleResponse[UserInfo](body)
 }
 
-
 func (c *Client) OssSign(signature string, modelType string) (*Response[FilesResp], error) {
 
 	// if file exists, return file.id, else return oss certificate
@@ -71,7 +70,6 @@ func (c *Client) OssSign(signature string, modelType string) (*Response[FilesRes
 	return handleResponse[FilesResp](body)
 
 }
-
 
 func (c *Client) CommitFileV2(signature string, objectKey string, md5_hash string, modelType string) (*Response[FilesResp], error) {
 	serverUrl := fmt.Sprintf("%s/x/%s/files", c.Domain, meta.APIv1)
@@ -91,7 +89,6 @@ func (c *Client) CommitFileV2(signature string, objectKey string, md5_hash strin
 	return handleResponse[FilesResp](body)
 }
 
-
 func (c *Client) CommitModelV2(modelName string, modelType string, modelVersion []*ModelVersion) (*Response[ModelCommitResp], error) {
 	serverUrl := fmt.Sprintf("%s/x/%s/bizy_models", c.Domain, meta.APIv1)
 	body, statusCode, err := c.doPost(serverUrl, ModelCommitReqV2{
@@ -109,11 +106,16 @@ func (c *Client) CommitModelV2(modelName string, modelType string, modelVersion 
 	return handleResponse[ModelCommitResp](body)
 }
 
-func (c *Client) ListModel(modelType string, public bool) (*Response[ModelListResp], error) {
-	serverUrl := fmt.Sprintf("%s/x/%s/models", c.Domain, meta.APIv1)
-	param := ModelListReq{
-		Type:   modelType,
-		Public: public,
+func (c *Client) ListModel(current int, pageSize int, keyword string, sort string, modelTypes []string, baseModels []string) (*Response[BizyModelListResp], error) {
+	// mode 固定为 "my"（我发布的模型）
+	serverUrl := fmt.Sprintf("%s/x/%s/bizy_models/my", c.Domain, meta.APIv1)
+	param := BizyModelListReq{
+		Current:    current,
+		PageSize:   pageSize,
+		Keyword:    keyword,
+		Sort:       sort,
+		ModelTypes: modelTypes,
+		BaseModels: baseModels,
 	}
 	body, statusCode, err := c.doGet(serverUrl, param, c.authHeader())
 	if err != nil {
@@ -123,28 +125,8 @@ func (c *Client) ListModel(modelType string, public bool) (*Response[ModelListRe
 	if statusCode != http.StatusOK {
 		return nil, cli.Exit(handleError(body, statusCode), meta.ServerError)
 	}
-	return handleResponse[ModelListResp](body)
+	return handleResponse[BizyModelListResp](body)
 }
-
-// delete it if no need to update func: `ListModel`
-// func (c *Client) ListModelV2(mode string, current int, pagesize int, modelTypes []string, baseModels []string, sort string) (*Response[ModelListResp], error) {
-// 	serverUrl := fmt.Sprintf("%s/x/%s/bizy_models/%s", c.Domain, meta.APIv1, mode)
-// 	param := ModelListReqV2{
-// 		Current: 	current,
-// 		PageSize: 	pagesize,
-// 		Types:   	modelTypes,
-// 		Sort: 		sort,
-// 	}
-// 	body, statusCode, err := c.doGet(serverUrl, param, c.authHeader())
-// 	if err != nil {
-// 		return nil, cli.Exit(err, meta.ServerError)
-// 	}
-
-// 	if statusCode != http.StatusOK {
-// 		return nil, cli.Exit(handleError(body, statusCode), meta.ServerError)
-// 	}
-// 	return handleResponse[ModelListResp](body)
-// }
 
 func (c *Client) ListModelFiles(modelType string, modelName string, extName string, public bool) (*Response[ModelListFilesResp], error) {
 	serverUrl := fmt.Sprintf("%s/x/%s/models/files", c.Domain, meta.APIv1)
@@ -225,9 +207,22 @@ func (c *Client) doGet(urlStr string, queryParams interface{}, header map[string
 		for i := 0; i < v.NumField(); i++ {
 			field := v.Field(i)
 			fieldName := v.Type().Field(i).Name
-			fieldValue := fmt.Sprintf("%v", field.Interface())
-			if fieldValue != "" && fieldValue != "0" {
-				query.Add(lo.SnakeCase(fieldName), fieldValue)
+			snakeName := lo.SnakeCase(fieldName)
+
+			// 处理数组/切片类型
+			if field.Kind() == reflect.Slice {
+				for j := 0; j < field.Len(); j++ {
+					elemValue := fmt.Sprintf("%v", field.Index(j).Interface())
+					if elemValue != "" {
+						query.Add(snakeName, elemValue)
+					}
+				}
+			} else {
+				// 处理普通类型
+				fieldValue := fmt.Sprintf("%v", field.Interface())
+				if fieldValue != "" && fieldValue != "0" && fieldValue != "false" && fieldValue != "[]" {
+					query.Add(snakeName, fieldValue)
+				}
 			}
 		}
 		parsedURL.RawQuery = query.Encode()

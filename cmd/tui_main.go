@@ -231,8 +231,6 @@ func newMainModel() mainModel {
 
 	menuList := list.New(mItems, d, 30, len(mItems))
 	menuList.Title = "请选择功能"
-	menuList.SetShowStatusBar(false)
-	menuList.SetShowPagination(false)
 
 	// 上传/通用：类型列表
 	tItems := make([]list.Item, 0, len(meta.ModelTypes))
@@ -382,33 +380,10 @@ func waitForUploadEvent(ch <-chan tea.Msg) tea.Cmd {
 
 func (m mainModel) Init() tea.Cmd { return tea.Batch(m.sp.Tick, m.filepicker.Init()) }
 
-// 从文件路径提取文件名（不含扩展名）作为模型名
-func extractModelNameFromPath(filePath string) string {
-	// 获取文件名（含扩展名）
-	fileName := filepath.Base(filePath)
-	// 去除扩展名
-	nameWithoutExt := strings.TrimSuffix(fileName, filepath.Ext(fileName))
-	// 清理文件名，只保留字母、数字、下划线和短横线
-	var result strings.Builder
-	for _, r := range nameWithoutExt {
-		if (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9') || r == '_' || r == '-' {
-			result.WriteRune(r)
-		} else if r == ' ' || r == '.' {
-			result.WriteRune('_')
-		}
-	}
-	cleanName := result.String()
-	// 确保不为空，如果为空则使用默认名称
-	if cleanName == "" {
-		cleanName = "model"
-	}
-	return cleanName
-}
-
 // 验证并设置路径的辅助方法
 func (m *mainModel) validateAndSetPath(path string) error {
 	// 验证文件扩展名
-	supportedExts := []string{".safetensors", ".bin", ".ckpt", ".pt", ".pth", ".pkl", ".h5", ".onnx", ".tflite", ".pb", ".json", ".txt", ".md", ".yaml", ".yml"}
+	supportedExts := []string{".safetensors"}
 	isSupported := false
 	for _, ext := range supportedExts {
 		if strings.HasSuffix(strings.ToLower(path), ext) {
@@ -428,10 +403,6 @@ func (m *mainModel) validateAndSetPath(path string) error {
 	m.act.cur.path = absPath(path)
 	m.selectedFile = path
 	m.act.filePickerErr = nil
-
-	// 提取文件名作为name的默认值
-	defaultName := extractModelNameFromPath(path)
-	m.inpName.SetValue(defaultName)
 
 	return nil
 }
@@ -719,7 +690,6 @@ func (m mainModel) View() string {
 			homeBuilder.WriteString(style.Render(line))
 			homeBuilder.WriteString("\n")
 		}
-		// 欢迎文案使用粉色收尾
 		homeBuilder.WriteString(lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("#EC4899")).Render("欢迎使用 BizyAir CLI 工具"))
 		return strings.TrimRight(homeBuilder.String(), "\n") + "\n" + panel.Render(m.hintStyle.Render("按 Enter 进入 ››"))
 	}
@@ -978,7 +948,7 @@ func (m *mainModel) updateActionInputs(msg tea.Msg) tea.Cmd {
 			}
 			return cmd
 		case stepPath:
-			// 混合模式：路径输入框 + 文件选择器，类似官方示例
+			// 路径输入框 + 文件选择器
 			var pathCmd, fpCmd tea.Cmd
 
 			// 处理按键事件
@@ -1093,12 +1063,11 @@ func (m *mainModel) updateActionInputs(msg tea.Msg) tea.Cmd {
 				if didSelect, path := m.filepicker.DidSelectFile(msg); didSelect {
 					// 使用stat检查是否为文件（而不是文件夹）
 					if info, err := os.Stat(path); err == nil && !info.IsDir() {
-						// 确认是文件才进行格式验证
-						if err := validatePath(path); err != nil {
+						// 确认是文件才进行完整的格式验证（包括扩展名）
+						if err := m.validateAndSetPath(path); err != nil {
 							m.act.filePickerErr = err
 							return clearFilePickerErrorAfter(3 * time.Second)
 						}
-						m.act.cur.path = absPath(path)
 						m.upStep = stepAskMore
 						return nil
 					}
@@ -1543,9 +1512,6 @@ func runLogout() tea.Cmd {
 		return actionDoneMsg{out: "Logged out successfully\n", err: nil}
 	}
 }
-
-// 运行上传（调用现有 upload 子命令）
-// obsolete single-version uploader removed (replaced by runUploadActionMulti)
 
 // 多版本上传
 func runUploadActionMulti(u uploadInputs, versions []versionItem) tea.Cmd {

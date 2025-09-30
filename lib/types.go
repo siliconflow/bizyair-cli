@@ -48,7 +48,6 @@ type FileCommitReqV2 struct {
 	ModelType string `json:"type,omitempty" form:"type" query:"type"`
 }
 
-
 type ModelCommitReqV2 struct {
 	Name     string          `json:"name,omitempty" form:"name" query:"name"`
 	Type     string          `json:"type,omitempty" form:"type" query:"type"`
@@ -103,13 +102,64 @@ type ModelInfo struct {
 	UpdatedAt string `json:"updated_at,omitempty" form:"updated_at" query:"updated_at"`
 }
 
-type ModelListReq struct {
-	Type   string `json:"type,omitempty" form:"type" query:"type"`
-	Public bool   `json:"public,omitempty" form:"public" query:"public"`
+// 新版模型列表请求参数
+type BizyModelListReq struct {
+	Current    int      `json:"current,omitempty" form:"current" query:"current"`
+	PageSize   int      `json:"page_size,omitempty" form:"page_size" query:"page_size"`
+	Keyword    string   `json:"keyword,omitempty" form:"keyword" query:"keyword"`
+	Sort       string   `json:"sort,omitempty" form:"sort" query:"sort"`
+	ModelTypes []string `json:"model_types,omitempty" form:"model_types" query:"model_types"`
+	BaseModels []string `json:"base_models,omitempty" form:"base_models" query:"base_models"`
 }
 
-type ModelListResp struct {
-	Models []*ModelInfo `json:"models,omitempty" form:"models" query:"models"`
+// 模型统计信息
+type ModelCounter struct {
+	UsedCount       int `json:"used_count,omitempty"`
+	ForkedCount     int `json:"forked_count,omitempty"`
+	LikedCount      int `json:"liked_count,omitempty"`
+	DownloadedCount int `json:"downloaded_count,omitempty"`
+	ViewCount       int `json:"view_count,omitempty"`
+}
+
+// 模型版本信息
+type BizyModelVersion struct {
+	Id           int64        `json:"id,omitempty"`
+	Version      string       `json:"version,omitempty"`
+	CoverUrls    []string     `json:"cover_urls,omitempty"`
+	FileUrl      string       `json:"file_url,omitempty"`
+	FileSize     int64        `json:"file_size,omitempty"`
+	Public       bool         `json:"public,omitempty"`
+	DraftId      string       `json:"draft_id,omitempty"`
+	CreatedAt    string       `json:"created_at,omitempty"`
+	Forked       bool         `json:"forked,omitempty"`
+	Liked        bool         `json:"liked,omitempty"`
+	Counter      ModelCounter `json:"counter,omitempty"`
+	BaseModel    string       `json:"base_model,omitempty"`
+	TriggerWords []string     `json:"trigger_words,omitempty"`
+	Description  string       `json:"description,omitempty"`
+}
+
+// 模型信息（新版）
+type BizyModelInfo struct {
+	Id          int64               `json:"id,omitempty"`
+	Name        string              `json:"name,omitempty"`
+	Type        string              `json:"type,omitempty"`
+	Description string              `json:"description,omitempty"`
+	Tags        []string            `json:"tags,omitempty"`
+	CreatedAt   string              `json:"created_at,omitempty"`
+	UpdatedAt   string              `json:"updated_at,omitempty"`
+	UserId      string              `json:"user_id,omitempty"`
+	Username    string              `json:"username,omitempty"`
+	Counter     ModelCounter        `json:"counter,omitempty"`
+	Versions    []*BizyModelVersion `json:"versions,omitempty"`
+}
+
+// 新版模型列表响应
+type BizyModelListResp struct {
+	List     []*BizyModelInfo `json:"list,omitempty"`
+	Total    int              `json:"total,omitempty"`
+	Current  int              `json:"current,omitempty"`
+	PageSize int              `json:"page_size,omitempty"`
 }
 
 type ModelListFilesReq struct {
