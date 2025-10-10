@@ -21,3 +21,7 @@ func deleteBizyModel(apiKey string, bizyModelId int64) tea.Cmd {
 		return deleteModelDoneMsg{msg: "删除成功", err: nil}
 	}
 }
+
+
+
+

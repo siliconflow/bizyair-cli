@@ -100,6 +100,31 @@ type uploadCancelMsg struct{}
 // 清除filepicker错误的消息
 type clearFilePickerErrorMsg struct{}
 
+// 带步骤信息的错误，用于在输出页提示发生阶段
+type stepError struct {
+	Step string
+	Err  error
+}
+
+func (e *stepError) Error() string { return e.Err.Error() }
+
+// 包装错误附带步骤信息
+func withStep(step string, err error) error {
+	if err == nil {
+		return nil
+	}
+	return &stepError{Step: step, Err: err}
+}
+
+// 读取错误中的步骤信息
+func errStep(err error) string {
+	var se *stepError
+	if errors.As(err, &se) {
+		return se.Step
+	}
+	return ""
+}
+
 // 模型列表加载完成消息
 type modelListLoadedMsg struct {
 	models []*lib.BizyModelInfo
@@ -225,12 +250,18 @@ type mainModel struct {
 	// 品牌
 	logo           string
 	logoStyle      lipgloss.Style
+	smallLogo      string
 	smallLogoStyle lipgloss.Style
 
 	// 上传进度
 	uploadCh   <-chan tea.Msg
 	uploadProg uploadProgMsg
 	cancelFn   context.CancelFunc
+
+	// 封面输入焦点：true 表示 URL 输入框聚焦；false 表示在本地选择模式（路径输入或文件选择器）
+	coverUrlInputFocused bool
+	// 本地封面选择：true 表示路径输入框聚焦；false 表示文件选择器聚焦
+	coverPathInputFocused bool
 }
 
 func newMainModel() mainModel {
@@ -248,7 +279,7 @@ func newMainModel() mainModel {
 	d.Styles.SelectedTitle = d.Styles.SelectedTitle.Foreground(cSel).BorderLeftForeground(cSel)
 	d.Styles.SelectedDesc = d.Styles.SelectedDesc.Foreground(cSel)
 
-	menuList := list.New(mItems, d, 30, len(mItems)*8 )
+	menuList := list.New(mItems, d, 30, len(mItems)*8)
 	menuList.Title = "请选择功能"
 	menuList.SetShowStatusBar(false)
 	menuList.SetShowPagination(false)
@@ -312,8 +343,9 @@ func newMainModel() mainModel {
 
 	//文件选择器 - 配置为支持模型文件格式
 	fp := filepicker.New()
-	// 允许所有文件类型，让用户可以浏览
-	fp.AllowedTypes = []string{} // 空数组表示允许所有文件类型
+	// 不设置 AllowedTypes，允许显示所有文件（用户可以浏览任何文件）
+	// 在选择时通过代码验证文件类型
+	// fp.AllowedTypes 保持 nil（默认值）
 
 	// 设置起始目录为用户主目录
 	homeDir, err := os.UserHomeDir()
@@ -328,7 +360,7 @@ func newMainModel() mainModel {
 	fp.AutoHeight = false
 
 	// 自定义样式，提供更友好的空目录消息
-	fp.Styles.EmptyDirectory = fp.Styles.EmptyDirectory.SetString("此目录为空。使用方向键导航到其他目录。")
+	fp.Styles.EmptyDirectory = fp.Styles.EmptyDirectory.SetString("此目录为空。使用方向键导航到其他目录。注意文件路径输入框中的路径与下面文件选择器中的内容的同步")
 
 	// spinner
 	sp := spinner.New()
@@ -403,7 +435,13 @@ func newMainModel() mainModel {
 			`  | '--'  /(_|  |   |        |` + "`" + `-./  /.__) |  | |  |(_|  |   |  |\  \  `,
 			`  ` + "`" + `------'   ` + "`" + `--'   ` + "`" + `--------'  ` + "`" + `--'      ` + "`" + `--' ` + "`" + `--'  ` + "`" + `--'   ` + "`" + `--' '--' `,
 		}, "\n"),
-		logoStyle:      lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("#8B5CF6")),
+		logoStyle: lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("#8B5CF6")),
+		smallLogo: strings.Join([]string{
+			".----. .-. .---..-.  .-..--.  .-..----.    ",
+			"| {}  }| |{_   / \\ \\/ // {} \\ | || {}  }   ",
+			"| {}  }| | /    } }  {/  /\\  \\| || .-. \\   ",
+			"`----' `-' `---'  `--'`-'  `-'`-'`-' `-'   ",
+		}, "\n"),
 		smallLogoStyle: lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("#EC4899")),
 		// 外框默认内边距：左右 2、上下 1
 		framePadX: 2,
@@ -443,6 +481,15 @@ func (m *mainModel) innerSize() (int, int) {
 // 将字符串裁剪/填充为固定宽度（兼容 ANSI 宽度）
 func clipToWidth(s string, width int) string {
 	return lipgloss.NewStyle().Width(width).Render(s)
+}
+
+// 确保路径末尾仅有一个分隔符（避免出现重复的 "/"）
+func ensureTrailingSep(p string) string {
+	sep := string(filepath.Separator)
+	if strings.HasSuffix(p, sep) {
+		return p
+	}
+	return p + sep
 }
 
 // 渐变外框渲染：在整屏绘制蓝紫(#8B5CF6)->粉色(#EC4899)的边框，并在内侧使用内边距包裹内容
@@ -672,6 +719,54 @@ func waitForUploadEvent(ch <-chan tea.Msg) tea.Cmd {
 	}
 }
 
+// 重置上传相关的所有状态，使再次进入上传时为全新交互
+func (m *mainModel) resetUploadState() {
+	// 上传流程运行态与通道/取消句柄
+	m.running = false
+	m.uploadCh = nil
+	m.uploadProg = uploadProgMsg{}
+	m.cancelFn = nil
+
+	// 进度条重置（单/多版本）
+	m.progress = progress.New(progress.WithDefaultGradient())
+	// 根据当前宽度设置合理的进度条宽度
+	iw, _ := m.innerSize()
+	m.progress.Width = iw - 6
+	if m.progress.Width < 10 {
+		m.progress.Width = 10
+	}
+	m.verProgress = nil
+	m.verConsumed = nil
+	m.verTotal = nil
+
+	// 上传输入状态与步骤
+	m.act = actionInputs{}
+	m.upStep = stepName
+
+	// 输入组件与焦点
+	m.inpName.SetValue("")
+	m.inpVersion.SetValue("")
+	m.inpCover.SetValue("")
+	m.inpIntro.SetValue("")
+
+	// 文件选择与路径输入：回到用户主目录
+	m.selectedFile = ""
+	m.filepicker.Path = ""
+	if homeDir, err := os.UserHomeDir(); err == nil && homeDir != "" {
+		m.filepicker.CurrentDirectory = homeDir
+		m.inpPath.SetValue(homeDir + "/")
+	} else {
+		m.inpPath.SetValue("")
+	}
+
+	// 封面与路径输入焦点
+	m.coverUrlInputFocused = false
+	m.coverPathInputFocused = false
+	m.act.pathInputFocused = false
+	m.act.useFilePicker = false
+	m.act.filePickerErr = nil
+}
+
 func (m mainModel) Init() tea.Cmd { return tea.Batch(m.sp.Tick, m.filepicker.Init()) }
 
 // 验证并设置路径的辅助方法
@@ -751,8 +846,11 @@ func (m mainModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 	case tea.KeyMsg:
 		if m.err != nil {
-			m.err = nil
-			return m, nil
+			if m.step != mainStepOutput {
+				m.err = nil
+				return m, nil
+			}
+			// 在输出页保留错误，继续处理按键（Enter/Esc 返回菜单）
 		}
 		switch msg.String() {
 		case "ctrl+c", "q":
@@ -761,6 +859,7 @@ func (m mainModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				// 停止等待更多上传事件
 				m.uploadCh = nil
 				m.running = false
+				m.resetUploadState()
 				return m, nil
 			}
 			return m, tea.Quit
@@ -825,13 +924,11 @@ func (m mainModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 				return m, m.updateActionInputs(msg)
 			case mainStepOutput:
-				// 回菜单
+				// 回菜单（退出输出页时清理错误，避免返回菜单后触发顶部错误遮罩）
 				m.step = mainStepMenu
 				m.output = ""
-				m.running = false
-				m.act = actionInputs{}
-				m.selectedFile = ""
-				m.filepicker.Path = ""
+				m.err = nil
+				m.resetUploadState()
 				return m, nil
 			}
 		case "esc":
@@ -845,10 +942,8 @@ func (m mainModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			case mainStepOutput:
 				m.step = mainStepMenu
 				m.output = ""
-				m.running = false
-				m.act = actionInputs{}
-				m.selectedFile = ""
-				m.filepicker.Path = ""
+				m.err = nil
+				m.resetUploadState()
 				return m, nil
 			}
 		default:
@@ -883,7 +978,7 @@ func (m mainModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case modelListLoadedMsg:
 		m.loadingModelList = false
 		if msg.err != nil {
-			m.err = msg.err
+			m.err = withStep("加载模型列表", msg.err)
 			m.step = mainStepOutput
 			m.output = fmt.Sprintf("加载模型列表失败: %v", msg.err)
 			return m, nil
@@ -925,8 +1020,8 @@ func (m mainModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.err = msg.err
 		}
 		m.step = mainStepOutput
-		m.uploadCh = nil
-		m.uploadProg = uploadProgMsg{}
+		// 上传流程结束（无论成功/失败），立即重置上传相关状态
+		m.resetUploadState()
 		return m, nil
 	case uploadStartMsg:
 		m.uploadCh = msg.ch
@@ -1032,12 +1127,16 @@ func (m mainModel) View() string {
 
 	var viewStr string
 
-	// 合并 Logo + 菜单：在菜单页顶部渲染大 Logo 渐变
-	header := lipgloss.PlaceHorizontal(innerW, lipgloss.Left, m.smallLogoStyle.Render("BizyAir CLI"))
+	header := lipgloss.PlaceHorizontal(innerW, lipgloss.Left, m.smallLogoStyle.Render(m.smallLogo))
 
 	if m.err != nil && m.step != mainStepOutput {
 		defer func() { m.err = nil }()
-		viewStr = header + "\n" + panel.Render(m.titleStyle.Render("错误")+"\n"+fmt.Sprintf("%v", m.err)+"\n\n"+m.hintStyle.Render("按任意键返回继续…"))
+		var body strings.Builder
+		if step := errStep(m.err); step != "" {
+			body.WriteString(fmt.Sprintf("步骤: %s\n", step))
+		}
+		body.WriteString(fmt.Sprintf("错误: %v", m.err))
+		viewStr = header + "\n" + panel.Render(m.titleStyle.Render("错误")+"\n"+body.String()+"\n\n"+m.hintStyle.Render("按任意键返回继续…"))
 		return m.renderFrame(viewStr)
 	}
 
@@ -1150,7 +1249,15 @@ func (m mainModel) View() string {
 		return m.renderFrame(viewStr)
 	case mainStepOutput:
 		if m.err != nil {
-			viewStr = header + "\n" + panel.Render(m.titleStyle.Render("执行完成（含错误）")+"\n\n"+m.output+"\n\n"+m.hintStyle.Render("按 Enter 返回菜单"))
+			body := m.output
+			if strings.TrimSpace(body) != "" {
+				body += "\n"
+			}
+			if step := errStep(m.err); step != "" {
+				body += fmt.Sprintf("步骤: %s\n", step)
+			}
+			body += fmt.Sprintf("错误: %v", m.err)
+			viewStr = header + "\n" + panel.Render(m.titleStyle.Render("执行完成（含错误）")+"\n\n"+body+"\n\n"+m.hintStyle.Render("按 Enter 返回菜单"))
 			return m.renderFrame(viewStr)
 		}
 		viewStr = header + "\n" + panel.Render(m.titleStyle.Render("执行完成")+"\n\n"+m.output+"\n\n"+m.hintStyle.Render("按 Enter 返回菜单"))
@@ -1276,8 +1383,21 @@ func (m *mainModel) updateActionInputs(msg tea.Msg) tea.Cmd {
 							return nil
 						}
 						m.act.cur.base = it.title
+						// 进入封面步骤：默认使用本地文件选择器（含路径输入框），Tab 在 URL 与本地间切换
 						m.upStep = stepCover
-						return m.inpCover.Focus()
+						m.act.useFilePicker = true
+						m.coverUrlInputFocused = false
+						m.coverPathInputFocused = true
+						m.inpCover.SetValue("")
+						// 与模型文件选择一致：路径输入框显示当前目录（去重尾部分隔符）
+						m.inpPath.SetValue(ensureTrailingSep(m.filepicker.CurrentDirectory))
+						// 显示全部文件/目录，在选择时再做图片类型校验
+						// 不设置 AllowedTypes（保持 nil）以显示所有文件
+						m.filepicker.AllowedTypes = nil
+						m.filepicker.DirAllowed = true
+						m.filepicker.FileAllowed = true
+						m.filepicker.Path = ""
+						return tea.Batch(m.inpPath.Focus(), m.filepicker.Init())
 					}
 				case "esc":
 					m.upStep = stepVersion
@@ -1286,20 +1406,177 @@ func (m *mainModel) updateActionInputs(msg tea.Msg) tea.Cmd {
 			}
 			return cmd
 		case stepCover:
-			var inputCmd tea.Cmd
-			m.inpCover, inputCmd = m.inpCover.Update(msg)
+			// 覆盖交互（单图）：
+			// - Tab 在 "URL 输入模式" 与 "本地选择模式" 之间切换；
+			// - 本地选择模式内，Tab 在 "路径输入框" 与 "文件选择器" 间切换；
+			// - 选择文件或确认路径输入后，直接进入下一步；URL 仅支持 1 个图片链接。
+			var urlCmd, pathCmd, fpCmd tea.Cmd
+
 			if km, ok := msg.(tea.KeyMsg); ok {
 				switch km.String() {
-				case "enter":
-					m.act.cur.cover = strings.TrimSpace(m.inpCover.Value())
-					m.upStep = stepIntro
-					return m.inpIntro.Focus()
 				case "esc":
+					m.coverUrlInputFocused = false
+					m.coverPathInputFocused = false
+					m.act.filePickerErr = nil
+					m.filepicker.Path = ""
 					m.upStep = stepBase
 					return nil
+				case "tab":
+					if m.coverUrlInputFocused {
+						// URL -> 本地（先聚焦路径输入框）
+						m.coverUrlInputFocused = false
+						m.coverPathInputFocused = true
+						m.inpCover.Blur()
+						return m.inpPath.Focus()
+					}
+					if m.coverPathInputFocused {
+						// 路径输入 -> 文件选择器（模仿 stepPath 的实现）
+						path := strings.TrimSpace(m.inpPath.Value())
+						if path != "" {
+							if info, err := os.Stat(path); err == nil && info.IsDir() {
+								// 如果路径是有效目录，更新filepicker
+								m.filepicker.CurrentDirectory = path
+								m.coverPathInputFocused = false
+								m.inpPath.Blur()
+								return m.filepicker.Init()
+							}
+						}
+						// 如果路径无效，仍然切换焦点但不更新目录
+						m.coverPathInputFocused = false
+						m.inpPath.Blur()
+						return nil
+					}
+					// 文件选择器 -> URL 输入
+					m.coverUrlInputFocused = true
+					return m.inpCover.Focus()
+				case "enter":
+					if m.coverUrlInputFocused {
+						raw := strings.TrimSpace(m.inpCover.Value())
+						// 仅取首个；若存在分号则警告
+						first := raw
+						warned := false
+						if i := strings.Index(raw, ";"); i >= 0 {
+							first = strings.TrimSpace(raw[:i])
+							m.inpCover.SetValue(first)
+							m.act.filePickerErr = errors.New("检测到分号，仅保留第一个 URL")
+							warned = true
+						}
+						// 若是本地路径，提示使用文件选择器
+						if _, err := os.Stat(first); err == nil {
+							m.act.filePickerErr = fmt.Errorf("检测到本地路径，请在下方文件选择器中选择：%s", first)
+							return clearFilePickerErrorAfter(3 * time.Second)
+						}
+						// 必须为 http/https
+						if !lib.IsHTTPURL(first) {
+							m.act.filePickerErr = fmt.Errorf("请输入图片的 URL（以 http/https 开头）")
+							return clearFilePickerErrorAfter(3 * time.Second)
+						}
+						// 校验图片扩展名（忽略查询串）
+						check := first
+						if q := strings.Index(check, "?"); q >= 0 {
+							check = check[:q]
+						}
+						lcheck := strings.ToLower(check)
+						if !(strings.HasSuffix(lcheck, ".jpg") || strings.HasSuffix(lcheck, ".jpeg") || strings.HasSuffix(lcheck, ".png") || strings.HasSuffix(lcheck, ".gif") || strings.HasSuffix(lcheck, ".bmp") || strings.HasSuffix(lcheck, ".webp")) {
+							m.act.filePickerErr = fmt.Errorf("URL 不是图片链接: %s", first)
+							return clearFilePickerErrorAfter(3 * time.Second)
+						}
+						m.act.cur.cover = first
+						m.upStep = stepIntro
+						if warned {
+							return tea.Batch(m.inpIntro.Focus(), clearFilePickerErrorAfter(3*time.Second))
+						}
+						return m.inpIntro.Focus()
+					}
+					if m.coverPathInputFocused && m.inpPath.Value() != "" {
+						// 从输入框确认路径（模仿 stepPath）
+						p := strings.TrimSpace(m.inpPath.Value())
+
+						// 检查路径是否存在
+						info, err := os.Stat(p)
+						if err != nil {
+							m.act.filePickerErr = fmt.Errorf("路径不存在: %s", p)
+							return clearFilePickerErrorAfter(3 * time.Second)
+						}
+
+						if info.IsDir() {
+							// 如果是目录，更新filepicker到该目录
+							m.filepicker.CurrentDirectory = p
+							return m.filepicker.Init()
+						} else {
+							// 如果是文件，校验图片后缀并直接进入下一步
+							lp := strings.ToLower(p)
+							if !(strings.HasSuffix(lp, ".jpg") || strings.HasSuffix(lp, ".jpeg") || strings.HasSuffix(lp, ".png") || strings.HasSuffix(lp, ".gif") || strings.HasSuffix(lp, ".bmp") || strings.HasSuffix(lp, ".webp")) {
+								m.act.filePickerErr = fmt.Errorf("不支持的图片类型: %s", p)
+								return clearFilePickerErrorAfter(3 * time.Second)
+							}
+							ap := absPath(p)
+							m.inpCover.SetValue(ap)
+							m.act.cur.cover = ap
+							m.upStep = stepIntro
+							return m.inpIntro.Focus()
+						}
+					}
 				}
 			}
-			return inputCmd
+
+			// URL 输入框更新
+			if m.coverUrlInputFocused {
+				m.inpCover, urlCmd = m.inpCover.Update(msg)
+			}
+
+			// 路径输入框更新（实时与文件选择器联动）
+			if m.coverPathInputFocused {
+				m.inpPath, pathCmd = m.inpPath.Update(msg)
+				// 实时同步：当输入为有效目录时，自动刷新下方文件选择器
+				typedPath := strings.TrimSpace(m.inpPath.Value())
+				if typedPath != "" {
+					if info, err := os.Stat(typedPath); err == nil && info.IsDir() {
+						// 仅在目录变化时刷新，避免无谓刷新
+						if filepath.Clean(m.filepicker.CurrentDirectory) != filepath.Clean(typedPath) {
+							m.filepicker.CurrentDirectory = typedPath
+							fpCmd = m.filepicker.Init()
+						}
+					}
+				}
+			}
+
+			if !m.coverUrlInputFocused && !m.coverPathInputFocused {
+				oldDir := m.filepicker.CurrentDirectory
+				m.filepicker, fpCmd = m.filepicker.Update(msg)
+				// 如果目录改变了（由用户在文件选择器中导航引起），同步更新路径输入框（去重尾部分隔符）
+				if m.filepicker.CurrentDirectory != oldDir {
+					m.inpPath.SetValue(ensureTrailingSep(m.filepicker.CurrentDirectory))
+				}
+				// 检查文件选择 - 只有在文件选择器有焦点时才检查
+				if did, p := m.filepicker.DidSelectFile(msg); did {
+					// 使用stat检查是否为文件（而不是文件夹）
+					if info, err := os.Stat(p); err == nil && !info.IsDir() {
+						// 校验图片后缀（直接进入下一步）
+						lp := strings.ToLower(p)
+						if !(strings.HasSuffix(lp, ".jpg") || strings.HasSuffix(lp, ".jpeg") || strings.HasSuffix(lp, ".png") || strings.HasSuffix(lp, ".gif") || strings.HasSuffix(lp, ".bmp") || strings.HasSuffix(lp, ".webp")) { // 使用辅助函数
+							m.act.filePickerErr = fmt.Errorf("不支持的图片类型: %s", p)
+							return clearFilePickerErrorAfter(3 * time.Second)
+						}
+						ap := absPath(p)
+						m.inpCover.SetValue(ap)
+						m.act.cur.cover = ap
+						m.upStep = stepIntro
+						return m.inpIntro.Focus()
+					}
+					// 如果是文件夹或无法访问，什么都不做，让filepicker正常处理
+				}
+				// 检查禁用文件选择
+				if didSelect, p := m.filepicker.DidSelectDisabledFile(msg); didSelect {
+					// 只对文件显示格式错误，文件夹不需要格式验证
+					if info, err := os.Stat(p); err == nil && !info.IsDir() {
+						m.act.filePickerErr = errors.New(p + " 文件格式不支持")
+						return clearFilePickerErrorAfter(3 * time.Second)
+					}
+				}
+			}
+
+			return tea.Batch(urlCmd, pathCmd, fpCmd)
 		case stepIntro:
 			m.inpIntro, cmd = m.inpIntro.Update(msg)
 			if km, ok := msg.(tea.KeyMsg); ok {
@@ -1310,7 +1587,7 @@ func (m *mainModel) updateActionInputs(msg tea.Msg) tea.Cmd {
 					// 进入文件选择
 					m.act.useFilePicker = true
 					m.act.pathInputFocused = false
-					m.inpPath.SetValue(m.filepicker.CurrentDirectory + "/")
+					m.inpPath.SetValue(ensureTrailingSep(m.filepicker.CurrentDirectory))
 					m.upStep = stepPath
 					return m.filepicker.Init()
 				case "esc":
@@ -1423,9 +1700,9 @@ func (m *mainModel) updateActionInputs(msg tea.Msg) tea.Cmd {
 				oldDir := m.filepicker.CurrentDirectory
 				m.filepicker, fpCmd = m.filepicker.Update(msg)
 
-				// 如果目录改变了，同步更新路径输入框
+				// 如果目录改变了，同步更新路径输入框（去重尾部分隔符）
 				if m.filepicker.CurrentDirectory != oldDir {
-					m.inpPath.SetValue(m.filepicker.CurrentDirectory + "/")
+					m.inpPath.SetValue(ensureTrailingSep(m.filepicker.CurrentDirectory))
 				}
 			}
 
@@ -1617,7 +1894,56 @@ func (m *mainModel) renderActionView() string {
 			}
 			return m.titleStyle.Render("上传 · Step 4/8 · Base Model（必选）") + "\n\n" + m.baseList.View() + "\n" + m.hintStyle.Render("选择后 Enter，返回：Esc，退出：q")
 		case stepCover:
-			return m.titleStyle.Render("上传 · Step 5/8 · Cover（可选；多个用 ; 分隔）") + "\n\n" + m.inpCover.View() + "\n" + m.hintStyle.Render("确认：Enter，返回：Esc，退出：q")
+			var content strings.Builder
+			content.WriteString(m.titleStyle.Render("上传 · Step 5/8 · 选择封面（默认文件选择器，Tab 在 URL/路径/文件选择器之间切换）"))
+			content.WriteString("\n\n")
+			// URL 输入区域
+			urlLabel := "封面 URL（仅 1 个图片链接；本地图片请在下方选择）："
+			if m.coverUrlInputFocused {
+				urlLabel = m.titleStyle.Render("► " + urlLabel + "（当前焦点，按 Tab 切换）")
+			} else {
+				urlLabel = m.hintStyle.Render(urlLabel)
+			}
+			content.WriteString(urlLabel)
+			content.WriteString("\n")
+			content.WriteString(m.inpCover.View())
+			content.WriteString("\n\n")
+
+			// 本地路径输入区域
+			pathLabel := "本地文件路径输入（按 Enter 确认并进入下一步）："
+			if m.coverPathInputFocused {
+				pathLabel = m.titleStyle.Render("► " + pathLabel + "（当前焦点，按 Tab 切换）")
+			} else {
+				pathLabel = m.hintStyle.Render(pathLabel)
+			}
+			content.WriteString(pathLabel)
+			content.WriteString("\n")
+			content.WriteString(m.inpPath.View())
+			content.WriteString("\n\n")
+			// 文件选择器
+			pickerLabel := "文件选择器："
+			if !m.coverUrlInputFocused && !m.coverPathInputFocused {
+				pickerLabel = m.titleStyle.Render("► 文件选择器：（当前焦点，按 Tab 切换）")
+			} else {
+				pickerLabel = m.hintStyle.Render(pickerLabel)
+			}
+			content.WriteString(pickerLabel)
+			content.WriteString("\n")
+			if m.act.filePickerErr != nil {
+				content.WriteString(m.filepicker.Styles.DisabledFile.Render(m.act.filePickerErr.Error()))
+				content.WriteString("\n")
+			}
+			content.WriteString(m.filepicker.View())
+			content.WriteString("\n")
+			// 操作提示
+			if m.coverUrlInputFocused {
+				content.WriteString(m.hintStyle.Render("输入图片 URL，回车确认并进入下一步；Tab 切换焦点；Esc 返回"))
+			} else if m.coverPathInputFocused {
+				content.WriteString(m.hintStyle.Render("输入本地文件路径，按 Enter 确认并进入下一步；Tab 切换焦点；Esc 返回"))
+			} else {
+				content.WriteString(m.hintStyle.Render("方向键导航，Enter 选择图片并进入下一步；Tab 切换焦点；Esc 返回"))
+			}
+			return content.String()
 		case stepIntro:
 			return m.titleStyle.Render("上传 · Step 6/8 · 模型介绍（可为空，回车跳过）") + "\n\n" + m.inpIntro.View() + "\n" + m.hintStyle.Render("确认：Enter（可空），返回：Esc，退出：q")
 		case stepPath:
@@ -1813,10 +2139,10 @@ func loginCmd(apiKey string) tea.Cmd {
 	return func() tea.Msg {
 		client := lib.NewClient(meta.AuthDomain, apiKey)
 		if _, err := client.UserInfo(); err != nil {
-			return loginDoneMsg{ok: false, err: err}
+			return loginDoneMsg{ok: false, err: withStep("登录校验", err)}
 		}
 		if err := lib.NewSfFolder().SaveKey(apiKey); err != nil {
-			return loginDoneMsg{ok: false, err: err}
+			return loginDoneMsg{ok: false, err: withStep("保存凭据", err)}
 		}
 		return loginDoneMsg{ok: true}
 	}
@@ -1836,7 +2162,7 @@ func runWhoami(apiKey string) tea.Cmd {
 		cmd.Stdout = &buf
 		cmd.Stderr = &buf
 		err := cmd.Run()
-		return actionDoneMsg{out: buf.String(), err: err}
+		return actionDoneMsg{out: buf.String(), err: withStep("whoami 执行", err)}
 	}
 }
 
@@ -1845,7 +2171,7 @@ func runLogout() tea.Cmd {
 	return func() tea.Msg {
 		err := lib.NewSfFolder().RemoveKey()
 		if err != nil {
-			return actionDoneMsg{out: "", err: err}
+			return actionDoneMsg{out: "", err: withStep("登出", err)}
 		}
 		return actionDoneMsg{out: "Logged out successfully\n", err: nil}
 	}
@@ -1864,17 +2190,17 @@ func runUploadActionMulti(u uploadInputs, versions []versionItem) tea.Cmd {
 			args.Name = u.name
 
 			if err := checkType(args, true); err != nil {
-				ch <- actionDoneMsg{err: err}
+				ch <- actionDoneMsg{err: withStep("上传/校验模型类型", err)}
 				return
 			}
 			if err := checkName(args, true); err != nil {
-				ch <- actionDoneMsg{err: err}
+				ch <- actionDoneMsg{err: withStep("上传/校验模型名称", err)}
 				return
 			}
 
 			apiKey, err := lib.NewSfFolder().GetKey()
 			if err != nil || apiKey == "" {
-				ch <- actionDoneMsg{out: "", err: fmt.Errorf("未登录或缺少 API Key，请先登录")}
+				ch <- actionDoneMsg{out: "", err: withStep("上传/鉴权", fmt.Errorf("未登录或缺少 API Key，请先登录"))}
 				return
 			}
 			client := lib.NewClient(meta.DefaultDomain, apiKey)
@@ -1896,26 +2222,96 @@ func runUploadActionMulti(u uploadInputs, versions []versionItem) tea.Cmd {
 					sem <- struct{}{}
 					defer func() { <-sem }()
 
-					// 统计与校验文件
+					// 为进度与标识准备文件索引（用于封面与模型文件）
+					fileIndex := fmt.Sprintf("%d/%d", idx+1, len(versions))
+
+					// 统计与校验
 					// 校验版本号，避免后端将空版本映射为 v0
 					verVersion := strings.TrimSpace(ver.version)
 					if verVersion == "" {
 						mu.Lock()
-						errs = append(errs, fmt.Errorf("版本[%d] 的版本号为空，请检查输入", idx+1))
+						errs = append(errs, withStep("上传/校验版本号", fmt.Errorf("版本[%d] 的版本号为空，请检查输入", idx+1)))
 						mu.Unlock()
 						return
 					}
 
+					// 先上传封面：仅取首个
+					var coverUrls []string
+					if strings.TrimSpace(ver.cover) != "" {
+						item := strings.TrimSpace(ver.cover)
+						if i := strings.Index(item, ";"); i >= 0 {
+							item = strings.TrimSpace(item[:i])
+						}
+						// 下载或使用本地路径
+						localPath := item
+						cleanup1 := func() {}
+						if lib.IsHTTPURL(item) {
+							if p, cfn, derr := lib.DownloadToTemp(item); derr == nil {
+								localPath = p
+								cleanup1 = cfn
+							} else {
+								mu.Lock()
+								errs = append(errs, withStep("上传/下载封面", fmt.Errorf("封面下载失败: %s, %v", item, derr)))
+								mu.Unlock()
+								cleanup1()
+								return
+							}
+						}
+						// 直接使用原图，不做转换
+						origPath := localPath
+
+						// 获取上传 token（inputs）
+						tkn, terr := client.GetUploadToken(filepath.Base(origPath), "inputs")
+						if terr != nil {
+							cleanup1()
+							mu.Lock()
+							errs = append(errs, withStep("上传/封面凭证", fmt.Errorf("封面获取上传凭证失败: %s, %v", item, terr)))
+							mu.Unlock()
+							return
+						}
+						fileRec := tkn.Data.File
+						sto := tkn.Data.Storage
+						ossCli, oerr := lib.NewAliOssStorageClient(sto.Endpoint, sto.Bucket, fileRec.AccessKeyId, fileRec.AccessKeySecret, fileRec.SecurityToken)
+						if oerr != nil {
+							cleanup1()
+							mu.Lock()
+							errs = append(errs, withStep("上传/封面OSS客户端", fmt.Errorf("封面创建 OSS 客户端失败: %s, %v", item, oerr)))
+							mu.Unlock()
+							return
+						}
+						// 以最小进度上报
+						coverFile := &lib.FileToUpload{Path: origPath, RelPath: filepath.Base(origPath), Size: 0}
+						if _, uerr := ossCli.UploadFileCtx(ctx, coverFile, fileRec.ObjectKey, fileIndex, nil); uerr != nil {
+							cleanup1()
+							mu.Lock()
+							errs = append(errs, withStep("上传/封面上传", fmt.Errorf("封面上传 OSS 失败: %s, %v", item, uerr)))
+							mu.Unlock()
+							return
+						}
+						// 提交输入资源
+						if commit, cerr := client.CommitInputResource(filepath.Base(origPath), fileRec.ObjectKey); cerr != nil {
+							cleanup1()
+							mu.Lock()
+							errs = append(errs, withStep("上传/封面提交", fmt.Errorf("封面提交失败: %s, %v", item, cerr)))
+							mu.Unlock()
+							return
+						} else if commit != nil && commit.Data.Url != "" {
+							coverUrls = append(coverUrls, commit.Data.Url)
+						}
+						cleanup1()
+					}
+
+					// 然后上传模型文件
 					st, err := os.Stat(ver.path)
 					if err != nil {
 						mu.Lock()
-						errs = append(errs, err)
+						errs = append(errs, withStep("上传/读取文件信息", err))
 						mu.Unlock()
 						return
 					}
 					if st.IsDir() {
 						mu.Lock()
-						errs = append(errs, fmt.Errorf("仅支持文件上传: %s", ver.path))
+						errs = append(errs, withStep("上传/校验路径", fmt.Errorf("仅支持文件上传: %s", ver.path)))
 						mu.Unlock()
 						return
 					}
@@ -1923,7 +2319,7 @@ func runUploadActionMulti(u uploadInputs, versions []versionItem) tea.Cmd {
 					relPath, err := filepath.Rel(filepath.Dir(ver.path), ver.path)
 					if err != nil {
 						mu.Lock()
-						errs = append(errs, err)
+						errs = append(errs, withStep("上传/计算哈希", err))
 						mu.Unlock()
 						return
 					}
@@ -1945,7 +2341,6 @@ func runUploadActionMulti(u uploadInputs, versions []versionItem) tea.Cmd {
 						mu.Unlock()
 						return
 					}
-					fileIndex := fmt.Sprintf("%d/%d", idx+1, len(versions))
 					fileRecord := ossCert.Data.File
 
 					if fileRecord.Id == 0 {
@@ -1953,7 +2348,7 @@ func runUploadActionMulti(u uploadInputs, versions []versionItem) tea.Cmd {
 						ossClient, err := lib.NewAliOssStorageClient(storage.Endpoint, storage.Bucket, fileRecord.AccessKeyId, fileRecord.AccessKeySecret, fileRecord.SecurityToken)
 						if err != nil {
 							mu.Lock()
-							errs = append(errs, err)
+							errs = append(errs, withStep("上传/获取上传签名", err))
 							mu.Unlock()
 							return
 						}
@@ -1971,13 +2366,13 @@ func runUploadActionMulti(u uploadInputs, versions []versionItem) tea.Cmd {
 								return
 							}
 							mu.Lock()
-							errs = append(errs, err)
+							errs = append(errs, withStep("上传/OSS上传模型文件", err))
 							mu.Unlock()
 							return
 						}
 						if _, err = client.CommitFileV2(f.Signature, fileRecord.ObjectKey, md5Hash, u.typ); err != nil {
 							mu.Lock()
-							errs = append(errs, err)
+							errs = append(errs, withStep("上传/提交模型文件", err))
 							mu.Unlock()
 							return
 						}
@@ -1992,8 +2387,8 @@ func runUploadActionMulti(u uploadInputs, versions []versionItem) tea.Cmd {
 
 					// 组装版本（成功的才入列）
 					mv := &lib.ModelVersion{Version: verVersion, BaseModel: ver.base, Introduction: ver.intro, Public: false, Sign: f.Signature, Path: ver.path}
-					if ver.cover != "" {
-						mv.CoverUrls = strings.Split(ver.cover, ";")
+					if len(coverUrls) > 0 {
+						mv.CoverUrls = coverUrls
 					}
 					mvList[idx] = mv
 				}()
@@ -2024,13 +2419,13 @@ func runUploadActionMulti(u uploadInputs, versions []versionItem) tea.Cmd {
 					sb.WriteString(e.Error())
 					sb.WriteString("\n")
 				}
-				ch <- actionDoneMsg{out: sb.String(), err: fmt.Errorf("上传失败")}
+				ch <- actionDoneMsg{out: sb.String(), err: withStep("上传/全部失败", fmt.Errorf("上传失败"))}
 				return
 			}
 
 			// 发布模型（仅包含成功的版本）
 			if _, err := client.CommitModelV2(u.name, u.typ, finalVersions); err != nil {
-				ch <- actionDoneMsg{err: err}
+				ch <- actionDoneMsg{err: withStep("上传/发布模型", err)}
 				return
 			}
 
@@ -2060,7 +2455,7 @@ func runListModels(typ string) tea.Cmd {
 		cmd.Stdout = &buf
 		cmd.Stderr = &buf
 		err := cmd.Run()
-		return actionDoneMsg{out: buf.String(), err: err}
+		return actionDoneMsg{out: buf.String(), err: withStep("列出模型", err)}
 	}
 }
 
@@ -2124,7 +2519,7 @@ func runListModelsWithPublic(typ string, public bool) tea.Cmd {
 		cmd.Stdout = &buf
 		cmd.Stderr = &buf
 		err := cmd.Run()
-		return actionDoneMsg{out: buf.String(), err: err}
+		return actionDoneMsg{out: buf.String(), err: withStep("列出模型(含public)", err)}
 	}
 }
 
@@ -2138,7 +2533,7 @@ func runListFiles(typ, name string) tea.Cmd {
 		cmd.Stdout = &buf
 		cmd.Stderr = &buf
 		err := cmd.Run()
-		return actionDoneMsg{out: buf.String(), err: err}
+		return actionDoneMsg{out: buf.String(), err: withStep("列出模型文件", err)}
 	}
 }
 
@@ -2152,7 +2547,7 @@ func runRemoveModel(typ, name string) tea.Cmd {
 		cmd.Stdout = &buf
 		cmd.Stderr = &buf
 		err := cmd.Run()
-		return actionDoneMsg{out: buf.String(), err: err}
+		return actionDoneMsg{out: buf.String(), err: withStep("删除模型", err)}
 	}
 }
 

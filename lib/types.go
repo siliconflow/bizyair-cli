@@ -181,6 +181,25 @@ type CheckModelResp struct {
 	Exists bool `json:"exists,omitempty" form:"exists" query:"exists"`
 }
 
+// Upload Token（inputs）
+type UploadTokenReq struct {
+	FileName string `json:"file_name,omitempty" form:"file_name" query:"file_name"`
+	FileType string `json:"file_type,omitempty" form:"file_type" query:"file_type"`
+}
+
+// Input Resource Commit
+type InputResourceCommitReq struct {
+	Name      string `json:"name,omitempty" form:"name" query:"name"`
+	ObjectKey string `json:"object_key,omitempty" form:"object_key" query:"object_key"`
+}
+
+type InputResourceCommitResp struct {
+	Id   int64  `json:"id,omitempty"`
+	Name string `json:"name,omitempty"`
+	Ext  string `json:"ext,omitempty"`
+	Url  string `json:"url,omitempty"`
+}
+
 // 详情页：模型版本（与列表版本字段略有不同，按接口保持独立定义）
 type BizyModelDetailVersion struct {
 	Id          int64        `json:"id,omitempty"`

@@ -28,3 +28,7 @@ func loadModelDetail(apiKey string, bizyModelId int64) tea.Cmd {
 		return modelDetailLoadedMsg{detail: &resp.Data, err: nil}
 	}
 }
+
+
+
+

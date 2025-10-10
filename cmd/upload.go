@@ -344,7 +344,21 @@ func checkCoverUrl(args *config.Argument, required bool) ([][]string, error) {
 		if idx >= len(args.CoverUrls) {
 			urlList = append(urlList, nil)
 		} else {
-			urlList = append(urlList, strings.Split(args.CoverUrls[idx], ";"))
+			raw := strings.TrimSpace(args.CoverUrls[idx])
+			if raw == "" {
+				urlList = append(urlList, nil)
+				continue
+			}
+			parts := strings.Split(raw, ";")
+			first := strings.TrimSpace(parts[0])
+			if len(parts) > 1 {
+				logs.Warnf("-cover 含分号，仅保留首个: %s", first)
+			}
+			if first == "" {
+				urlList = append(urlList, nil)
+			} else {
+				urlList = append(urlList, []string{first})
+			}
 		}
 	}
 	return urlList, nil

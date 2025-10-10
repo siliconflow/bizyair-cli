@@ -205,6 +205,32 @@ func (c *Client) CheckModel(modelType string, modelName string) (*Response[Check
 	return handleResponse[CheckModelResp](body)
 }
 
+// GetUploadToken 获取临时上传凭证（inputs）
+func (c *Client) GetUploadToken(fileName, fileType string) (*Response[FilesResp], error) {
+	serverUrl := fmt.Sprintf("%s/x/%s/upload/token", c.Domain, meta.APIv1)
+	body, statusCode, err := c.doGet(serverUrl, UploadTokenReq{FileName: fileName, FileType: fileType}, c.authHeader())
+	if err != nil {
+		return nil, cli.Exit(err, meta.ServerError)
+	}
+	if statusCode != http.StatusOK {
+		return nil, cli.Exit(handleError(body, statusCode), meta.ServerError)
+	}
+	return handleResponse[FilesResp](body)
+}
+
+// CommitInputResource 提交输入资源，返回可用 url
+func (c *Client) CommitInputResource(name, objectKey string) (*Response[InputResourceCommitResp], error) {
+	serverUrl := fmt.Sprintf("%s/x/%s/input_resource/commit", c.Domain, meta.APIv1)
+	body, statusCode, err := c.doPost(serverUrl, InputResourceCommitReq{Name: name, ObjectKey: objectKey}, c.authHeader())
+	if err != nil {
+		return nil, cli.Exit(err, meta.ServerError)
+	}
+	if statusCode != http.StatusOK {
+		return nil, cli.Exit(handleError(body, statusCode), meta.ServerError)
+	}
+	return handleResponse[InputResourceCommitResp](body)
+}
+
 func (c *Client) authHeader() map[string]string {
 	header := make(map[string]string)
 	header[meta.HeaderAuthorization] = fmt.Sprintf("Bearer %s", c.ApiKey)
