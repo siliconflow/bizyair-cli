@@ -1,13 +1,7 @@
 package cmd
 
 import (
-	"crypto/md5"
-	"crypto/sha256"
-	"encoding/base64"
-	"encoding/hex"
 	"fmt"
-	"hash/crc64"
-	"io"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -19,6 +13,7 @@ import (
 	"github.com/samber/lo"
 	"github.com/siliconflow/bizyair-cli/config"
 	"github.com/siliconflow/bizyair-cli/lib"
+	"github.com/siliconflow/bizyair-cli/lib/filehash"
 	"github.com/siliconflow/bizyair-cli/meta"
 	"github.com/urfave/cli/v2"
 )
@@ -115,7 +110,7 @@ func Upload(c *cli.Context) error {
 	versionList := make([]*lib.ModelVersion, 0)
 	for i, fileToUpload := range filesToUpload {
 		// calculate file hash
-		sha256sum, md5_hash, err := calculateHash(fileToUpload.Path)
+		sha256sum, md5_hash, err := filehash.CalculateHash(fileToUpload.Path)
 		if err != nil {
 			return err
 		}
@@ -200,37 +195,7 @@ func Upload(c *cli.Context) error {
 }
 
 // calculateHash calculates the SHA256 hash of a file.
-func calculateHash(filePath string) (string, string, error) {
-	// read file and calculate CRC64
-	tabECMA := crc64.MakeTable(crc64.ECMA)
-	hashCRC := crc64.New(tabECMA)
-	file, err := os.Open(filePath)
-	if err != nil {
-		return "", "", err
-	}
-	defer file.Close()
-	io.Copy(hashCRC, file)
-	crc1 := hashCRC.Sum64()
-
-	// reset file pointer to the beginning
-	_, err = file.Seek(0, 0)
-	if err != nil {
-		return "", "", err
-	}
-
-	// MD5
-	hashMD5 := md5.New()
-	io.Copy(hashMD5, file)
-	md5Str := base64.StdEncoding.EncodeToString(hashMD5.Sum(nil))
-
-	// 计算SHA256
-	hasher := sha256.New()
-	hasher.Write([]byte(fmt.Sprintf("%s%d", md5Str, crc1)))
-	hashBytes := hasher.Sum(nil)
-	hashString := hex.EncodeToString(hashBytes)
-	logs.Debugf("file: %s, crc64: %d, md5: %s, sha256: %s", filePath, crc1, md5Str, hashString)
-	return hashString, md5Str, nil
-}
+// calculateHash moved to lib/filehash
 
 func checkType(args *config.Argument, required bool) error {
 	if required && args.Type == "" {

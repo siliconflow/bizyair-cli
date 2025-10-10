@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"github.com/cloudwego/hertz/cmd/hz/util/logs"
+	tuiPkg "github.com/siliconflow/bizyair-cli/cmd/tui"
 	"github.com/siliconflow/bizyair-cli/config"
 	"github.com/siliconflow/bizyair-cli/meta"
 	"github.com/urfave/cli/v2"
@@ -47,7 +48,7 @@ func Init() *cli.App {
 	}
 
 	// 默认无参进入主 TUI
-	app.Action = MainTUI
+	app.Action = tuiPkg.MainTUI
 
 	// Commands
 	app.Commands = []*cli.Command{
