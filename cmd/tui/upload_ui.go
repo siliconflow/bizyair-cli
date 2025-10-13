@@ -46,7 +46,7 @@ func (m *mainModel) resetUploadState() {
 	m.verConsumed = nil
 	m.verTotal = nil
 	m.act = actionInputs{}
-	m.upStep = stepName
+	m.upStep = stepType
 
 	m.inpName.SetValue("")
 	m.inpVersion.SetValue("")
@@ -171,6 +171,24 @@ func (m *mainModel) renderActionView() string {
 // 上传交互更新（截断原大函数到子方法）
 func (m *mainModel) updateUploadInputs(msg tea.Msg) tea.Cmd {
 	switch m.upStep {
+	case stepType:
+		var cmd tea.Cmd
+		m.typeList, cmd = m.typeList.Update(msg)
+		if km, ok := msg.(tea.KeyMsg); ok {
+			switch km.String() {
+			case "enter":
+				if it, ok := m.typeList.SelectedItem().(listItem); ok {
+					m.act.u.typ = it.title
+					m.upStep = stepName
+					return m.inpName.Focus()
+				}
+			case "esc":
+				m.step = mainStepMenu
+				m.act = actionInputs{}
+				return nil
+			}
+		}
+		return cmd
 	case stepName:
 		var cmd tea.Cmd
 		m.inpName, cmd = m.inpName.Update(msg)
@@ -183,30 +201,12 @@ func (m *mainModel) updateUploadInputs(msg tea.Msg) tea.Cmd {
 					return nil
 				}
 				m.act.u.name = name
+				// 调用后端校验模型名是否重复
+				m.running = true
+				return checkModelExists(m.apiKey, name, m.act.u.typ)
+			case "esc":
 				m.upStep = stepType
 				return nil
-			case "esc":
-				m.step = mainStepMenu
-				m.act = actionInputs{}
-				return nil
-			}
-		}
-		return cmd
-	case stepType:
-		var cmd tea.Cmd
-		m.typeList, cmd = m.typeList.Update(msg)
-		if km, ok := msg.(tea.KeyMsg); ok {
-			switch km.String() {
-			case "enter":
-				if it, ok := m.typeList.SelectedItem().(listItem); ok {
-					m.act.u.typ = it.title
-					m.inpVersion.SetValue("v1.0")
-					m.upStep = stepVersion
-					return nil
-				}
-			case "esc":
-				m.upStep = stepName
-				return m.inpName.Focus()
 			}
 		}
 		return cmd
@@ -225,8 +225,8 @@ func (m *mainModel) updateUploadInputs(msg tea.Msg) tea.Cmd {
 				m.upStep = stepBase
 				return nil
 			case "esc":
-				m.upStep = stepType
-				return nil
+				m.upStep = stepName
+				return m.inpName.Focus()
 			}
 		}
 		return cmd
@@ -568,8 +568,6 @@ func (m *mainModel) updateUploadInputs(msg tea.Msg) tea.Cmd {
 // 渲染上传各步骤视图（从旧 View 拆出）
 func (m *mainModel) renderUploadStepsView() string {
 	switch m.upStep {
-	case stepName:
-		return m.titleStyle.Render("上传 · Step 1/8 · 模型名称") + "\n\n" + m.inpName.View() + "\n" + m.hintStyle.Render("确认：Enter，返回：Esc，退出：q")
 	case stepType:
 		if _, ih := m.innerSize(); ih > 0 {
 			h := ih - 10
@@ -578,7 +576,9 @@ func (m *mainModel) renderUploadStepsView() string {
 			}
 			m.typeList.SetHeight(h)
 		}
-		return m.titleStyle.Render("上传 · Step 2/8 · 选择模型类型") + "\n\n" + m.typeList.View() + "\n" + m.hintStyle.Render("确认：Enter，返回：Esc，退出：q")
+		return m.titleStyle.Render("上传 · Step 1/8 · 选择模型类型") + "\n\n" + m.typeList.View() + "\n" + m.hintStyle.Render("确认：Enter，返回：Esc，退出：q")
+	case stepName:
+		return m.titleStyle.Render("上传 · Step 2/8 · 模型名称") + "\n\n" + m.inpName.View() + "\n" + m.hintStyle.Render("确认：Enter，返回：Esc，退出：q")
 	case stepVersion:
 		return m.titleStyle.Render("上传 · Step 3/8 · 版本名称（默认 v1.0）") + "\n\n" + m.inpVersion.View() + "\n" + m.hintStyle.Render("确认：Enter，返回：Esc，退出：q")
 	case stepBase:

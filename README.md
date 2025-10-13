@@ -81,16 +81,14 @@ bizyair upload -n mymodel -t [LoRA | Controlnet | Checkpoint] -p /local/path/fil
 
 You can specify model name, model type, base model and path to upload by using the `-n`, `-t`, `-b` and `-p` flags respectively.
 
-You can specify version names, introductions, and model cover urls using `-v`, `-i`, `-cover` flags respectively.
-
-To upload multiple covers for one version, use ";" as a separator.
+You can specify version names, introductions, and model cover url using `-v`, `-i`, `-cover` flags respectively. Only one cover is supported. If multiple URLs are provided separated by `;`, only the first will be used.
 
 To upload multiple versions of your model, you can provide a list of values for each flag. Each value in the list corresponds to a specific version of your model. For example, consider the following usage:
 
 ```bash
 bizyair upload -n mymodel -t Checkpoint \
--v "v1" -b SDXL -p /local/path/file1 -i "sdxl checkpoint1" -cover "${url1};${url2}" \
--v "v2" -b [Basemodel2] -p /local/path/file2 -cover "${url3}" \
+-v "v1" -b SDXL -p /local/path/file1 -i "sdxl checkpoint1" -cover "${url1}" \
+-v "v2" -b [Basemodel2] -p /local/path/file2 -cover "${url2}" \
 -v "v3" -b [basemodel3] -p /local/path/file3 \
 ...
 ```

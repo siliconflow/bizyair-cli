@@ -332,8 +332,8 @@ func (m mainModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					case actionUpload:
 						m.step = mainStepAction
 						m.act = actionInputs{}
-						m.upStep = stepName
-						return m, m.inpName.Focus()
+						m.upStep = stepType
+						return m, nil
 					case actionLsModel:
 						m.step = mainStepAction
 						m.act = actionInputs{}
@@ -468,6 +468,23 @@ func (m mainModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case clearFilePickerErrorMsg:
 		m.act.filePickerErr = nil
 		return m, nil
+	case checkModelExistsDoneMsg:
+		m.running = false
+		if msg.err != nil {
+			m.err = msg.err
+			return m, nil
+		}
+		if msg.exists {
+			// 模型名重复，显示错误并停留在 stepName
+			m.err = fmt.Errorf("模型名 '%s' 已存在，请换一个名字", m.act.u.name)
+			m.inpName.SetValue("")
+			m.act.u.name = ""
+			return m, m.inpName.Focus()
+		}
+		// 模型名不重复，进入下一步
+		m.upStep = stepVersion
+		m.inpVersion.SetValue("v1.0")
+		return m, m.inpVersion.Focus()
 	default:
 		var bat []tea.Cmd
 		var cmd1 tea.Cmd
@@ -538,6 +555,11 @@ func (m mainModel) View() string {
 	}
 	if m.running {
 		if m.currentAction == actionUpload && m.step == mainStepAction {
+			// 如果是在 stepName 步骤，显示校验模型名的提示
+			if m.upStep == stepName {
+				spin := m.sp.View()
+				return m.renderFrame(header + "\n" + panel.Render(m.titleStyle.Render("上传 · Step 2/8 · 模型名称")+"\n\n"+m.inpName.View()+"\n\n"+spin+" 正在校验模型名是否重复…"))
+			}
 			return m.renderFrame(header + "\n" + panel.Render(m.renderUploadRunningView()))
 		}
 		spin := m.sp.View()

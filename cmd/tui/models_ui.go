@@ -32,7 +32,14 @@ func (m *mainModel) updateListModelsInputs(msg tea.Msg) tea.Cmd {
 			m.viewingModelDetail = false
 			m.modelDetail = nil
 			return nil
-		case "r", "ctrl+r":
+		case "r":
+			if !m.viewingModelDetail {
+				m.loadingModelList = true
+				return loadModelList(m.apiKey)
+			}
+			return nil
+		case "ctrl+d":
+			// 详情界面删除
 			if m.viewingModelDetail {
 				if m.modelDetail != nil {
 					m.confirmingDelete = true
@@ -41,10 +48,8 @@ func (m *mainModel) updateListModelsInputs(msg tea.Msg) tea.Cmd {
 				}
 				return nil
 			}
-			m.loadingModelList = true
-			return loadModelList(m.apiKey)
-		case "ctrl+d":
-			if !m.viewingModelDetail && !m.loadingModelList && len(m.modelList) > 0 {
+			// 列表界面删除
+			if !m.loadingModelList && len(m.modelList) > 0 {
 				selectedRow := m.modelTable.SelectedRow()
 				if len(selectedRow) > 0 {
 					idStr := selectedRow[0]
@@ -146,7 +151,7 @@ func (m *mainModel) renderListModelsView() string {
 				b.WriteString("\n")
 			}
 		}
-		b.WriteString(m.hintStyle.Render("返回：Esc/q，删除：Ctrl+R，列表：Enter 选择前需回退到列表"))
+		b.WriteString(m.hintStyle.Render("返回：Esc/q，删除：Ctrl+D，列表：Enter 选择前需回退到列表"))
 		return b.String()
 	}
 	if m.loadingModelList {

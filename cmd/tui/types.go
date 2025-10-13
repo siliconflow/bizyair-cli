@@ -32,8 +32,8 @@ const (
 type uploadStep int
 
 const (
-	stepName uploadStep = iota
-	stepType
+	stepType uploadStep = iota
+	stepName
 	stepVersion
 	stepBase
 	stepCover
@@ -69,6 +69,11 @@ type uploadProgMsg struct {
 
 type uploadCancelMsg struct{}
 type clearFilePickerErrorMsg struct{}
+
+type checkModelExistsDoneMsg struct {
+	exists bool
+	err    error
+}
 
 // 带步骤信息的错误
 type stepError struct {

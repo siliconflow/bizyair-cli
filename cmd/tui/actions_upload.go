@@ -17,6 +17,15 @@ import (
 	"github.com/siliconflow/bizyair-cli/meta"
 )
 
+// checkModelExists 检查模型名是否已存在
+func checkModelExists(apiKey, modelName, modelType string) tea.Cmd {
+	return func() tea.Msg {
+		client := lib.NewClient(meta.DefaultDomain, apiKey)
+		exists, err := client.CheckModelExists(modelName, modelType)
+		return checkModelExistsDoneMsg{exists: exists, err: err}
+	}
+}
+
 // 多版本上传
 func runUploadActionMulti(u uploadInputs, versions []versionItem) tea.Cmd {
 	return func() tea.Msg {

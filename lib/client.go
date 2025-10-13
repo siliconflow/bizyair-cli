@@ -231,6 +231,32 @@ func (c *Client) CommitInputResource(name, objectKey string) (*Response[InputRes
 	return handleResponse[InputResourceCommitResp](body)
 }
 
+// CheckModelExists 检查模型名是否已存在
+// 返回 true 表示模型名已存在（HTTP 200），false 表示不存在（HTTP 404）
+func (c *Client) CheckModelExists(modelName string, modelType string) (bool, error) {
+	serverUrl := fmt.Sprintf("%s/x/%s/bizy_models/exists", c.Domain, meta.APIv1)
+	body, statusCode, err := c.doGet(serverUrl, ModelQueryReq{
+		Name: modelName,
+		Type: modelType,
+	}, c.authHeader())
+	if err != nil {
+		return false, err
+	}
+
+	// HTTP 200 表示模型名已存在
+	if statusCode == http.StatusOK {
+		return true, nil
+	}
+
+	// HTTP 404 表示模型名不存在
+	if statusCode == http.StatusNotFound {
+		return false, nil
+	}
+
+	// 其他状态码作为错误处理
+	return false, handleError(body, statusCode)
+}
+
 func (c *Client) authHeader() map[string]string {
 	header := make(map[string]string)
 	header[meta.HeaderAuthorization] = fmt.Sprintf("Bearer %s", c.ApiKey)
