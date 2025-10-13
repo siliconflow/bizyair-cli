@@ -569,7 +569,7 @@ func (m mainModel) View() string {
 		panelW = 40
 	}
 	panel := m.panelStyle.Width(panelW)
-	header := lipgloss.PlaceHorizontal(innerW, lipgloss.Left, m.smallLogoStyle.Render(m.smallLogo))
+	header := lipgloss.PlaceHorizontal(innerW, lipgloss.Left, m.renderGradientLogo(m.smallLogo))
 
 	if m.err != nil && m.step != mainStepOutput {
 		defer func() { m.err = nil }()
@@ -596,25 +596,7 @@ func (m mainModel) View() string {
 	case mainStepLogin:
 		return m.renderFrame(header + "\n" + panel.Render(m.titleStyle.Render("登录 · 请输入 API Key")+"\n\n"+m.inpApi.View()+"\n"+m.hintStyle.Render("确认：Enter，返回：Esc，退出：q")))
 	case mainStepMenu:
-		var logoB strings.Builder
-		lines := strings.Split(m.logo, "\n")
-		n := len(lines)
-		sr, sg, sb := hexToRGB("#8B5CF6")
-		er, eg, eb := hexToRGB("#EC4899")
-		for i, line := range lines {
-			var t float64
-			if n > 1 {
-				t = float64(i) / float64(n-1)
-			}
-			r := lerpInt(sr, er, t)
-			g := lerpInt(sg, eg, t)
-			b := lerpInt(sb, eb, t)
-			color := rgbToHex(r, g, b)
-			style := lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color(color))
-			logoB.WriteString(style.Render(line))
-			logoB.WriteString("\n")
-		}
-		logoStr := strings.TrimRight(logoB.String(), "\n")
+		logoStr := m.renderGradientLogo(m.logo)
 		menuTop := strings.Count(logoStr, "\n") + 2
 		h := innerH - menuTop - 6
 		if h < 6 {
@@ -644,6 +626,29 @@ func (m mainModel) View() string {
 		}
 		return m.renderFrame(header)
 	}
+}
+
+// renderGradientLogo 为给定的logo文本应用渐变颜色（从紫色到粉色）
+func (m mainModel) renderGradientLogo(logoText string) string {
+	var logoB strings.Builder
+	lines := strings.Split(logoText, "\n")
+	n := len(lines)
+	sr, sg, sb := hexToRGB("#8B5CF6") // 起始颜色：紫色
+	er, eg, eb := hexToRGB("#EC4899") // 结束颜色：粉色
+	for i, line := range lines {
+		var t float64
+		if n > 1 {
+			t = float64(i) / float64(n-1)
+		}
+		r := lerpInt(sr, er, t)
+		g := lerpInt(sg, eg, t)
+		b := lerpInt(sb, eb, t)
+		color := rgbToHex(r, g, b)
+		style := lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color(color))
+		logoB.WriteString(style.Render(line))
+		logoB.WriteString("\n")
+	}
+	return strings.TrimRight(logoB.String(), "\n")
 }
 
 // 入口
