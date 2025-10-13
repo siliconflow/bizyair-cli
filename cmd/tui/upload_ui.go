@@ -141,7 +141,15 @@ func (m *mainModel) renderUploadRunningView() string {
 		}
 		progressSection.WriteString(fileLine + "\n" + progLine)
 	}
-	return m.titleStyle.Render("上传中 · 请稍候") + "\n\n" + summary + "\n\n" + progressSection.String()
+
+	var hint string
+	if m.canceling {
+		hint = m.hintStyle.Render("正在取消上传，请稍候...（已上传部分会保存，支持断点续传）")
+	} else {
+		hint = m.hintStyle.Render("按 q 或 Ctrl+C 取消上传（已上传部分会保存，支持断点续传）")
+	}
+
+	return m.titleStyle.Render("上传中 · 请稍候") + "\n\n" + summary + "\n\n" + progressSection.String() + "\n\n" + hint
 }
 
 // 根据当前动作处理输入与触发命令（仅上传和列表两个分支）
@@ -570,7 +578,7 @@ func (m *mainModel) renderUploadStepsView() string {
 	switch m.upStep {
 	case stepType:
 		if _, ih := m.innerSize(); ih > 0 {
-			h := ih - 10
+			h := ih - 12
 			if h < 5 {
 				h = 5
 			}
@@ -583,7 +591,7 @@ func (m *mainModel) renderUploadStepsView() string {
 		return m.titleStyle.Render("上传 · Step 3/8 · 版本名称（默认 v1.0）") + "\n\n" + m.inpVersion.View() + "\n" + m.hintStyle.Render("确认：Enter，返回：Esc，退出：q")
 	case stepBase:
 		if _, ih := m.innerSize(); ih > 0 {
-			h := ih - 10
+			h := ih - 12
 			if h < 5 {
 				h = 5
 			}

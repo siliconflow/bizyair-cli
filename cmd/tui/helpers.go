@@ -74,7 +74,7 @@ func isSupportedCoverFormat(path string) bool {
 	imageFormats := []string{".jpg", ".jpeg", ".png", ".gif", ".bmp", ".webp"}
 	// 视频格式
 	videoFormats := []string{".mp4", ".mov", ".avi", ".webm", ".mkv", ".flv"}
-	
+
 	for _, ext := range imageFormats {
 		if strings.HasSuffix(lp, ext) {
 			return true
@@ -98,7 +98,7 @@ func validateCoverFile(path string) error {
 	if !isSupportedCoverFormat(path) {
 		return fmt.Errorf("不支持的封面文件类型: %s\n支持的格式: %s", path, getSupportedCoverFormats())
 	}
-	
+
 	// 如果是视频格式，检查文件大小限制（100MB）
 	if isVideoFormat(path) {
 		st, err := os.Stat(path)
@@ -110,6 +110,6 @@ func validateCoverFile(path string) error {
 			return fmt.Errorf("视频文件大小超过限制: %.2f MB (最大 100 MB)", float64(st.Size())/(1024*1024))
 		}
 	}
-	
+
 	return nil
 }

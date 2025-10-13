@@ -90,29 +90,29 @@ func runUploadActionMulti(u uploadInputs, versions []versionItem) tea.Cmd {
 						if i := strings.Index(item, ";"); i >= 0 {
 							item = strings.TrimSpace(item[:i])
 						}
-					localPath := item
-					cleanup1 := func() {}
-					if lib.IsHTTPURL(item) {
-						if p, cfn, derr := lib.DownloadToTemp(item); derr == nil {
-							localPath = p
-							cleanup1 = cfn
-						} else {
-							mu.Lock()
-							errs = append(errs, withStep("上传/下载封面", fmt.Errorf("封面下载失败: %s, %v", item, derr)))
-							mu.Unlock()
+						localPath := item
+						cleanup1 := func() {}
+						if lib.IsHTTPURL(item) {
+							if p, cfn, derr := lib.DownloadToTemp(item); derr == nil {
+								localPath = p
+								cleanup1 = cfn
+							} else {
+								mu.Lock()
+								errs = append(errs, withStep("上传/下载封面", fmt.Errorf("封面下载失败: %s, %v", item, derr)))
+								mu.Unlock()
+								cleanup1()
+								return
+							}
+						}
+						// 校验封面文件格式和大小（视频限 100MB）
+						if verr := validateCoverFile(localPath); verr != nil {
 							cleanup1()
+							mu.Lock()
+							errs = append(errs, withStep("上传/校验封面", verr))
+							mu.Unlock()
 							return
 						}
-					}
-					// 校验封面文件格式和大小（视频限 100MB）
-					if verr := validateCoverFile(localPath); verr != nil {
-						cleanup1()
-						mu.Lock()
-						errs = append(errs, withStep("上传/校验封面", verr))
-						mu.Unlock()
-						return
-					}
-					tkn, terr := client.GetUploadToken(filepath.Base(localPath), "inputs")
+						tkn, terr := client.GetUploadToken(filepath.Base(localPath), "inputs")
 						if terr != nil {
 							cleanup1()
 							mu.Lock()
@@ -133,6 +133,13 @@ func runUploadActionMulti(u uploadInputs, versions []versionItem) tea.Cmd {
 						coverFile := &lib.FileToUpload{Path: localPath, RelPath: filepath.Base(localPath), Size: 0}
 						if _, uerr := ossCli.UploadFileCtx(ctx, coverFile, fileRec.ObjectKey, fileIndex, nil); uerr != nil {
 							cleanup1()
+							// 检查是否是用户取消
+							if errors.Is(uerr, context.Canceled) {
+								mu.Lock()
+								anyCanceled = true
+								mu.Unlock()
+								return
+							}
 							mu.Lock()
 							errs = append(errs, withStep("上传/封面上传", fmt.Errorf("封面上传 OSS 失败: %s, %v", item, uerr)))
 							mu.Unlock()
@@ -339,7 +346,14 @@ func runUploadActionMulti(u uploadInputs, versions []versionItem) tea.Cmd {
 			wg.Wait()
 
 			if anyCanceled {
-				ch <- actionDoneMsg{out: "上传已取消\n", err: nil}
+				var sb strings.Builder
+				sb.WriteString("✓ 上传已取消\n\n")
+				sb.WriteString("已上传的部分已保存checkpoint，下次上传相同文件时会自动续传。\n\n")
+				folder, _ := lib.GetCheckpointDir()
+				if folder != "" {
+					sb.WriteString(fmt.Sprintf("Checkpoint文件位置: %s\n", folder))
+				}
+				ch <- actionDoneMsg{out: sb.String(), err: nil}
 				return
 			}
 

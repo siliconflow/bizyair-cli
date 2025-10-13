@@ -3,6 +3,7 @@ package lib
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -273,6 +274,12 @@ func (a *AliOssStorageClient) UploadFileMultipart(ctx context.Context, file *Fil
 	// 上传分片
 	parts, err := a.uploadParts(ctx, file, objectName, uploadID, checkpoint, existingParts, fileIndex, totalSize, progress, checkpointFile)
 	if err != nil {
+		// 检查是否是用户取消
+		if errors.Is(err, context.Canceled) {
+			logs.Debugf("[%s] upload canceled by user, checkpoint saved for resuming\n", fileIndex)
+			return "", err // 直接返回不包装，保持 context.Canceled 类型
+		}
+
 		// 检查是否是 NoSuchUpload 错误（UploadID已失效）
 		errStr := err.Error()
 		if strings.Contains(errStr, "NoSuchUpload") || strings.Contains(errStr, "does not exist") {

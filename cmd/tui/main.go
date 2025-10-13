@@ -63,6 +63,7 @@ type mainModel struct {
 	upStep uploadStep
 
 	running     bool
+	canceling   bool
 	output      string
 	sp          spinner.Model
 	progress    progress.Model
@@ -158,7 +159,7 @@ func newMainModel() mainModel {
 	fp.ShowHidden = true
 	fp.DirAllowed = true
 	fp.FileAllowed = true
-	fp.Height = 10
+	fp.SetHeight(10)
 	fp.AutoHeight = false
 	fp.Styles.EmptyDirectory = fp.Styles.EmptyDirectory.SetString("此目录为空。使用方向键导航到其他目录。注意文件路径输入框中的路径与下面文件选择器中的内容的同步")
 
@@ -264,20 +265,20 @@ func (m mainModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.inpCover.Width = lw
 		m.inpExt.Width = lw
 		m.inpIntro.Width = lw
-		m.progress.Width = innerW - 6
+		m.progress.Width = innerW - 10
 		if m.progress.Width < 10 {
 			m.progress.Width = 10
 		}
 		if len(m.verProgress) > 0 {
 			for i := range m.verProgress {
-				m.verProgress[i].Width = innerW - 6
+				m.verProgress[i].Width = innerW - 10
 				if m.verProgress[i].Width < 10 {
 					m.verProgress[i].Width = 10
 				}
 			}
 		}
 		if innerH > 15 {
-			m.filepicker.SetHeight(innerH - 15)
+			m.filepicker.SetHeight(innerH - 19)
 		} else {
 			m.filepicker.SetHeight(5)
 		}
@@ -293,10 +294,11 @@ func (m mainModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		switch msg.String() {
 		case "ctrl+c", "q":
 			if m.running && m.currentAction == actionUpload && m.cancelFn != nil {
-				m.cancelFn()
-				m.uploadCh = nil
-				m.running = false
-				m.resetUploadState()
+				// 设置取消标志，等待后台任务完成
+				if !m.canceling {
+					m.cancelFn()
+					m.canceling = true
+				}
 				return m, nil
 			}
 			return m, tea.Quit
@@ -428,6 +430,7 @@ func (m mainModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, loadModelList(m.apiKey)
 	case actionDoneMsg:
 		m.running = false
+		m.canceling = false
 		m.output = msg.out
 		if msg.err != nil {
 			m.err = msg.err
@@ -444,7 +447,7 @@ func (m mainModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.verTotal = make([]int64, len(m.act.versions))
 			for i := range m.verProgress {
 				m.verProgress[i] = progress.New(progress.WithDefaultGradient())
-				m.verProgress[i].Width = m.width - 6
+				m.verProgress[i].Width = m.width - 10
 				if m.verProgress[i].Width < 10 {
 					m.verProgress[i].Width = 10
 				}
