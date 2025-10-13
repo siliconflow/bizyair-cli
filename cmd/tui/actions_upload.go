@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/siliconflow/bizyair-cli/config"
@@ -161,59 +162,149 @@ func runUploadActionMulti(u uploadInputs, versions []versionItem) tea.Cmd {
 					}
 					f.Signature = sha256sum
 
-					ossCert, err := client.OssSign(sha256sum, u.typ)
-					if err != nil {
-						mu.Lock()
-						errs = append(errs, err)
-						mu.Unlock()
-						return
-					}
-					fileRecord := ossCert.Data.File
+					// 先按 sha256 尝试本地 checkpoint 续传
+					resumed := false
+					if cpPath, gerr := lib.GetCheckpointFile(sha256sum); gerr == nil {
+						if cp, lerr := lib.LoadCheckpoint(cpPath); lerr == nil && cp != nil {
+							if lib.ValidateCheckpoint(cp, f) {
+								var ossClient *lib.AliOssStorageClient
+								useCreds := cp.AccessKeyId != "" && cp.AccessKeySecret != ""
+								if useCreds && strings.TrimSpace(cp.Expiration) != "" {
+									if exp, perr := time.Parse(time.RFC3339, cp.Expiration); perr == nil {
+										if time.Now().After(exp) {
+											useCreds = false
+										}
+									}
+								}
+								if useCreds {
+									if cli, oerr := lib.NewAliOssStorageClient(cp.Endpoint, cp.Bucket, cp.AccessKeyId, cp.AccessKeySecret, cp.SecurityToken); oerr == nil {
+										cli.SetExpiration(cp.Expiration)
+										ossClient = cli
+									}
+								}
 
-					if fileRecord.Id == 0 {
-						storage := ossCert.Data.Storage
-						ossClient, err := lib.NewAliOssStorageClient(storage.Endpoint, storage.Bucket, fileRecord.AccessKeyId, fileRecord.AccessKeySecret, fileRecord.SecurityToken)
+								// 凭证不可用或过期则刷新凭证
+								if ossClient == nil {
+									ossCert, err := client.OssSign(sha256sum, u.typ)
+									if err != nil {
+										mu.Lock()
+										errs = append(errs, err)
+										mu.Unlock()
+										return
+									}
+									fileRecord := ossCert.Data.File
+									storage := ossCert.Data.Storage
+									if cli, oerr := lib.NewAliOssStorageClient(storage.Endpoint, storage.Bucket, fileRecord.AccessKeyId, fileRecord.AccessKeySecret, fileRecord.SecurityToken); oerr == nil {
+										cli.SetExpiration(fileRecord.Expiration)
+										ossClient = cli
+									} else {
+										mu.Lock()
+										errs = append(errs, withStep("上传/获取上传签名", oerr))
+										mu.Unlock()
+										return
+									}
+								}
+
+								// 续传：使用 checkpoint 的 objectKey
+								_, err = ossClient.UploadFileMultipart(ctx, f, cp.ObjectKey, fileIndex, func(consumed, total int64) {
+									// 显示进度（总量>0时）
+									if total > 0 {
+										_ = format.FormatBytes(consumed)
+										_ = format.FormatBytes(total)
+									}
+									select {
+									case ch <- uploadProgMsg{fileIndex: fileIndex, fileName: filepath.Base(f.RelPath), consumed: consumed, total: total, verIdx: idx}:
+									default:
+									}
+								})
+								if err != nil {
+									if errors.Is(err, context.Canceled) {
+										mu.Lock()
+										anyCanceled = true
+										mu.Unlock()
+										return
+									}
+									mu.Lock()
+									errs = append(errs, withStep("上传/OSS上传模型文件", err))
+									mu.Unlock()
+									return
+								}
+								// 提交使用续传时的 key
+								commitKey := cp.ObjectKey
+								if f.RemoteKey != "" {
+									commitKey = f.RemoteKey
+								}
+								if _, err = client.CommitFileV2(f.Signature, commitKey, md5Hash, u.typ); err != nil {
+									mu.Lock()
+									errs = append(errs, withStep("上传/提交模型文件", err))
+									mu.Unlock()
+									return
+								}
+								resumed = true
+							}
+						}
+					}
+
+					if !resumed {
+						ossCert, err := client.OssSign(sha256sum, u.typ)
 						if err != nil {
 							mu.Lock()
-							errs = append(errs, withStep("上传/获取上传签名", err))
+							errs = append(errs, err)
 							mu.Unlock()
 							return
 						}
-						_, err = ossClient.UploadFileCtx(ctx, f, fileRecord.ObjectKey, fileIndex, func(consumed, total int64) {
-							// 显示进度（总量>0时）
-							if total > 0 {
-								_ = format.FormatBytes(consumed)
-								_ = format.FormatBytes(total)
-							}
-							select {
-							case ch <- uploadProgMsg{fileIndex: fileIndex, fileName: filepath.Base(f.RelPath), consumed: consumed, total: total, verIdx: idx}:
-							default:
-							}
-						})
-						if err != nil {
-							if errors.Is(err, context.Canceled) {
+						fileRecord := ossCert.Data.File
+
+						if fileRecord.Id == 0 {
+							storage := ossCert.Data.Storage
+							ossClient, err := lib.NewAliOssStorageClient(storage.Endpoint, storage.Bucket, fileRecord.AccessKeyId, fileRecord.AccessKeySecret, fileRecord.SecurityToken)
+							if err != nil {
 								mu.Lock()
-								anyCanceled = true
+								errs = append(errs, withStep("上传/获取上传签名", err))
 								mu.Unlock()
 								return
 							}
-							mu.Lock()
-							errs = append(errs, withStep("上传/OSS上传模型文件", err))
-							mu.Unlock()
-							return
-						}
-						if _, err = client.CommitFileV2(f.Signature, fileRecord.ObjectKey, md5Hash, u.typ); err != nil {
-							mu.Lock()
-							errs = append(errs, withStep("上传/提交模型文件", err))
-							mu.Unlock()
-							return
-						}
-					} else {
-						f.Id = fileRecord.Id
-						f.RemoteKey = fileRecord.ObjectKey
-						select {
-						case ch <- uploadProgMsg{fileIndex: fileIndex, fileName: filepath.Base(f.RelPath), consumed: f.Size, total: f.Size, verIdx: idx}:
-						default:
+							ossClient.SetExpiration(fileRecord.Expiration)
+							_, err = ossClient.UploadFileMultipart(ctx, f, fileRecord.ObjectKey, fileIndex, func(consumed, total int64) {
+								// 显示进度（总量>0时）
+								if total > 0 {
+									_ = format.FormatBytes(consumed)
+									_ = format.FormatBytes(total)
+								}
+								select {
+								case ch <- uploadProgMsg{fileIndex: fileIndex, fileName: filepath.Base(f.RelPath), consumed: consumed, total: total, verIdx: idx}:
+								default:
+								}
+							})
+							if err != nil {
+								if errors.Is(err, context.Canceled) {
+									mu.Lock()
+									anyCanceled = true
+									mu.Unlock()
+									return
+								}
+								mu.Lock()
+								errs = append(errs, withStep("上传/OSS上传模型文件", err))
+								mu.Unlock()
+								return
+							}
+							commitKey := fileRecord.ObjectKey
+							if f.RemoteKey != "" {
+								commitKey = f.RemoteKey
+							}
+							if _, err = client.CommitFileV2(f.Signature, commitKey, md5Hash, u.typ); err != nil {
+								mu.Lock()
+								errs = append(errs, withStep("上传/提交模型文件", err))
+								mu.Unlock()
+								return
+							}
+						} else {
+							f.Id = fileRecord.Id
+							f.RemoteKey = fileRecord.ObjectKey
+							select {
+							case ch <- uploadProgMsg{fileIndex: fileIndex, fileName: filepath.Base(f.RelPath), consumed: f.Size, total: f.Size, verIdx: idx}:
+							default:
+							}
 						}
 					}
 

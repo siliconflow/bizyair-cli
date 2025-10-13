@@ -29,6 +29,14 @@ const (
 	HttpError   = 3
 )
 
+const (
+	// 分片上传配置
+	MultipartPartSize  = 5 * 1024 * 1024   // 每个分片5MB（与前端一致）
+	MultipartParallel  = 3                 // 并发上传3个分片（与前端一致）
+	MultipartThreshold = 100 * 1024 * 1024 // 超过100MB使用分片上传
+	CheckpointFolder   = "uploads"         // checkpoint文件夹名称
+)
+
 type UploadFileType string
 
 const (
