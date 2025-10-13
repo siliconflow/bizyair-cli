@@ -151,3 +151,9 @@ type modelListLoadedMsg struct {
 	total  int
 	err    error
 }
+
+// 基础模型类型列表加载消息
+type baseModelTypesLoadedMsg struct {
+	items []*lib.BaseModelTypeItem
+	err   error
+}

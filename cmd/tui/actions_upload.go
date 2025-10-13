@@ -27,6 +27,18 @@ func checkModelExists(apiKey, modelName, modelType string) tea.Cmd {
 	}
 }
 
+// loadBaseModelTypes 从后端加载基础模型类型列表
+func loadBaseModelTypes(apiKey string) tea.Cmd {
+	return func() tea.Msg {
+		client := lib.NewClient(meta.DefaultDomain, apiKey)
+		resp, err := client.GetBaseModelTypes()
+		if err != nil {
+			return baseModelTypesLoadedMsg{items: nil, err: err}
+		}
+		return baseModelTypesLoadedMsg{items: resp.Data, err: nil}
+	}
+}
+
 // 多版本上传
 func runUploadActionMulti(u uploadInputs, versions []versionItem) tea.Cmd {
 	return func() tea.Msg {

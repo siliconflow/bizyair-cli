@@ -257,6 +257,22 @@ func (c *Client) CheckModelExists(modelName string, modelType string) (bool, err
 	return false, handleError(body, statusCode)
 }
 
+// GetBaseModelTypes 获取基础模型类型列表
+func (c *Client) GetBaseModelTypes() (*Response[[]*BaseModelTypeItem], error) {
+	// 使用固定的社区API地址
+	serverUrl := "https://bizyair.cn/api/special/community/base_model_types"
+	body, statusCode, err := c.doGet(serverUrl, nil, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	if statusCode != http.StatusOK {
+		return nil, handleError(body, statusCode)
+	}
+
+	return handleResponse[[]*BaseModelTypeItem](body)
+}
+
 func (c *Client) authHeader() map[string]string {
 	header := make(map[string]string)
 	header[meta.HeaderAuthorization] = fmt.Sprintf("Bearer %s", c.ApiKey)

@@ -589,6 +589,14 @@ func (m *mainModel) renderUploadStepsView() string {
 			}
 			m.baseList.SetHeight(h)
 		}
+		// 如果基础模型类型还在加载中
+		if m.loadingBaseModelTypes {
+			return m.titleStyle.Render("上传 · Step 4/8 · Base Model（必选）") + "\n\n" + m.sp.View() + " 正在加载基础模型类型列表…\n" + m.hintStyle.Render("返回：Esc，退出：q")
+		}
+		// 如果列表为空（加载失败），显示提示
+		if len(m.baseModelTypes) == 0 {
+			return m.titleStyle.Render("上传 · Step 4/8 · Base Model（必选）") + "\n\n" + m.baseList.View() + "\n" + m.hintStyle.Render("（使用本地列表）选择后 Enter，返回：Esc，退出：q")
+		}
 		return m.titleStyle.Render("上传 · Step 4/8 · Base Model（必选）") + "\n\n" + m.baseList.View() + "\n" + m.hintStyle.Render("选择后 Enter，返回：Esc，退出：q")
 	case stepCover:
 		var content strings.Builder

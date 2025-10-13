@@ -236,3 +236,9 @@ type BizyModelDetail struct {
 	UpdatedAt  string                   `json:"updated_at,omitempty"`
 	Source     string                   `json:"source,omitempty"`
 }
+
+// 基础模型类型项
+type BaseModelTypeItem struct {
+	Label string `json:"label,omitempty"`
+	Value string `json:"value,omitempty"`
+}

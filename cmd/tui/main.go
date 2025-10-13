@@ -89,6 +89,9 @@ type mainModel struct {
 
 	coverUrlInputFocused  bool
 	coverPathInputFocused bool
+
+	loadingBaseModelTypes bool
+	baseModelTypes        []*lib.BaseModelTypeItem
 }
 
 func newMainModel() mainModel {
@@ -118,16 +121,8 @@ func newMainModel() mainModel {
 	tp.SetShowStatusBar(false)
 	tp.SetShowPagination(false)
 
-	bases := make([]string, 0, len(meta.SupportedBaseModels))
-	for k := range meta.SupportedBaseModels {
-		bases = append(bases, k)
-	}
-	sort.Strings(bases)
-	bItems := []list.Item{}
-	for _, b := range bases {
-		bItems = append(bItems, listItem{title: b})
-	}
-	bl := list.New(bItems, d, 30, 12)
+	// 初始化时创建空的基础模型列表，将在进入上传步骤时从后端加载
+	bl := list.New([]list.Item{}, d, 30, 12)
 	bl.Title = "选择 Base Model（必选）"
 
 	moreItems := []list.Item{listItem{title: "是，继续添加版本"}, listItem{title: "否，进入确认"}}
@@ -333,6 +328,11 @@ func (m mainModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 						m.step = mainStepAction
 						m.act = actionInputs{}
 						m.upStep = stepType
+						// 如果还没有加载基础模型类型，则开始加载
+						if len(m.baseModelTypes) == 0 && !m.loadingBaseModelTypes {
+							m.loadingBaseModelTypes = true
+							return m, loadBaseModelTypes(m.apiKey)
+						}
 						return m, nil
 					case actionLsModel:
 						m.step = mainStepAction
@@ -467,6 +467,30 @@ func (m mainModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, tea.Batch(cmds...)
 	case clearFilePickerErrorMsg:
 		m.act.filePickerErr = nil
+		return m, nil
+	case baseModelTypesLoadedMsg:
+		m.loadingBaseModelTypes = false
+		if msg.err != nil {
+			// 如果加载失败，使用本地硬编码的列表作为后备
+			bases := make([]string, 0, len(meta.SupportedBaseModels))
+			for k := range meta.SupportedBaseModels {
+				bases = append(bases, k)
+			}
+			sort.Strings(bases)
+			bItems := []list.Item{}
+			for _, b := range bases {
+				bItems = append(bItems, listItem{title: b})
+			}
+			m.baseList.SetItems(bItems)
+			return m, nil
+		}
+		// 加载成功，更新基础模型类型列表
+		m.baseModelTypes = msg.items
+		bItems := []list.Item{}
+		for _, item := range msg.items {
+			bItems = append(bItems, listItem{title: item.Value})
+		}
+		m.baseList.SetItems(bItems)
 		return m, nil
 	case checkModelExistsDoneMsg:
 		m.running = false
