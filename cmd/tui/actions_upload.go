@@ -90,21 +90,29 @@ func runUploadActionMulti(u uploadInputs, versions []versionItem) tea.Cmd {
 						if i := strings.Index(item, ";"); i >= 0 {
 							item = strings.TrimSpace(item[:i])
 						}
-						localPath := item
-						cleanup1 := func() {}
-						if lib.IsHTTPURL(item) {
-							if p, cfn, derr := lib.DownloadToTemp(item); derr == nil {
-								localPath = p
-								cleanup1 = cfn
-							} else {
-								mu.Lock()
-								errs = append(errs, withStep("上传/下载封面", fmt.Errorf("封面下载失败: %s, %v", item, derr)))
-								mu.Unlock()
-								cleanup1()
-								return
-							}
+					localPath := item
+					cleanup1 := func() {}
+					if lib.IsHTTPURL(item) {
+						if p, cfn, derr := lib.DownloadToTemp(item); derr == nil {
+							localPath = p
+							cleanup1 = cfn
+						} else {
+							mu.Lock()
+							errs = append(errs, withStep("上传/下载封面", fmt.Errorf("封面下载失败: %s, %v", item, derr)))
+							mu.Unlock()
+							cleanup1()
+							return
 						}
-						tkn, terr := client.GetUploadToken(filepath.Base(localPath), "inputs")
+					}
+					// 校验封面文件格式和大小（视频限 100MB）
+					if verr := validateCoverFile(localPath); verr != nil {
+						cleanup1()
+						mu.Lock()
+						errs = append(errs, withStep("上传/校验封面", verr))
+						mu.Unlock()
+						return
+					}
+					tkn, terr := client.GetUploadToken(filepath.Base(localPath), "inputs")
 						if terr != nil {
 							cleanup1()
 							mu.Lock()

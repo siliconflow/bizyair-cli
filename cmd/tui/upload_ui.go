@@ -306,16 +306,16 @@ func (m *mainModel) updateUploadInputs(msg tea.Msg) tea.Cmd {
 						return clearFilePickerErrorAfter(3 * time.Second)
 					}
 					if !IsHTTPURL(first) {
-						m.act.filePickerErr = fmt.Errorf("请输入图片的 URL（以 http/https 开头）")
+						m.act.filePickerErr = fmt.Errorf("请输入封面的 URL（以 http/https 开头）")
 						return clearFilePickerErrorAfter(3 * time.Second)
 					}
 					check := first
 					if q := strings.Index(check, "?"); q >= 0 {
 						check = check[:q]
 					}
-					lcheck := strings.ToLower(check)
-					if !(strings.HasSuffix(lcheck, ".jpg") || strings.HasSuffix(lcheck, ".jpeg") || strings.HasSuffix(lcheck, ".png") || strings.HasSuffix(lcheck, ".gif") || strings.HasSuffix(lcheck, ".bmp") || strings.HasSuffix(lcheck, ".webp")) {
-						m.act.filePickerErr = fmt.Errorf("URL 不是图片链接: %s", first)
+					// 使用新的辅助函数验证格式
+					if !isSupportedCoverFormat(check) {
+						m.act.filePickerErr = fmt.Errorf("URL 格式不支持: %s\n支持的格式: %s", first, getSupportedCoverFormats())
 						return clearFilePickerErrorAfter(3 * time.Second)
 					}
 					m.act.cur.cover = first
@@ -336,9 +336,9 @@ func (m *mainModel) updateUploadInputs(msg tea.Msg) tea.Cmd {
 						m.filepicker.CurrentDirectory = p
 						return m.filepicker.Init()
 					}
-					lp := strings.ToLower(p)
-					if !(strings.HasSuffix(lp, ".jpg") || strings.HasSuffix(lp, ".jpeg") || strings.HasSuffix(lp, ".png") || strings.HasSuffix(lp, ".gif") || strings.HasSuffix(lp, ".bmp") || strings.HasSuffix(lp, ".webp")) {
-						m.act.filePickerErr = fmt.Errorf("不支持的图片类型: %s", p)
+					// 使用新的辅助函数验证格式和大小
+					if err := validateCoverFile(p); err != nil {
+						m.act.filePickerErr = err
 						return clearFilePickerErrorAfter(3 * time.Second)
 					}
 					ap := absPath(p)
@@ -376,9 +376,9 @@ func (m *mainModel) updateUploadInputs(msg tea.Msg) tea.Cmd {
 			}
 			if did, p := m.filepicker.DidSelectFile(msg); did {
 				if info, err := os.Stat(p); err == nil && !info.IsDir() {
-					lp := strings.ToLower(p)
-					if !(strings.HasSuffix(lp, ".jpg") || strings.HasSuffix(lp, ".jpeg") || strings.HasSuffix(lp, ".png") || strings.HasSuffix(lp, ".gif") || strings.HasSuffix(lp, ".bmp") || strings.HasSuffix(lp, ".webp")) {
-						m.act.filePickerErr = fmt.Errorf("不支持的图片类型: %s", p)
+					// 使用新的辅助函数验证格式和大小
+					if err := validateCoverFile(p); err != nil {
+						m.act.filePickerErr = err
 						return clearFilePickerErrorAfter(3 * time.Second)
 					}
 					ap := absPath(p)
@@ -602,7 +602,7 @@ func (m *mainModel) renderUploadStepsView() string {
 		var content strings.Builder
 		content.WriteString(m.titleStyle.Render("上传 · Step 5/8 · 选择封面（默认文件选择器，Tab 在 URL/路径/文件选择器之间切换）"))
 		content.WriteString("\n\n")
-		urlLabel := "封面 URL（仅 1 个图片链接；本地图片请在下方选择）："
+		urlLabel := "封面 URL（仅 1 个图片或视频链接；本地文件请在下方选择）："
 		if m.coverUrlInputFocused {
 			urlLabel = m.titleStyle.Render("► " + urlLabel + "（当前焦点，按 Tab 切换）")
 		} else {
@@ -628,11 +628,11 @@ func (m *mainModel) renderUploadStepsView() string {
 		}
 		content.WriteString(m.filepicker.View() + "\n")
 		if m.coverUrlInputFocused {
-			content.WriteString(m.hintStyle.Render("输入图片 URL，回车确认并进入下一步；Tab 切换焦点；Esc 返回"))
+			content.WriteString(m.hintStyle.Render("输入封面 URL（图片或视频，视频限 100MB），回车确认并进入下一步；Tab 切换焦点；Esc 返回"))
 		} else if m.coverPathInputFocused {
-			content.WriteString(m.hintStyle.Render("输入本地文件路径，按 Enter 确认并进入下一步；Tab 切换焦点；Esc 返回"))
+			content.WriteString(m.hintStyle.Render("输入本地文件路径（视频限 100MB），按 Enter 确认并进入下一步；Tab 切换焦点；Esc 返回"))
 		} else {
-			content.WriteString(m.hintStyle.Render("方向键导航，Enter 选择图片并进入下一步；Tab 切换焦点；Esc 返回"))
+			content.WriteString(m.hintStyle.Render("方向键导航，Enter 选择封面文件（视频限 100MB）并进入下一步；Tab 切换焦点；Esc 返回"))
 		}
 		return content.String()
 	case stepIntro:
