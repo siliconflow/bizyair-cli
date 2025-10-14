@@ -135,6 +135,20 @@ func DeleteCheckpoint(checkpointFile string) error {
 	return nil
 }
 
+// IsCredentialExpired 检查凭证是否过期（提前5分钟判定为过期）
+func IsCredentialExpired(expiration string) bool {
+	if expiration == "" {
+		return true
+	}
+	exp, err := time.Parse(time.RFC3339, expiration)
+	if err != nil {
+		logs.Warnf("failed to parse expiration time: %v\n", err)
+		return true
+	}
+	// 提前5分钟判定为过期，避免边界情况
+	return time.Now().Add(5 * time.Minute).After(exp)
+}
+
 // ValidateCheckpoint 验证checkpoint是否有效（不比对 objectKey，仅校验文件与分片大小）
 func ValidateCheckpoint(info *CheckpointInfo, file *FileToUpload) bool {
 	if info == nil {

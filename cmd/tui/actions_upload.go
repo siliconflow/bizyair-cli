@@ -8,7 +8,6 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
-	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/siliconflow/bizyair-cli/config"
@@ -104,7 +103,7 @@ func runUploadActionMulti(u uploadInputs, versions []versionItem) tea.Cmd {
 								return
 							}
 						}
-						// 校验封面文件格式和大小（视频限 100MB）
+						// 校验封面文件格式和大小（视频限 50MB）
 						if verr := validateCoverFile(localPath); verr != nil {
 							cleanup1()
 							mu.Lock()
@@ -195,14 +194,8 @@ func runUploadActionMulti(u uploadInputs, versions []versionItem) tea.Cmd {
 						if cp, lerr := lib.LoadCheckpoint(cpPath); lerr == nil && cp != nil {
 							if lib.ValidateCheckpoint(cp, f) {
 								var ossClient *lib.AliOssStorageClient
-								useCreds := cp.AccessKeyId != "" && cp.AccessKeySecret != ""
-								if useCreds && strings.TrimSpace(cp.Expiration) != "" {
-									if exp, perr := time.Parse(time.RFC3339, cp.Expiration); perr == nil {
-										if time.Now().After(exp) {
-											useCreds = false
-										}
-									}
-								}
+								// 检查checkpoint中的凭证是否可用且未过期
+								useCreds := cp.AccessKeyId != "" && cp.AccessKeySecret != "" && !lib.IsCredentialExpired(cp.Expiration)
 								if useCreds {
 									if cli, oerr := lib.NewAliOssStorageClient(cp.Endpoint, cp.Bucket, cp.AccessKeyId, cp.AccessKeySecret, cp.SecurityToken); oerr == nil {
 										cli.SetExpiration(cp.Expiration)

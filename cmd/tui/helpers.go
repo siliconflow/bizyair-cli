@@ -105,9 +105,9 @@ func validateCoverFile(path string) error {
 		if err != nil {
 			return fmt.Errorf("无法读取文件信息: %v", err)
 		}
-		const maxVideoSize = 100 * 1024 * 1024 // 100MB
+		const maxVideoSize = 50 * 1024 * 1024 // 50MB
 		if st.Size() > maxVideoSize {
-			return fmt.Errorf("视频文件大小超过限制: %.2f MB (最大 100 MB)", float64(st.Size())/(1024*1024))
+			return fmt.Errorf("视频文件大小超过限制: %.2f MB (最大 50 MB)", float64(st.Size())/(1024*1024))
 		}
 	}
 

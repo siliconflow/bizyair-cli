@@ -45,6 +45,12 @@ func (m *mainModel) resetUploadState() {
 	m.verProgress = nil
 	m.verConsumed = nil
 	m.verTotal = nil
+	m.lastUploadTime = time.Time{}
+	m.lastUploadBytes = 0
+	m.currentUploadSpeed = 0
+	m.verLastTime = nil
+	m.verLastBytes = nil
+	m.verSpeed = nil
 	m.act = actionInputs{}
 	m.upStep = stepType
 
@@ -123,7 +129,13 @@ func (m *mainModel) renderUploadRunningView() string {
 			}
 			progressSection.WriteString(fmt.Sprintf("%s[%d/%d] 版本=%s\n", prefix, i+1, len(m.verProgress), dash(versionLabel)))
 			if total > 0 {
-				progressSection.WriteString(fmt.Sprintf("%s%s %.1f%% (%s/%s)\n", prefix, bar, percent*100, format.FormatBytes(consumed), format.FormatBytes(total)))
+				progressSection.WriteString(fmt.Sprintf("%s%s\n", prefix, bar))
+				// 显示进度百分比、已上传/总大小和速率
+				speed := int64(0)
+				if i < len(m.verSpeed) {
+					speed = m.verSpeed[i]
+				}
+				progressSection.WriteString(fmt.Sprintf("%s%.1f%% (%s/%s) %s/s\n", prefix, percent*100, format.FormatBytes(consumed), format.FormatBytes(total), format.FormatBytes(speed)))
 			} else {
 				progressSection.WriteString(fmt.Sprintf("%s%s\n", prefix, bar))
 			}
@@ -131,15 +143,21 @@ func (m *mainModel) renderUploadRunningView() string {
 	} else {
 		var fileLine string
 		var progLine string
+		var speedLine string
 		if m.uploadProg.total > 0 {
 			percent := float64(m.uploadProg.consumed) / float64(m.uploadProg.total)
 			fileLine = fmt.Sprintf("(%s) %s", m.uploadProg.fileIndex, m.uploadProg.fileName)
-			progLine = fmt.Sprintf("%s %.1f%% (%s/%s)", m.progress.View(), percent*100, format.FormatBytes(m.uploadProg.consumed), format.FormatBytes(m.uploadProg.total))
+			progLine = m.progress.View()
+			speedLine = fmt.Sprintf("%.1f%% (%s/%s) %s/s", percent*100, format.FormatBytes(m.uploadProg.consumed), format.FormatBytes(m.uploadProg.total), format.FormatBytes(m.currentUploadSpeed))
 		} else {
 			fileLine = "准备上传…"
 			progLine = m.progress.View()
+			speedLine = ""
 		}
 		progressSection.WriteString(fileLine + "\n" + progLine)
+		if speedLine != "" {
+			progressSection.WriteString("\n" + speedLine)
+		}
 	}
 
 	var hint string

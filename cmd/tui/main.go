@@ -5,6 +5,7 @@ import (
 	"os"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/charmbracelet/bubbles/filepicker"
 	"github.com/charmbracelet/bubbles/list"
@@ -93,6 +94,16 @@ type mainModel struct {
 
 	loadingBaseModelTypes bool
 	baseModelTypes        []*lib.BaseModelTypeItem
+
+	// 上传速率追踪
+	lastUploadTime     time.Time // 上次更新进度的时间
+	lastUploadBytes    int64     // 上次更新时的字节数
+	currentUploadSpeed int64     // 当前上传速率（字节/秒）
+
+	// 多版本上传的速率追踪
+	verLastTime  []time.Time
+	verLastBytes []int64
+	verSpeed     []int64
 }
 
 func newMainModel() mainModel {
@@ -445,6 +456,9 @@ func (m mainModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.verProgress = make([]progress.Model, len(m.act.versions))
 			m.verConsumed = make([]int64, len(m.act.versions))
 			m.verTotal = make([]int64, len(m.act.versions))
+			m.verLastTime = make([]time.Time, len(m.act.versions))
+			m.verLastBytes = make([]int64, len(m.act.versions))
+			m.verSpeed = make([]int64, len(m.act.versions))
 			for i := range m.verProgress {
 				m.verProgress[i] = progress.New(progress.WithDefaultGradient())
 				m.verProgress[i].Width = m.width - 10
@@ -456,13 +470,35 @@ func (m mainModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, waitForUploadEvent(m.uploadCh)
 	case uploadProgMsg:
 		m.uploadProg = msg
+		now := time.Now()
 		var cmds []tea.Cmd
+
 		if msg.total > 0 {
 			if msg.verIdx >= 0 && msg.verIdx < len(m.verProgress) {
+				// 多版本上传速率计算
+				if !m.verLastTime[msg.verIdx].IsZero() {
+					duration := now.Sub(m.verLastTime[msg.verIdx]).Seconds()
+					if duration > 0 {
+						bytesDiff := msg.consumed - m.verLastBytes[msg.verIdx]
+						m.verSpeed[msg.verIdx] = int64(float64(bytesDiff) / duration)
+					}
+				}
+				m.verLastTime[msg.verIdx] = now
+				m.verLastBytes[msg.verIdx] = msg.consumed
 				m.verConsumed[msg.verIdx] = msg.consumed
 				m.verTotal[msg.verIdx] = msg.total
 				cmds = append(cmds, m.verProgress[msg.verIdx].SetPercent(float64(msg.consumed)/float64(msg.total)))
 			} else {
+				// 单版本上传速率计算
+				if !m.lastUploadTime.IsZero() {
+					duration := now.Sub(m.lastUploadTime).Seconds()
+					if duration > 0 {
+						bytesDiff := msg.consumed - m.lastUploadBytes
+						m.currentUploadSpeed = int64(float64(bytesDiff) / duration)
+					}
+				}
+				m.lastUploadTime = now
+				m.lastUploadBytes = msg.consumed
 				cmds = append(cmds, m.progress.SetPercent(float64(msg.consumed)/float64(msg.total)))
 			}
 		}
