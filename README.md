@@ -1,135 +1,181 @@
-<h1 align="center">BizyAir-cli</h1>
+<h1 align="center">BizyAir CLI</h1>
 
 <p align="center">
 <p>
 
-The BizyAir CLI is an open source tool, you can get the latest version from [GitHub](https://github.com/siliconflow/bizyair-cli).
+BizyAir CLI 是一个开源命令行工具，您可以从 [GitHub](https://github.com/siliconflow/bizyair-cli) 获取最新版本。
 
-## Introduction
-The BizyAir CLI is a command line tool for managing your files on bizyair. It provides an easy way to upload,  and manage your bizyair files.
+## 简介
 
-## CLI Releases
+BizyAir CLI 是用于管理 BizyAir 上文件的命令行工具。它提供了一种简便的方式来上传和管理您的 BizyAir 文件。
 
-All releases please [click here](https://github.com/siliconflow/bizyair-cli/releases).
+## 发布版本
 
-## Installation
-BizyAir-CLI is available on Linux, macOS and Windows platforms.
-Binaries for Linux, Windows and Mac are available as tarballs in the [release page](https://github.com/siliconflow/bizyair-cli/releases).
+所有发布版本请[点击这里查看](https://github.com/siliconflow/bizyair-cli/releases)。
 
-- Linux
+## 安装
+
+BizyAir CLI 支持 Linux、macOS 和 Windows 平台。
+Linux、Windows 和 Mac 的二进制文件以 tarball 形式提供在[发布页面](https://github.com/siliconflow/bizyair-cli/releases)。
+
+- **Linux 安装**
+
   ```shell
-    VERSION=0.1.0
-    tar -xzvf bizyair-cli-linux-$VERSION-amd64.tar.gz
-    install bizyair /usr/local/bin
+  VERSION=0.1.0
+  tar -xzvf bizyair-cli-linux-$VERSION-amd64.tar.gz
+  install bizyair /usr/local/bin
   ```
 
-* Via a GO install
+- **通过 GO 安装**
 
   ```shell
-  # NOTE: The dev version will be in effect!
+  # 注意：这将安装开发版本！
   go install github.com/siliconflow/bizyair-cli@latest
   ```
 
-## Building From Source
+## 从源码构建
 
-BizyAir-CLI is currently using GO v1.22.X or above.
-In order to build it from source you must:
+BizyAir CLI 当前使用 GO v1.22.X 或更高版本。
+要从源码构建，您需要：
 
-1. Clone the repo
-2. Build and run the executable
+1. 克隆仓库
+2. 构建并运行可执行文件
 
-     ```shell
-     make build && ./execs/bizyair
-     ```
+   ```shell
+   make build && ./execs/bizyair
+   ```
 
-- For Windows OS, run `make build_windows`.
-- For MacOS, run `make build_mac`.
-- For Linux, run `make build_linux` or `make build_linux_arm64`.
+- Windows 系统运行：`make build_windows`
+- MacOS 系统运行：`make build_mac`
+- Linux 系统运行：`make build_linux` 或 `make build_linux_arm64`
+
 ---
 
-## Quick start
+## 快速开始
 
-### Login
-The BizyAir CLI uses api-keys to authenticate client. To login your machine, run the following CLI:
+### 登录
+
+BizyAir CLI 使用 API Key 进行身份验证。要登录您的设备，运行以下命令：
 
 ```bash
-# if you have an environment variable SF_API_KEY set with your api key
+# 如果您已设置环境变量 SF_API_KEY
 bizyair login
-# or using an option --key,-k
+
+# 或使用 --key/-k 选项指定
 bizyair login -k $SF_API_KEY
 ```
 
-### Logout
-To logout your machine, run the following CLI:
+### 登出
+
+要登出您的设备，运行以下命令：
 
 ```bash
 bizyair logout
 ```
 
-### Upload files
-To upload files to the silicon cloud, run the following CLI:
+### 上传文件
+
+要上传文件到 BizyAir，运行以下命令：
 
 ```bash
-bizyair upload -n mymodel -t [LoRA | Controlnet | Checkpoint] -p /local/path/file -b [basemodel]
+bizyair upload -n mymodel -t [LoRA | Controlnet | Checkpoint] -p /local/path/file -b [basemodel] -cover /path/to/cover.jpg
 ```
 
-~~You can specify overwrite flag to overwrite the model if it already exists in the silicon cloud.~~
+**新功能特性：**
+
+- **自动断点续传**：上传中断后，重新运行相同命令会自动从断点继续
+- **并发上传**：默认使用 3 个并发上传，显著提升速度
+- **分片上传**：大文件（>100MB）自动使用分片上传
+- **封面上传**：支持本地文件和 URL，自动上传到 OSS（**必填项**）
+
+您可以使用 `-n`、`-t`、`-b`、`-p` 和 `-cover` 标志分别指定模型名称、模型类型、基础模型、上传路径和封面（必填）。
+
+#### 封面图片/视频上传（必填）
+
+`-cover` 标志为**必填项**，同时支持 URL 和本地文件：
 
 ```bash
-(Deprecated) bizyair upload -n mymodel -t bizyair/checkpoint -p /local/path/file --overwrite
+# 使用本地封面文件（自动上传到 OSS）
+bizyair upload -n mymodel -t Checkpoint \
+  -p /local/path/model.safetensors -b SDXL \
+  -cover "/local/path/cover.jpg"
+
+# 使用远程 URL（自动下载并上传到 OSS）
+bizyair upload -n mymodel -t Checkpoint \
+  -p /local/path/model.safetensors -b SDXL \
+  -cover "https://example.com/cover.jpg"
 ```
 
-You can specify model name, model type, base model and path to upload by using the `-n`, `-t`, `-b` and `-p` flags respectively.
+**支持的封面格式：** `.jpg`、`.jpeg`、`.png`、`.gif`、`.webp`、`.mp4`、`.webm`、`.mov`  
+**视频大小限制：** 100MB  
+**注意：** 每个上传的版本都必须提供封面。
 
-You can specify version names, introductions, and model cover url using `-v`, `-i`, `-cover` flags respectively. Only one cover is supported. If multiple URLs are provided separated by `;`, only the first will be used.
+#### 多版本上传
 
-To upload multiple versions of your model, you can provide a list of values for each flag. Each value in the list corresponds to a specific version of your model. For example, consider the following usage:
+您可以使用 `-v`、`-i`、`-cover` 标志指定版本名称、介绍和封面。列表中的每个值对应特定版本：
 
 ```bash
 bizyair upload -n mymodel -t Checkpoint \
--v "v1" -b SDXL -p /local/path/file1 -i "sdxl checkpoint1" -cover "${url1}" \
--v "v2" -b [Basemodel2] -p /local/path/file2 -cover "${url2}" \
--v "v3" -b [basemodel3] -p /local/path/file3 \
-...
+-v "v1" -b SDXL -p /local/path/file1 -i "sdxl checkpoint1" -cover "/path/cover1.jpg" \
+-v "v2" -b SD1.5 -p /local/path/file2 -i "sd1.5 checkpoint" -cover "https://example.com/cover2.jpg" \
+-v "v3" -b SDXL -p /local/path/file3 -i "another checkpoint" -cover "/path/cover3.png"
 ```
- 
-Default version names will be used if `-v` is not specified.
 
+**注意：**
 
-### View Models (Not Supported Yet)
-To view all your models in the silicon cloud, run the following CLI:
+- 如果未指定 `-v`，将使用默认版本名称。
+- **每个版本都必须提供封面**，封面数量必须与文件数量相同。
+
+#### 断点续传
+
+如果上传被中断（例如按 Ctrl+C），只需再次运行相同的命令。CLI 将自动从中断的地方继续：
+
+```bash
+# 第一次上传（中断）
+bizyair upload -n mymodel -t Checkpoint -p /path/large-model.safetensors -b SDXL -cover "/path/cover.jpg"
+# ^C (中断)
+
+# 重新运行相同命令，自动续传
+bizyair upload -n mymodel -t Checkpoint -p /path/large-model.safetensors -b SDXL -cover "/path/cover.jpg"
+# ✓ 从断点继续上传
+```
+
+### 查看模型列表
+
+要查看您在云端的所有模型，运行以下命令：
 
 ```bash
 bizyair model ls -t Checkpoint
 ```
 
-You must specify model type by using the `-t` flag.
+您必须使用 `-t` 标志指定模型类型。
 
-You can specify public flag `--public` to view all public models in the silicon cloud. By default it will show only your private models.
+您可以使用 `--public` 标志查看所有公开模型。默认情况下只显示您的私有模型。
+
+### 查看模型文件
+
+要查看模型中的所有文件，运行以下命令：
 
 ```bash
-
-### View Model Files
-To view all files in a model, run the following CLI:
-
-```bash
-bizyair model ls-files -n mymodel -t bizyair/checkpoint
+bizyair model ls-files -n mymodel -t Checkpoint
 ```
 
-You can specify public flag `--public` to view all public model files in the silicon cloud. By default, it will show only your private model files.
+您可以使用 `--public` 标志查看所有公开模型文件。默认情况下只显示您的私有模型文件。
 
-If you want to see the files in a model in tree view, run the following CLI:
+如果您想以树形视图查看模型中的文件，运行以下命令：
+
 ```bash
 bizyair model ls-files -n mymodel -t Checkpoint --tree
 ```
 
-You must specify model name and model type by using the `-n` and `-t` flags respectively.
+您必须使用 `-n` 和 `-t` 标志分别指定模型名称和模型类型。
 
-### Remove Model
-To remove model from the silicon cloud, run the following CLI:
+### 删除模型
+
+要从云端删除模型，运行以下命令：
 
 ```bash
 bizyair model rm -n mymodel -t Checkpoint
 ```
 
-You must specify model name and model type by using the `-n` and `-t` flags respectively.
+您必须使用 `-n` 和 `-t` 标志分别指定模型名称和模型类型。

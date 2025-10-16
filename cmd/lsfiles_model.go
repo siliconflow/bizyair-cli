@@ -2,12 +2,13 @@ package cmd
 
 import (
 	"fmt"
+	"os"
+	"text/tabwriter"
+
 	"github.com/cloudwego/hertz/cmd/hz/util/logs"
 	"github.com/siliconflow/bizyair-cli/lib"
 	"github.com/siliconflow/bizyair-cli/meta"
 	"github.com/urfave/cli/v2"
-	"os"
-	"text/tabwriter"
 )
 
 func ListFilesModel(c *cli.Context) error {
@@ -18,12 +19,14 @@ func ListFilesModel(c *cli.Context) error {
 	setLogVerbose(args.Verbose)
 	logs.Debugf("args: %#v\n", args)
 
-	if err = checkType(args, true); err != nil {
-		return err
+	if err := lib.ValidateModelType(args.Type); err != nil {
+		return cli.Exit(err, meta.LoadError)
 	}
 
-	if err = checkName(args, false); err != nil {
-		return err
+	if args.Name != "" {
+		if err := lib.ValidateModelName(args.Name); err != nil {
+			return cli.Exit(err, meta.LoadError)
+		}
 	}
 
 	var apiKey string

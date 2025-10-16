@@ -12,8 +12,6 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/siliconflow/bizyair-cli/config"
 	"github.com/siliconflow/bizyair-cli/lib"
-	"github.com/siliconflow/bizyair-cli/lib/filehash"
-	"github.com/siliconflow/bizyair-cli/lib/format"
 	"github.com/siliconflow/bizyair-cli/meta"
 )
 
@@ -50,6 +48,14 @@ func runUploadActionMulti(u uploadInputs, versions []versionItem) tea.Cmd {
 			args.Type = u.typ
 			args.Name = u.name
 
+			// 验证所有版本都有封面（必填）
+			for i, v := range versions {
+				if strings.TrimSpace(v.cover) == "" {
+					ch <- actionDoneMsg{out: "", err: withStep("校验封面", fmt.Errorf("版本 %d (%s) 缺少封面，封面为必填项", i+1, v.version))}
+					return
+				}
+			}
+
 			apiKey, err := lib.NewSfFolder().GetKey()
 			if err != nil || apiKey == "" {
 				ch <- actionDoneMsg{out: "", err: withStep("上传/鉴权", fmt.Errorf("未登录或缺少 API Key，请先登录"))}
@@ -83,79 +89,29 @@ func runUploadActionMulti(u uploadInputs, versions []versionItem) tea.Cmd {
 						return
 					}
 
+					// 使用统一的封面上传逻辑
 					var coverUrls []string
 					if strings.TrimSpace(ver.cover) != "" {
-						item := strings.TrimSpace(ver.cover)
-						if i := strings.Index(item, ";"); i >= 0 {
-							item = strings.TrimSpace(item[:i])
-						}
-						localPath := item
-						cleanup1 := func() {}
-						if lib.IsHTTPURL(item) {
-							if p, cfn, derr := lib.DownloadToTemp(item); derr == nil {
-								localPath = p
-								cleanup1 = cfn
-							} else {
-								mu.Lock()
-								errs = append(errs, withStep("上传/下载封面", fmt.Errorf("封面下载失败: %s, %v", item, derr)))
-								mu.Unlock()
-								cleanup1()
-								return
-							}
-						}
-						// 校验封面文件格式和大小（视频限 50MB）
-						if verr := validateCoverFile(localPath); verr != nil {
-							cleanup1()
-							mu.Lock()
-							errs = append(errs, withStep("上传/校验封面", verr))
-							mu.Unlock()
-							return
-						}
-						tkn, terr := client.GetUploadToken(filepath.Base(localPath), "inputs")
-						if terr != nil {
-							cleanup1()
-							mu.Lock()
-							errs = append(errs, withStep("上传/封面凭证", fmt.Errorf("封面获取上传凭证失败: %s, %v", item, terr)))
-							mu.Unlock()
-							return
-						}
-						fileRec := tkn.Data.File
-						sto := tkn.Data.Storage
-						ossCli, oerr := lib.NewAliOssStorageClient(sto.Endpoint, sto.Bucket, fileRec.AccessKeyId, fileRec.AccessKeySecret, fileRec.SecurityToken)
-						if oerr != nil {
-							cleanup1()
-							mu.Lock()
-							errs = append(errs, withStep("上传/封面OSS客户端", fmt.Errorf("封面创建 OSS 客户端失败: %s, %v", item, oerr)))
-							mu.Unlock()
-							return
-						}
-						coverFile := &lib.FileToUpload{Path: localPath, RelPath: filepath.Base(localPath), Size: 0}
-						if _, uerr := ossCli.UploadFileCtx(ctx, coverFile, fileRec.ObjectKey, fileIndex, nil); uerr != nil {
-							cleanup1()
+						coverUrl, cerr := lib.UploadCover(client, ver.cover, ctx)
+						if cerr != nil {
 							// 检查是否是用户取消
-							if errors.Is(uerr, context.Canceled) {
+							if errors.Is(cerr, context.Canceled) {
 								mu.Lock()
 								anyCanceled = true
 								mu.Unlock()
 								return
 							}
 							mu.Lock()
-							errs = append(errs, withStep("上传/封面上传", fmt.Errorf("封面上传 OSS 失败: %s, %v", item, uerr)))
+							errs = append(errs, cerr)
 							mu.Unlock()
 							return
 						}
-						if commit, cerr := client.CommitInputResource(filepath.Base(localPath), fileRec.ObjectKey); cerr != nil {
-							cleanup1()
-							mu.Lock()
-							errs = append(errs, withStep("上传/封面提交", fmt.Errorf("封面提交失败: %s, %v", item, cerr)))
-							mu.Unlock()
-							return
-						} else if commit != nil && commit.Data.Url != "" {
-							coverUrls = append(coverUrls, commit.Data.Url)
+						if coverUrl != "" {
+							coverUrls = append(coverUrls, coverUrl)
 						}
-						cleanup1()
 					}
 
+					// 使用统一的上传逻辑
 					st, err := os.Stat(ver.path)
 					if err != nil {
 						mu.Lock()
@@ -163,172 +119,59 @@ func runUploadActionMulti(u uploadInputs, versions []versionItem) tea.Cmd {
 						mu.Unlock()
 						return
 					}
-					if st.IsDir() {
-						mu.Lock()
-						errs = append(errs, withStep("上传/校验路径", fmt.Errorf("仅支持文件上传: %s", ver.path)))
-						mu.Unlock()
-						return
-					}
 
 					relPath, err := filepath.Rel(filepath.Dir(ver.path), ver.path)
 					if err != nil {
-						mu.Lock()
-						errs = append(errs, withStep("上传/计算哈希", err))
-						mu.Unlock()
-						return
+						relPath = filepath.Base(ver.path)
 					}
-					f := &lib.FileToUpload{Path: filepath.ToSlash(ver.path), RelPath: filepath.ToSlash(relPath), Size: st.Size()}
+					f := &lib.FileToUpload{
+						Path:    filepath.ToSlash(ver.path),
+						RelPath: filepath.ToSlash(relPath),
+						Size:    st.Size(),
+					}
 
-					sha256sum, md5Hash, err := filehash.CalculateHash(f.Path)
+					// 使用 UnifiedUpload 进行上传
+					_, err = lib.UnifiedUpload(lib.UploadOptions{
+						File:      f,
+						Client:    client,
+						ModelType: u.typ,
+						Context:   ctx,
+						FileIndex: fileIndex,
+						ProgressFunc: func(consumed, total int64) {
+							select {
+							case ch <- uploadProgMsg{
+								fileIndex: fileIndex,
+								fileName:  filepath.Base(f.RelPath),
+								consumed:  consumed,
+								total:     total,
+								verIdx:    idx,
+							}:
+							default:
+							}
+						},
+					})
 					if err != nil {
+						// 检查是否是用户取消
+						if errors.Is(err, context.Canceled) {
+							mu.Lock()
+							anyCanceled = true
+							mu.Unlock()
+							return
+						}
 						mu.Lock()
 						errs = append(errs, err)
 						mu.Unlock()
 						return
 					}
-					f.Signature = sha256sum
 
-					// 先按 sha256 尝试本地 checkpoint 续传
-					resumed := false
-					if cpPath, gerr := lib.GetCheckpointFile(sha256sum); gerr == nil {
-						if cp, lerr := lib.LoadCheckpoint(cpPath); lerr == nil && cp != nil {
-							if lib.ValidateCheckpoint(cp, f) {
-								var ossClient *lib.AliOssStorageClient
-								// 检查checkpoint中的凭证是否可用且未过期
-								useCreds := cp.AccessKeyId != "" && cp.AccessKeySecret != "" && !lib.IsCredentialExpired(cp.Expiration)
-								if useCreds {
-									if cli, oerr := lib.NewAliOssStorageClient(cp.Endpoint, cp.Bucket, cp.AccessKeyId, cp.AccessKeySecret, cp.SecurityToken); oerr == nil {
-										cli.SetExpiration(cp.Expiration)
-										ossClient = cli
-									}
-								}
-
-								// 凭证不可用或过期则刷新凭证
-								if ossClient == nil {
-									ossCert, err := client.OssSign(sha256sum, u.typ)
-									if err != nil {
-										mu.Lock()
-										errs = append(errs, err)
-										mu.Unlock()
-										return
-									}
-									fileRecord := ossCert.Data.File
-									storage := ossCert.Data.Storage
-									if cli, oerr := lib.NewAliOssStorageClient(storage.Endpoint, storage.Bucket, fileRecord.AccessKeyId, fileRecord.AccessKeySecret, fileRecord.SecurityToken); oerr == nil {
-										cli.SetExpiration(fileRecord.Expiration)
-										ossClient = cli
-									} else {
-										mu.Lock()
-										errs = append(errs, withStep("上传/获取上传签名", oerr))
-										mu.Unlock()
-										return
-									}
-								}
-
-								// 续传：使用 checkpoint 的 objectKey
-								_, err = ossClient.UploadFileMultipart(ctx, f, cp.ObjectKey, fileIndex, func(consumed, total int64) {
-									// 显示进度（总量>0时）
-									if total > 0 {
-										_ = format.FormatBytes(consumed)
-										_ = format.FormatBytes(total)
-									}
-									select {
-									case ch <- uploadProgMsg{fileIndex: fileIndex, fileName: filepath.Base(f.RelPath), consumed: consumed, total: total, verIdx: idx}:
-									default:
-									}
-								})
-								if err != nil {
-									if errors.Is(err, context.Canceled) {
-										mu.Lock()
-										anyCanceled = true
-										mu.Unlock()
-										return
-									}
-									mu.Lock()
-									errs = append(errs, withStep("上传/OSS上传模型文件", err))
-									mu.Unlock()
-									return
-								}
-								// 提交使用续传时的 key
-								commitKey := cp.ObjectKey
-								if f.RemoteKey != "" {
-									commitKey = f.RemoteKey
-								}
-								if _, err = client.CommitFileV2(f.Signature, commitKey, md5Hash, u.typ); err != nil {
-									mu.Lock()
-									errs = append(errs, withStep("上传/提交模型文件", err))
-									mu.Unlock()
-									return
-								}
-								resumed = true
-							}
-						}
+					mv := &lib.ModelVersion{
+						Version:      verVersion,
+						BaseModel:    ver.base,
+						Introduction: ver.intro,
+						Public:       false,
+						Sign:         f.Signature,
+						Path:         ver.path,
 					}
-
-					if !resumed {
-						ossCert, err := client.OssSign(sha256sum, u.typ)
-						if err != nil {
-							mu.Lock()
-							errs = append(errs, err)
-							mu.Unlock()
-							return
-						}
-						fileRecord := ossCert.Data.File
-
-						if fileRecord.Id == 0 {
-							storage := ossCert.Data.Storage
-							ossClient, err := lib.NewAliOssStorageClient(storage.Endpoint, storage.Bucket, fileRecord.AccessKeyId, fileRecord.AccessKeySecret, fileRecord.SecurityToken)
-							if err != nil {
-								mu.Lock()
-								errs = append(errs, withStep("上传/获取上传签名", err))
-								mu.Unlock()
-								return
-							}
-							ossClient.SetExpiration(fileRecord.Expiration)
-							_, err = ossClient.UploadFileMultipart(ctx, f, fileRecord.ObjectKey, fileIndex, func(consumed, total int64) {
-								// 显示进度（总量>0时）
-								if total > 0 {
-									_ = format.FormatBytes(consumed)
-									_ = format.FormatBytes(total)
-								}
-								select {
-								case ch <- uploadProgMsg{fileIndex: fileIndex, fileName: filepath.Base(f.RelPath), consumed: consumed, total: total, verIdx: idx}:
-								default:
-								}
-							})
-							if err != nil {
-								if errors.Is(err, context.Canceled) {
-									mu.Lock()
-									anyCanceled = true
-									mu.Unlock()
-									return
-								}
-								mu.Lock()
-								errs = append(errs, withStep("上传/OSS上传模型文件", err))
-								mu.Unlock()
-								return
-							}
-							commitKey := fileRecord.ObjectKey
-							if f.RemoteKey != "" {
-								commitKey = f.RemoteKey
-							}
-							if _, err = client.CommitFileV2(f.Signature, commitKey, md5Hash, u.typ); err != nil {
-								mu.Lock()
-								errs = append(errs, withStep("上传/提交模型文件", err))
-								mu.Unlock()
-								return
-							}
-						} else {
-							f.Id = fileRecord.Id
-							f.RemoteKey = fileRecord.ObjectKey
-							select {
-							case ch <- uploadProgMsg{fileIndex: fileIndex, fileName: filepath.Base(f.RelPath), consumed: f.Size, total: f.Size, verIdx: idx}:
-							default:
-							}
-						}
-					}
-
-					mv := &lib.ModelVersion{Version: verVersion, BaseModel: ver.base, Introduction: ver.intro, Public: false, Sign: f.Signature, Path: ver.path}
 					if len(coverUrls) > 0 {
 						mv.CoverUrls = coverUrls
 					}

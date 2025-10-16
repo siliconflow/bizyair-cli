@@ -1,19 +1,19 @@
 package cmd
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"path/filepath"
-	"regexp"
 	"strconv"
 	"strings"
+	"sync"
 
 	"github.com/cloudwego/hertz/cmd/hz/util"
 	"github.com/cloudwego/hertz/cmd/hz/util/logs"
-	"github.com/samber/lo"
 	"github.com/siliconflow/bizyair-cli/config"
 	"github.com/siliconflow/bizyair-cli/lib"
-	"github.com/siliconflow/bizyair-cli/lib/filehash"
+	"github.com/siliconflow/bizyair-cli/lib/format"
 	"github.com/siliconflow/bizyair-cli/meta"
 	"github.com/urfave/cli/v2"
 )
@@ -26,12 +26,13 @@ func Upload(c *cli.Context) error {
 	setLogVerbose(args.Verbose)
 	logs.Debugf("args: %#v\n", args)
 
-	if err = checkType(args, true); err != nil {
-		return err
+	// 1. 校验参数
+	if err := lib.ValidateModelType(args.Type); err != nil {
+		return cli.Exit(err, meta.LoadError)
 	}
 
-	if err = checkName(args, true); err != nil {
-		return err
+	if err := lib.ValidateModelName(args.Name); err != nil {
+		return cli.Exit(err, meta.LoadError)
 	}
 
 	modelPath, err := checkPath(args)
@@ -39,12 +40,12 @@ func Upload(c *cli.Context) error {
 		return err
 	}
 
+	// 2. 准备文件列表
 	var filesToUpload []*lib.FileToUpload
-
 	for _, mPath := range modelPath {
 		stat, err := os.Stat(mPath)
 		if err != nil {
-			return err
+			return cli.Exit(err, meta.LoadError)
 		}
 		if stat.IsDir() {
 			return cli.Exit("uploading directory is not supported yet", meta.LoadError)
@@ -52,7 +53,7 @@ func Upload(c *cli.Context) error {
 
 		relPath, err := filepath.Rel(filepath.Dir(mPath), mPath)
 		if err != nil {
-			return err
+			relPath = filepath.Base(mPath)
 		}
 		filesToUpload = append(filesToUpload, &lib.FileToUpload{
 			Path:    filepath.ToSlash(mPath),
@@ -63,150 +64,165 @@ func Upload(c *cli.Context) error {
 
 	total := len(filesToUpload)
 	if total < 1 {
-		return cli.Exit("No files found to upload, you cannot upload an empty directory!", meta.LoadError)
+		return cli.Exit("No files found to upload", meta.LoadError)
 	}
 
-	// version: default 'v{idx}'
+	// 3. 处理版本信息
 	modelVersion, err := getVersion(args)
 	if err != nil {
 		return err
 	}
 	versionPublic, err := checkPublic(args, false)
 	if err != nil {
-		return nil
+		return err
 	}
-
 	modelIntro, err := checkModelIntro(args, false)
 	if err != nil {
 		return err
 	}
 
-	cover_urls, err := checkCoverUrl(args, false)
-	if err != nil {
-		return err
+	// 4. 校验基础模型
+	for _, base := range args.BaseModel {
+		if err := lib.ValidateBaseModel(base); err != nil {
+			return cli.Exit(err, meta.LoadError)
+		}
 	}
 
-	if err := checkBaseModel(args, false); err != nil {
-		return err
+	// 4.5 校验封面（必填）
+	if len(args.CoverUrls) == 0 {
+		return cli.Exit("封面是必填项，请使用 -cover 标志为每个版本指定封面", meta.LoadError)
+	}
+	if len(args.CoverUrls) != len(args.Path) {
+		return cli.Exit(fmt.Errorf("封面数量（%d）必须与文件数量（%d）相同", len(args.CoverUrls), len(args.Path)), meta.LoadError)
+	}
+	for idx, cover := range args.CoverUrls {
+		if strings.TrimSpace(cover) == "" {
+			return cli.Exit(fmt.Errorf("版本 %d 的封面不能为空", idx+1), meta.LoadError)
+		}
 	}
 
+	// 5. 获取 API Key
 	var apiKey string
 	if args.ApiKey != "" {
 		apiKey = args.ApiKey
 	} else {
 		apiKey, err = lib.NewSfFolder().GetKey()
 		if err != nil {
-			return err
+			return cli.Exit(err, meta.LoadError)
 		}
 	}
 
 	client := lib.NewClient(args.BaseDomain, apiKey)
 
-	// 	// TODO: overwrite model
+	// 6. 预检查模型名是否已存在
+	exists, err := client.CheckModelExists(args.Name, args.Type)
+	if err != nil {
+		return cli.Exit(fmt.Errorf("检查模型名失败: %w", err), meta.LoadError)
+	}
+	if exists && !args.Overwrite {
+		return cli.Exit(fmt.Errorf("模型名 '%s' 已存在，请使用不同的名称或添加 --overwrite 标志", args.Name), meta.LoadError)
+	}
 
-	// start to upload files
-	fmt.Fprintln(os.Stdout, fmt.Sprintf("Start uploading %d files", total))
+	// 7. 开始并发上传
+	fmt.Fprintf(os.Stdout, "开始上传 %d 个文件（并发数：3）\n", total)
 
-	versionList := make([]*lib.ModelVersion, 0)
+	ctx := context.Background()
+	versionList := make([]*lib.ModelVersion, total)
+	var wg sync.WaitGroup
+	sem := make(chan struct{}, 3) // 最多 3 个并发
+	var mu sync.Mutex
+	var uploadErrors []error
+
 	for i, fileToUpload := range filesToUpload {
-		// calculate file hash
-		sha256sum, md5_hash, err := filehash.CalculateHash(fileToUpload.Path)
-		if err != nil {
-			return err
-		}
+		wg.Add(1)
+		idx := i
+		file := fileToUpload
 
-		fileToUpload.Signature = sha256sum
-		logs.Debugf(fmt.Sprintf("file: %s, signature: %s", fileToUpload.RelPath, fileToUpload.Signature))
+		go func() {
+			defer wg.Done()
+			sem <- struct{}{}
+			defer func() { <-sem }()
 
-		// pass sha256sum to the server
-		ossCert, err := client.OssSign(sha256sum, args.Type)
-		if err != nil {
-			return err
-		}
+			fileIndex := fmt.Sprintf("%d/%d", idx+1, total)
 
-		fileIndex := fmt.Sprintf("%d/%d", i+1, total)
-
-		fileRecord := ossCert.Data.File
-		if fileRecord.Id == 0 {
-			// upload file
-			fileStorage := ossCert.Data.Storage
-			ossClient, err := lib.NewAliOssStorageClient(fileStorage.Endpoint, fileStorage.Bucket, fileRecord.AccessKeyId, fileRecord.AccessKeySecret, fileRecord.SecurityToken)
-			if err != nil {
-				return err
-			}
-
-			// 使用简单的进度回调，直接输出到终端
-			_, err = ossClient.UploadFile(fileToUpload, fileRecord.ObjectKey, fileIndex,
-				func(consumed, total int64) {
+			// 使用统一上传函数
+			_, err := lib.UnifiedUpload(lib.UploadOptions{
+				File:      file,
+				Client:    client,
+				ModelType: args.Type,
+				Context:   ctx,
+				FileIndex: fileIndex,
+				ProgressFunc: func(consumed, total int64) {
 					if total > 0 {
 						percent := float64(consumed) / float64(total)
 						bar := renderProgressBar(percent)
 						fmt.Printf("\r(%s) %s %s %.1f%% (%s/%s)",
 							fileIndex,
-							filepath.Base(fileToUpload.RelPath),
+							filepath.Base(file.RelPath),
 							bar,
 							percent*100,
-							formatBytes(consumed),
-							formatBytes(total))
+							format.FormatBytes(consumed),
+							format.FormatBytes(total))
 
 						if percent >= 1.0 {
 							fmt.Println() // 上传完成后换行
 						}
 					}
-				})
+				},
+			})
 			if err != nil {
-				return err
+				mu.Lock()
+				uploadErrors = append(uploadErrors, fmt.Errorf("[%s] %w", fileIndex, err))
+				mu.Unlock()
+				return
 			}
 
-			// commit
-			_, err = client.CommitFileV2(fileToUpload.Signature, fileRecord.ObjectKey, md5_hash, args.Type)
-
-			if err != nil {
-				return err
+			// 处理封面上传（必填）
+			var coverUrls []string
+			coverUrl, cerr := lib.UploadCover(client, args.CoverUrls[idx], ctx)
+			if cerr != nil {
+				mu.Lock()
+				uploadErrors = append(uploadErrors, fmt.Errorf("[%s] 封面上传失败: %w", fileIndex, cerr))
+				mu.Unlock()
+				return
 			}
-		} else {
-			// skip
-			fileToUpload.Id = fileRecord.Id
-			fileToUpload.RemoteKey = fileRecord.ObjectKey
+			if coverUrl != "" {
+				coverUrls = []string{coverUrl}
+			}
 
-			fmt.Fprintln(os.Stdout, fmt.Sprintf("(%s) %s Already Uploaded", fileIndex, fileToUpload.RelPath))
-		}
-		versionInfo := lib.ModelVersion{
-			Version:      modelVersion[i],
-			BaseModel:    args.BaseModel[i],
-			Introduction: modelIntro[i],
-			Public:       versionPublic[i],
-			Sign:         sha256sum,
-			Path:         modelPath[i],
-			CoverUrls:    cover_urls[i],
-		}
-		versionList = append(versionList, &versionInfo)
-
+			// 构建版本信息
+			mu.Lock()
+			versionList[idx] = &lib.ModelVersion{
+				Version:      modelVersion[idx],
+				BaseModel:    args.BaseModel[idx],
+				Introduction: modelIntro[idx],
+				Public:       versionPublic[idx],
+				Sign:         file.Signature,
+				Path:         modelPath[idx],
+				CoverUrls:    coverUrls,
+			}
+			mu.Unlock()
+		}()
 	}
-	// upload versions
+
+	wg.Wait()
+
+	// 8. 检查错误
+	if len(uploadErrors) > 0 {
+		fmt.Fprintf(os.Stderr, "\n上传失败，错误列表：\n")
+		for _, err := range uploadErrors {
+			fmt.Fprintf(os.Stderr, "  - %v\n", err)
+		}
+		return cli.Exit("部分文件上传失败", meta.ServerError)
+	}
+
+	// 9. 提交模型
 	_, err = client.CommitModelV2(args.Name, args.Type, versionList)
 	if err != nil {
-		return err
+		return cli.Exit(fmt.Errorf("提交模型失败: %w", err), meta.ServerError)
 	}
 
-	fmt.Fprintf(os.Stdout, "Uploaded successfully\n")
-
-	return nil
-}
-
-// calculateHash calculates the SHA256 hash of a file.
-// calculateHash moved to lib/filehash
-
-func checkType(args *config.Argument, required bool) error {
-	if required && args.Type == "" {
-		return cli.Exit("The following arguments are required: type", meta.LoadError)
-	}
-
-	modelType := meta.UploadFileType(args.Type)
-	if !lo.Contains[meta.UploadFileType](meta.ModelTypes, modelType) {
-		return cli.Exit(fmt.Sprintf("Unsupported type [%s], only works for %s", args.Type, meta.ModelTypesStr), meta.LoadError)
-	}
-
+	fmt.Fprintf(os.Stdout, "\n✓ 上传成功！\n")
 	return nil
 }
 
@@ -232,23 +248,6 @@ func checkPath(args *config.Argument) ([]string, error) {
 	}
 
 	return args.Path, nil
-}
-
-func checkName(args *config.Argument, required bool) error {
-	if required && args.Name == "" {
-		return cli.Exit("The following arguments are required: name", meta.LoadError)
-	}
-
-	if args.Name == "" {
-		return nil
-	}
-
-	re := regexp.MustCompile(`^[\w-]+$`)
-	matches := re.MatchString(args.Name)
-	if !matches {
-		return cli.Exit(fmt.Errorf("invalid \"name\", it can only include numbers, English letters, and \"-\" or \"_\""), meta.LoadError)
-	}
-	return nil
 }
 
 func getVersion(args *config.Argument) ([]string, error) {
@@ -283,52 +282,6 @@ func checkPublic(args *config.Argument, required bool) ([]bool, error) {
 	return publicList, nil
 }
 
-func checkBaseModel(args *config.Argument, required bool) error {
-	if required && len(args.BaseModel) == 0 {
-		return cli.Exit("The following arguments are required: base_model", meta.LoadError)
-	}
-	if len(args.BaseModel) != len(args.Path) {
-		cli.Exit(fmt.Sprintf("Required %d BaseModel arguments, but got %d", len(args.Path), len(args.ModelVersion)), meta.LoadError)
-	}
-	for _, base := range args.BaseModel {
-		isValid := isValidBaseModel(base)
-		if !isValid {
-			return cli.Exit(fmt.Sprintf("Base model not supported: [%s]", args.BaseModel), meta.LoadError)
-		}
-	}
-
-	return nil
-}
-
-func checkCoverUrl(args *config.Argument, required bool) ([][]string, error) {
-	urlList := make([][]string, 0)
-	if required && len(args.CoverUrls) != len(args.Path) {
-		return nil, cli.Exit(fmt.Sprintf("Required %d cover_url arguments, but got %d", len(args.Path), len(args.CoverUrls)), meta.LoadError)
-	}
-	for idx := range len(args.Path) {
-		if idx >= len(args.CoverUrls) {
-			urlList = append(urlList, nil)
-		} else {
-			raw := strings.TrimSpace(args.CoverUrls[idx])
-			if raw == "" {
-				urlList = append(urlList, nil)
-				continue
-			}
-			parts := strings.Split(raw, ";")
-			first := strings.TrimSpace(parts[0])
-			if len(parts) > 1 {
-				logs.Warnf("-cover 含分号，仅保留首个: %s", first)
-			}
-			if first == "" {
-				urlList = append(urlList, nil)
-			} else {
-				urlList = append(urlList, []string{first})
-			}
-		}
-	}
-	return urlList, nil
-}
-
 func checkModelIntro(args *config.Argument, required bool) ([]string, error) {
 	Intro := make([]string, 0)
 	if required && len(args.Intro) != len(args.Path) {
@@ -342,17 +295,6 @@ func checkModelIntro(args *config.Argument, required bool) ([]string, error) {
 		}
 	}
 	return Intro, nil
-}
-
-func isValidBaseModel(basemodel string) bool {
-	valid, exists := meta.SupportedBaseModels[basemodel]
-	if !exists {
-		logs.Debugf("Base model not exists: ", basemodel)
-	}
-	if exists && !valid {
-		logs.Debugf("Base model not valid: ", basemodel)
-	}
-	return valid
 }
 
 func parseBoolStringSlice(s []string) ([]bool, error) {

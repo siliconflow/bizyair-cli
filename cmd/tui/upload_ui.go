@@ -57,7 +57,7 @@ func (m *mainModel) resetUploadState() {
 	m.inpName.SetValue("")
 	m.inpVersion.SetValue("")
 	m.inpCover.SetValue("")
-	m.inpIntro.SetValue("")
+	m.taIntro.SetValue("")
 	m.selectedFile = ""
 	m.filepicker.Path = ""
 	if homeDir, err := os.UserHomeDir(); err == nil && homeDir != "" {
@@ -347,9 +347,9 @@ func (m *mainModel) updateUploadInputs(msg tea.Msg) tea.Cmd {
 					m.act.cur.cover = first
 					m.upStep = stepIntro
 					if warned {
-						return tea.Batch(m.inpIntro.Focus(), clearFilePickerErrorAfter(3*time.Second))
+						return tea.Batch(m.taIntro.Focus(), clearFilePickerErrorAfter(3*time.Second))
 					}
-					return m.inpIntro.Focus()
+					return m.taIntro.Focus()
 				}
 				if m.coverPathInputFocused && m.inpPath.Value() != "" {
 					p := strings.TrimSpace(m.inpPath.Value())
@@ -371,7 +371,7 @@ func (m *mainModel) updateUploadInputs(msg tea.Msg) tea.Cmd {
 					m.inpCover.SetValue(ap)
 					m.act.cur.cover = ap
 					m.upStep = stepIntro
-					return m.inpIntro.Focus()
+					return m.taIntro.Focus()
 				}
 			}
 		}
@@ -411,7 +411,7 @@ func (m *mainModel) updateUploadInputs(msg tea.Msg) tea.Cmd {
 					m.inpCover.SetValue(ap)
 					m.act.cur.cover = ap
 					m.upStep = stepIntro
-					return m.inpIntro.Focus()
+					return m.taIntro.Focus()
 				}
 			}
 			if didSelect, p := m.filepicker.DidSelectDisabledFile(msg); didSelect {
@@ -424,11 +424,15 @@ func (m *mainModel) updateUploadInputs(msg tea.Msg) tea.Cmd {
 		return tea.Batch(urlCmd, pathCmd, fpCmd)
 	case stepIntro:
 		var cmd tea.Cmd
-		m.inpIntro, cmd = m.inpIntro.Update(msg)
+		m.taIntro, cmd = m.taIntro.Update(msg)
 		if km, ok := msg.(tea.KeyMsg); ok {
 			switch km.String() {
-			case "enter":
-				m.act.cur.intro = strings.TrimSpace(m.inpIntro.Value())
+			case "ctrl+d":
+				intro := strings.TrimSpace(m.taIntro.Value())
+				if len([]rune(intro)) > 5000 {
+					intro = string([]rune(intro)[:5000])
+				}
+				m.act.cur.intro = intro
 				m.act.useFilePicker = true
 				m.act.pathInputFocused = false
 				m.inpPath.SetValue(ensureTrailingSep(m.filepicker.CurrentDirectory))
@@ -450,7 +454,7 @@ func (m *mainModel) updateUploadInputs(msg tea.Msg) tea.Cmd {
 				m.act.filePickerErr = nil
 				m.filepicker.Path = ""
 				m.upStep = stepIntro
-				return m.inpIntro.Focus()
+				return m.taIntro.Focus()
 			case "ctrl+r":
 				path := strings.TrimSpace(m.inpPath.Value())
 				if path != "" {
@@ -557,7 +561,7 @@ func (m *mainModel) updateUploadInputs(msg tea.Msg) tea.Cmd {
 						m.act.cur = versionItem{}
 						m.inpVersion.SetValue(next)
 						m.inpCover.SetValue("")
-						m.inpIntro.SetValue("")
+						m.taIntro.SetValue("")
 						m.upStep = stepVersion
 						return nil
 					}
@@ -626,9 +630,9 @@ func (m *mainModel) renderUploadStepsView() string {
 		return m.titleStyle.Render("上传 · Step 4/8 · Base Model（必选）") + "\n\n" + m.baseList.View() + "\n" + m.hintStyle.Render("选择后 Enter，返回：Esc，退出：q")
 	case stepCover:
 		var content strings.Builder
-		content.WriteString(m.titleStyle.Render("上传 · Step 5/8 · 选择封面（默认文件选择器，Tab 在 URL/路径/文件选择器之间切换）"))
+		content.WriteString(m.titleStyle.Render("上传 · Step 5/8 · 选择封面（必填，默认文件选择器，Tab 在 URL/路径/文件选择器之间切换）"))
 		content.WriteString("\n\n")
-		urlLabel := "封面 URL（仅 1 个图片或视频链接；本地文件请在下方选择）："
+		urlLabel := "封面 URL（必填，仅 1 个图片或视频链接；本地文件请在下方选择）："
 		if m.coverUrlInputFocused {
 			urlLabel = m.titleStyle.Render("► " + urlLabel + "（当前焦点，按 Tab 切换）")
 		} else {
@@ -662,7 +666,9 @@ func (m *mainModel) renderUploadStepsView() string {
 		}
 		return content.String()
 	case stepIntro:
-		return m.titleStyle.Render("上传 · Step 6/8 · 模型介绍（可为空，回车跳过）") + "\n\n" + m.inpIntro.View() + "\n" + m.hintStyle.Render("确认：Enter（可空），返回：Esc，退出：q")
+		charCount := len([]rune(m.taIntro.Value()))
+		charInfo := fmt.Sprintf("（%d/5000 字）", charCount)
+		return m.titleStyle.Render("上传 · Step 6/8 · 模型介绍") + " " + m.hintStyle.Render(charInfo) + "\n\n" + m.taIntro.View() + "\n" + m.hintStyle.Render("提交：Ctrl+D，返回：Esc，退出：q")
 	case stepPath:
 		var content strings.Builder
 		content.WriteString(m.titleStyle.Render("上传 · Step 7/8 · 选择文件") + "\n\n")

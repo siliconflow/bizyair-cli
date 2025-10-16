@@ -2,11 +2,12 @@ package cmd
 
 import (
 	"fmt"
+	"os"
+
 	"github.com/cloudwego/hertz/cmd/hz/util/logs"
 	"github.com/siliconflow/bizyair-cli/lib"
 	"github.com/siliconflow/bizyair-cli/meta"
 	"github.com/urfave/cli/v2"
-	"os"
 )
 
 func RemoveModel(c *cli.Context) error {
@@ -17,8 +18,8 @@ func RemoveModel(c *cli.Context) error {
 	setLogVerbose(args.Verbose)
 	logs.Debugf("args: %#v\n", args)
 
-	if err = checkType(args, true); err != nil {
-		return err
+	if err := lib.ValidateModelType(args.Type); err != nil {
+		return cli.Exit(err, meta.LoadError)
 	}
 
 	var apiKey string

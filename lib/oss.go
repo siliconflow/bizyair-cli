@@ -201,7 +201,7 @@ func (a *AliOssStorageClient) UploadFileMultipart(ctx context.Context, file *Fil
 			checkpoint = nil
 		}
 
-		// 验证checkpoint（不比对 objectKey）
+		// 验证checkpoint
 		if checkpoint != nil && ValidateCheckpoint(checkpoint, file) {
 			logs.Debugf("[%s] resuming upload from checkpoint (uploadID: %s)\n", fileIndex, checkpoint.UploadID)
 			uploadID = checkpoint.UploadID

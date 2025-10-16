@@ -12,6 +12,7 @@ import (
 	"github.com/charmbracelet/bubbles/progress"
 	"github.com/charmbracelet/bubbles/spinner"
 	"github.com/charmbracelet/bubbles/table"
+	"github.com/charmbracelet/bubbles/textarea"
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
@@ -40,7 +41,7 @@ type mainModel struct {
 	inpCover   textinput.Model
 	inpExt     textinput.Model
 	inpVersion textinput.Model
-	inpIntro   textinput.Model
+	taIntro    textarea.Model
 
 	filepicker   filepicker.Model
 	selectedFile string
@@ -149,8 +150,11 @@ func newMainModel() mainModel {
 	inName.Placeholder = "请输入模型名称（字母/数字/下划线/短横线）"
 	inVer := textinput.New()
 	inVer.Placeholder = "请输入版本名称（默认: v1.0）"
-	inIntro := textinput.New()
-	inIntro.Placeholder = "可选，输入模型介绍（回车跳过）"
+	taIntro := textarea.New()
+	taIntro.Placeholder = "输入模型介绍（最多5000字，Ctrl+D 提交）"
+	taIntro.CharLimit = 5000
+	taIntro.SetHeight(20)
+	taIntro.ShowLineNumbers = false
 	inPath := textinput.New()
 	inPath.Placeholder = "请输入文件路径（仅文件）"
 	if homeDir, err := os.UserHomeDir(); err == nil {
@@ -167,7 +171,7 @@ func newMainModel() mainModel {
 		homeDir = "."
 	}
 	fp.CurrentDirectory = homeDir
-	fp.ShowHidden = true
+	fp.ShowHidden = false
 	fp.DirAllowed = true
 	fp.FileAllowed = true
 	fp.SetHeight(10)
@@ -212,7 +216,7 @@ func newMainModel() mainModel {
 		inpCover:   inCover,
 		inpExt:     inExt,
 		inpVersion: inVer,
-		inpIntro:   inIntro,
+		taIntro:    taIntro,
 		filepicker: fp,
 		modelTable: modelTable,
 		titleStyle: lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("#36A3F7")),
@@ -275,7 +279,17 @@ func (m mainModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.inpPath.Width = lw
 		m.inpCover.Width = lw
 		m.inpExt.Width = lw
-		m.inpIntro.Width = lw
+		m.taIntro.SetWidth(lw - 2)
+		// 动态调整 textarea 高度
+		// 为标题、字符计数、提示文字等预留约 6 行空间
+		taHeight := innerH - 6
+		if taHeight < 8 {
+			taHeight = 8 // 最小高度 8 行
+		}
+		if taHeight > 40 {
+			taHeight = 40 // 最大高度 40 行，避免过大
+		}
+		m.taIntro.SetHeight(taHeight)
 		m.progress.Width = innerW - 10
 		if m.progress.Width < 10 {
 			m.progress.Width = 10

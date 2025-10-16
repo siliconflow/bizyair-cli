@@ -1,8 +1,6 @@
 package tui
 
 import (
-	"errors"
-
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/siliconflow/bizyair-cli/lib"
 )
@@ -75,27 +73,14 @@ type checkModelExistsDoneMsg struct {
 	err    error
 }
 
-// 带步骤信息的错误
-type stepError struct {
-	Step string
-	Err  error
-}
-
-func (e *stepError) Error() string { return e.Err.Error() }
-
+// withStep 使用 lib 层的错误处理
 func withStep(step string, err error) error {
-	if err == nil {
-		return nil
-	}
-	return &stepError{Step: step, Err: err}
+	return lib.WithStep(step, err)
 }
 
+// errStep 从错误中提取步骤信息
 func errStep(err error) string {
-	var se *stepError
-	if errors.As(err, &se) {
-		return se.Step
-	}
-	return ""
+	return lib.GetStep(err)
 }
 
 // 列表项（与 bubbles/list 兼容）
