@@ -31,17 +31,18 @@ type mainModel struct {
 	width  int
 	height int
 
-	menu       list.Model
-	inpApi     textinput.Model
-	typeList   list.Model
-	baseList   list.Model
-	moreList   list.Model
-	inpName    textinput.Model
-	inpPath    textinput.Model
-	inpCover   textinput.Model
-	inpExt     textinput.Model
-	inpVersion textinput.Model
-	taIntro    textarea.Model
+	menu            list.Model
+	inpApi          textinput.Model
+	typeList        list.Model
+	baseList        list.Model
+	coverMethodList list.Model
+	moreList        list.Model
+	inpName         textinput.Model
+	inpPath         textinput.Model
+	inpCover        textinput.Model
+	inpExt          textinput.Model
+	inpVersion      textinput.Model
+	taIntro         textarea.Model
 
 	filepicker   filepicker.Model
 	selectedFile string
@@ -138,6 +139,15 @@ func newMainModel() mainModel {
 	bl := list.New([]list.Item{}, d, 30, 12)
 	bl.Title = "选择 Base Model（必选）"
 
+	coverMethodItems := []list.Item{
+		listItem{title: "通过 URL 上传", desc: "输入图片或视频的网络链接"},
+		listItem{title: "从本地上传", desc: "从本地文件系统选择文件"},
+	}
+	cml := list.New(coverMethodItems, d, 30, 12)
+	cml.Title = "选择封面上传方式"
+	cml.SetShowStatusBar(false)
+	cml.SetShowPagination(false)
+
 	moreItems := []list.Item{listItem{title: "是，继续添加版本"}, listItem{title: "否，进入确认"}}
 	ml := list.New(moreItems, d, 30, 12)
 	ml.Title = "是否继续添加版本？"
@@ -205,26 +215,27 @@ func newMainModel() mainModel {
 	modelTable.SetStyles(s)
 
 	m := mainModel{
-		step:       mainStepHome,
-		menu:       menuList,
-		inpApi:     inApi,
-		typeList:   tp,
-		baseList:   bl,
-		moreList:   ml,
-		inpName:    inName,
-		inpPath:    inPath,
-		inpCover:   inCover,
-		inpExt:     inExt,
-		inpVersion: inVer,
-		taIntro:    taIntro,
-		filepicker: fp,
-		modelTable: modelTable,
-		titleStyle: lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("#36A3F7")),
-		hintStyle:  lipgloss.NewStyle().Faint(true).Foreground(lipgloss.Color("244")),
-		panelStyle: lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).BorderForeground(lipgloss.Color("63")).Padding(1, 2),
-		btnStyle:   lipgloss.NewStyle().Foreground(lipgloss.Color("#FFFFFF")).Background(lipgloss.Color("#04B575")).Padding(0, 1).Bold(true),
-		sp:         sp,
-		progress:   pr,
+		step:            mainStepHome,
+		menu:            menuList,
+		inpApi:          inApi,
+		typeList:        tp,
+		baseList:        bl,
+		coverMethodList: cml,
+		moreList:        ml,
+		inpName:         inName,
+		inpPath:         inPath,
+		inpCover:        inCover,
+		inpExt:          inExt,
+		inpVersion:      inVer,
+		taIntro:         taIntro,
+		filepicker:      fp,
+		modelTable:      modelTable,
+		titleStyle:      lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("#36A3F7")),
+		hintStyle:       lipgloss.NewStyle().Faint(true).Foreground(lipgloss.Color("244")),
+		panelStyle:      lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).BorderForeground(lipgloss.Color("63")).Padding(1, 2),
+		btnStyle:        lipgloss.NewStyle().Foreground(lipgloss.Color("#FFFFFF")).Background(lipgloss.Color("#04B575")).Padding(0, 1).Bold(true),
+		sp:              sp,
+		progress:        pr,
 		logo: strings.Join([]string{
 			` .-. .-')              .-') _              ('-.             _  .-')   `,
 			` \  ( OO )            (  OO) )            ( OO ).-.        ( \( -O )  `,
@@ -272,6 +283,7 @@ func (m mainModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.menu.SetWidth(lw)
 		m.typeList.SetWidth(lw)
 		m.baseList.SetWidth(lw)
+		m.coverMethodList.SetWidth(lw)
 		m.moreList.SetWidth(lw)
 		m.inpApi.Width = lw
 		m.inpName.Width = lw
@@ -635,7 +647,7 @@ func (m mainModel) View() string {
 			// 如果是在 stepName 步骤，显示校验模型名的提示
 			if m.upStep == stepName {
 				spin := m.sp.View()
-				return m.renderFrame(header + "\n" + panel.Render(m.titleStyle.Render("上传 · Step 2/8 · 模型名称")+"\n\n"+m.inpName.View()+"\n\n"+spin+" 正在校验模型名是否重复…"))
+				return m.renderFrame(header + "\n" + panel.Render(m.titleStyle.Render("上传 · Step 2/9 · 模型名称")+"\n\n"+m.inpName.View()+"\n\n"+spin+" 正在校验模型名是否重复…"))
 			}
 			return m.renderFrame(header + "\n" + panel.Render(m.renderUploadRunningView()))
 		}

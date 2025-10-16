@@ -34,7 +34,8 @@ const (
 	stepName
 	stepVersion
 	stepBase
-	stepCover
+	stepCoverMethod // 选择封面上传方式
+	stepCover       // 实际上传封面
 	stepIntro
 	stepPath
 	stepAskMore
@@ -128,6 +129,9 @@ type actionInputs struct {
 
 	// 路径输入相关
 	pathInputFocused bool
+
+	// 封面上传方式：url 或 local
+	coverUploadMethod string
 }
 
 // 列表消息
