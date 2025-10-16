@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/siliconflow/bizyair-cli/lib"
 )
@@ -60,4 +61,29 @@ func getSupportedCoverFormats() string {
 // validateCoverFile 使用 lib 层的实现
 func validateCoverFile(path string) error {
 	return lib.ValidateCoverFile(path)
+}
+
+// validateIntroFile 验证介绍文件格式
+func validateIntroFile(path string) error {
+	ext := strings.ToLower(filepath.Ext(path))
+	if ext != ".txt" && ext != ".md" {
+		return fmt.Errorf("不支持的文件格式，仅支持 .txt 和 .md 文件")
+	}
+	return validatePath(path)
+}
+
+// readIntroFile 读取介绍文件内容并截断到5000字
+func readIntroFile(path string) (string, error) {
+	content, err := os.ReadFile(path)
+	if err != nil {
+		return "", fmt.Errorf("读取文件失败: %w", err)
+	}
+
+	text := strings.TrimSpace(string(content))
+	runes := []rune(text)
+	if len(runes) > 5000 {
+		runes = runes[:5000]
+	}
+
+	return string(runes), nil
 }

@@ -71,6 +71,7 @@ func (m *mainModel) resetUploadState() {
 	m.act.pathInputFocused = false
 	m.act.useFilePicker = false
 	m.act.filePickerErr = nil
+	m.act.coverUploadMethod = ""
 }
 
 // 路径校验与设置
@@ -264,17 +265,8 @@ func (m *mainModel) updateUploadInputs(msg tea.Msg) tea.Cmd {
 			case "enter":
 				if it, ok := m.baseList.SelectedItem().(listItem); ok {
 					m.act.cur.base = it.title
-					m.upStep = stepCover
-					m.act.useFilePicker = true
-					m.coverUrlInputFocused = false
-					m.coverPathInputFocused = true
-					m.inpCover.SetValue("")
-					m.inpPath.SetValue(ensureTrailingSep(m.filepicker.CurrentDirectory))
-					m.filepicker.AllowedTypes = nil
-					m.filepicker.DirAllowed = true
-					m.filepicker.FileAllowed = true
-					m.filepicker.Path = ""
-					return tea.Batch(m.inpPath.Focus(), m.filepicker.Init())
+					m.upStep = stepCoverMethod
+					return nil
 				}
 			case "esc":
 				m.upStep = stepVersion
@@ -282,8 +274,42 @@ func (m *mainModel) updateUploadInputs(msg tea.Msg) tea.Cmd {
 			}
 		}
 		return cmd
+	case stepCoverMethod:
+		var cmd tea.Cmd
+		m.coverMethodList, cmd = m.coverMethodList.Update(msg)
+		if km, ok := msg.(tea.KeyMsg); ok {
+			switch km.String() {
+			case "enter":
+				if it, ok := m.coverMethodList.SelectedItem().(listItem); ok {
+					method := it.title
+					if strings.Contains(method, "URL") {
+						m.act.coverUploadMethod = "url"
+						m.coverUrlInputFocused = true
+						m.coverPathInputFocused = false
+						m.inpCover.SetValue("")
+						m.upStep = stepCover
+						return m.inpCover.Focus()
+					} else {
+						m.act.coverUploadMethod = "local"
+						m.act.useFilePicker = true
+						m.coverUrlInputFocused = false
+						m.coverPathInputFocused = true
+						m.inpPath.SetValue(ensureTrailingSep(m.filepicker.CurrentDirectory))
+						m.filepicker.AllowedTypes = nil
+						m.filepicker.DirAllowed = true
+						m.filepicker.FileAllowed = true
+						m.filepicker.Path = ""
+						m.upStep = stepCover
+						return tea.Batch(m.inpPath.Focus(), m.filepicker.Init())
+					}
+				}
+			case "esc":
+				m.upStep = stepBase
+				return nil
+			}
+		}
+		return cmd
 	case stepCover:
-		var urlCmd, pathCmd, fpCmd tea.Cmd
 		if km, ok := msg.(tea.KeyMsg); ok {
 			switch km.String() {
 			case "esc":
@@ -291,33 +317,18 @@ func (m *mainModel) updateUploadInputs(msg tea.Msg) tea.Cmd {
 				m.coverPathInputFocused = false
 				m.act.filePickerErr = nil
 				m.filepicker.Path = ""
-				m.upStep = stepBase
+				m.upStep = stepCoverMethod
 				return nil
-			case "tab":
-				if m.coverUrlInputFocused {
-					m.coverUrlInputFocused = false
-					m.coverPathInputFocused = true
-					m.inpCover.Blur()
-					return m.inpPath.Focus()
-				}
-				if m.coverPathInputFocused {
-					path := strings.TrimSpace(m.inpPath.Value())
-					if path != "" {
-						if info, err := os.Stat(path); err == nil && info.IsDir() {
-							m.filepicker.CurrentDirectory = path
-							m.coverPathInputFocused = false
-							m.inpPath.Blur()
-							return m.filepicker.Init()
-						}
-					}
-					m.coverPathInputFocused = false
-					m.inpPath.Blur()
-					return nil
-				}
-				m.coverUrlInputFocused = true
-				return m.inpCover.Focus()
-			case "enter":
-				if m.coverUrlInputFocused {
+			}
+		}
+
+		// 根据上传方式分别处理
+		if m.act.coverUploadMethod == "url" {
+			// URL 上传模式
+			var urlCmd tea.Cmd
+			if km, ok := msg.(tea.KeyMsg); ok {
+				switch km.String() {
+				case "enter":
 					raw := strings.TrimSpace(m.inpCover.Value())
 					first := raw
 					warned := false
@@ -328,7 +339,7 @@ func (m *mainModel) updateUploadInputs(msg tea.Msg) tea.Cmd {
 						warned = true
 					}
 					if _, err := os.Stat(first); err == nil {
-						m.act.filePickerErr = fmt.Errorf("检测到本地路径，请在下方文件选择器中选择：%s", first)
+						m.act.filePickerErr = fmt.Errorf("检测到本地路径，请返回上一步选择本地上传")
 						return clearFilePickerErrorAfter(3 * time.Second)
 					}
 					if !IsHTTPURL(first) {
@@ -339,7 +350,6 @@ func (m *mainModel) updateUploadInputs(msg tea.Msg) tea.Cmd {
 					if q := strings.Index(check, "?"); q >= 0 {
 						check = check[:q]
 					}
-					// 使用新的辅助函数验证格式
 					if !isSupportedCoverFormat(check) {
 						m.act.filePickerErr = fmt.Errorf("URL 格式不支持: %s\n支持的格式: %s", first, getSupportedCoverFormats())
 						return clearFilePickerErrorAfter(3 * time.Second)
@@ -351,77 +361,101 @@ func (m *mainModel) updateUploadInputs(msg tea.Msg) tea.Cmd {
 					}
 					return m.taIntro.Focus()
 				}
-				if m.coverPathInputFocused && m.inpPath.Value() != "" {
-					p := strings.TrimSpace(m.inpPath.Value())
-					info, err := os.Stat(p)
-					if err != nil {
-						m.act.filePickerErr = fmt.Errorf("路径不存在: %s", p)
-						return clearFilePickerErrorAfter(3 * time.Second)
-					}
-					if info.IsDir() {
-						m.filepicker.CurrentDirectory = p
-						return m.filepicker.Init()
-					}
-					// 使用新的辅助函数验证格式和大小
-					if err := validateCoverFile(p); err != nil {
-						m.act.filePickerErr = err
-						return clearFilePickerErrorAfter(3 * time.Second)
-					}
-					ap := absPath(p)
-					m.inpCover.SetValue(ap)
-					m.act.cur.cover = ap
-					m.upStep = stepIntro
-					return m.taIntro.Focus()
-				}
 			}
-		}
-		if m.coverUrlInputFocused {
 			m.inpCover, urlCmd = m.inpCover.Update(msg)
-		}
-		if m.coverPathInputFocused {
-			m.inpPath, pathCmd = m.inpPath.Update(msg)
-			typedPath := strings.TrimSpace(m.inpPath.Value())
-			if typedPath != "" {
-				if info, err := os.Stat(typedPath); err == nil && info.IsDir() {
-					if filepath.Clean(m.filepicker.CurrentDirectory) != filepath.Clean(typedPath) {
-						m.filepicker.CurrentDirectory = typedPath
-						fpCmd = m.filepicker.Init()
+			return urlCmd
+		} else if m.act.coverUploadMethod == "local" {
+			// 本地文件上传模式
+			var pathCmd, fpCmd tea.Cmd
+			if km, ok := msg.(tea.KeyMsg); ok {
+				switch km.String() {
+				case "tab":
+					if m.coverPathInputFocused {
+						path := strings.TrimSpace(m.inpPath.Value())
+						if path != "" {
+							if info, err := os.Stat(path); err == nil && info.IsDir() {
+								m.filepicker.CurrentDirectory = path
+								m.coverPathInputFocused = false
+								m.inpPath.Blur()
+								return m.filepicker.Init()
+							}
+						}
+						m.coverPathInputFocused = false
+						m.inpPath.Blur()
+						return nil
+					} else {
+						m.coverPathInputFocused = true
+						return m.inpPath.Focus()
+					}
+				case "enter":
+					if m.coverPathInputFocused && m.inpPath.Value() != "" {
+						p := strings.TrimSpace(m.inpPath.Value())
+						info, err := os.Stat(p)
+						if err != nil {
+							m.act.filePickerErr = fmt.Errorf("路径不存在: %s", p)
+							return clearFilePickerErrorAfter(3 * time.Second)
+						}
+						if info.IsDir() {
+							m.filepicker.CurrentDirectory = p
+							return m.filepicker.Init()
+						}
+						if err := validateCoverFile(p); err != nil {
+							m.act.filePickerErr = err
+							return clearFilePickerErrorAfter(3 * time.Second)
+						}
+						ap := absPath(p)
+						m.inpCover.SetValue(ap)
+						m.act.cur.cover = ap
+						m.upStep = stepIntro
+						return m.taIntro.Focus()
 					}
 				}
 			}
-		}
-		if !m.coverUrlInputFocused && !m.coverPathInputFocused {
-			oldDir := m.filepicker.CurrentDirectory
-			var fc tea.Cmd
-			m.filepicker, fc = m.filepicker.Update(msg)
-			if fc != nil {
-				fpCmd = fc
+			if m.coverPathInputFocused {
+				m.inpPath, pathCmd = m.inpPath.Update(msg)
+				typedPath := strings.TrimSpace(m.inpPath.Value())
+				if typedPath != "" {
+					if info, err := os.Stat(typedPath); err == nil && info.IsDir() {
+						if filepath.Clean(m.filepicker.CurrentDirectory) != filepath.Clean(typedPath) {
+							m.filepicker.CurrentDirectory = typedPath
+							fpCmd = m.filepicker.Init()
+						}
+					}
+				}
 			}
-			if m.filepicker.CurrentDirectory != oldDir {
-				m.inpPath.SetValue(ensureTrailingSep(m.filepicker.CurrentDirectory))
-			}
-			if did, p := m.filepicker.DidSelectFile(msg); did {
-				if info, err := os.Stat(p); err == nil && !info.IsDir() {
-					// 使用新的辅助函数验证格式和大小
-					if err := validateCoverFile(p); err != nil {
-						m.act.filePickerErr = err
+			if !m.coverPathInputFocused {
+				oldDir := m.filepicker.CurrentDirectory
+				var fc tea.Cmd
+				m.filepicker, fc = m.filepicker.Update(msg)
+				if fc != nil {
+					fpCmd = fc
+				}
+				if m.filepicker.CurrentDirectory != oldDir {
+					m.inpPath.SetValue(ensureTrailingSep(m.filepicker.CurrentDirectory))
+				}
+				if did, p := m.filepicker.DidSelectFile(msg); did {
+					if info, err := os.Stat(p); err == nil && !info.IsDir() {
+						if err := validateCoverFile(p); err != nil {
+							m.act.filePickerErr = err
+							return clearFilePickerErrorAfter(3 * time.Second)
+						}
+						ap := absPath(p)
+						m.inpCover.SetValue(ap)
+						m.act.cur.cover = ap
+						m.upStep = stepIntro
+						return m.taIntro.Focus()
+					}
+				}
+				if didSelect, p := m.filepicker.DidSelectDisabledFile(msg); didSelect {
+					if info, err := os.Stat(p); err == nil && !info.IsDir() {
+						m.act.filePickerErr = errors.New(p + " 文件格式不支持")
 						return clearFilePickerErrorAfter(3 * time.Second)
 					}
-					ap := absPath(p)
-					m.inpCover.SetValue(ap)
-					m.act.cur.cover = ap
-					m.upStep = stepIntro
-					return m.taIntro.Focus()
 				}
 			}
-			if didSelect, p := m.filepicker.DidSelectDisabledFile(msg); didSelect {
-				if info, err := os.Stat(p); err == nil && !info.IsDir() {
-					m.act.filePickerErr = errors.New(p + " 文件格式不支持")
-					return clearFilePickerErrorAfter(3 * time.Second)
-				}
-			}
+			return tea.Batch(pathCmd, fpCmd)
 		}
-		return tea.Batch(urlCmd, pathCmd, fpCmd)
+		return nil
 	case stepIntro:
 		var cmd tea.Cmd
 		m.taIntro, cmd = m.taIntro.Update(msg)
@@ -606,11 +640,11 @@ func (m *mainModel) renderUploadStepsView() string {
 			}
 			m.typeList.SetHeight(h)
 		}
-		return m.titleStyle.Render("上传 · Step 1/8 · 选择模型类型") + "\n\n" + m.typeList.View() + "\n" + m.hintStyle.Render("确认：Enter，返回：Esc，退出：q")
+		return m.titleStyle.Render("上传 · Step 1/9 · 选择模型类型") + "\n\n" + m.typeList.View() + "\n" + m.hintStyle.Render("确认：Enter，返回：Esc，退出：q")
 	case stepName:
-		return m.titleStyle.Render("上传 · Step 2/8 · 模型名称") + "\n\n" + m.inpName.View() + "\n" + m.hintStyle.Render("确认：Enter，返回：Esc，退出：q")
+		return m.titleStyle.Render("上传 · Step 2/9 · 模型名称") + "\n\n" + m.inpName.View() + "\n" + m.hintStyle.Render("确认：Enter，返回：Esc，退出：q")
 	case stepVersion:
-		return m.titleStyle.Render("上传 · Step 3/8 · 版本名称（默认 v1.0）") + "\n\n" + m.inpVersion.View() + "\n" + m.hintStyle.Render("确认：Enter，返回：Esc，退出：q")
+		return m.titleStyle.Render("上传 · Step 3/9 · 版本名称（默认 v1.0）") + "\n\n" + m.inpVersion.View() + "\n" + m.hintStyle.Render("确认：Enter，返回：Esc，退出：q")
 	case stepBase:
 		if _, ih := m.innerSize(); ih > 0 {
 			h := ih - 12
@@ -621,57 +655,71 @@ func (m *mainModel) renderUploadStepsView() string {
 		}
 		// 如果基础模型类型还在加载中
 		if m.loadingBaseModelTypes {
-			return m.titleStyle.Render("上传 · Step 4/8 · Base Model（必选）") + "\n\n" + m.sp.View() + " 正在加载基础模型类型列表…\n" + m.hintStyle.Render("返回：Esc，退出：q")
+			return m.titleStyle.Render("上传 · Step 4/9 · Base Model（必选）") + "\n\n" + m.sp.View() + " 正在加载基础模型类型列表…\n" + m.hintStyle.Render("返回：Esc，退出：q")
 		}
 		// 如果列表为空（加载失败），显示提示
 		if len(m.baseModelTypes) == 0 {
-			return m.titleStyle.Render("上传 · Step 4/8 · Base Model（必选）") + "\n\n" + m.baseList.View() + "\n" + m.hintStyle.Render("（使用本地列表）选择后 Enter，返回：Esc，退出：q")
+			return m.titleStyle.Render("上传 · Step 4/9 · Base Model（必选）") + "\n\n" + m.baseList.View() + "\n" + m.hintStyle.Render("（使用本地列表）选择后 Enter，返回：Esc，退出：q")
 		}
-		return m.titleStyle.Render("上传 · Step 4/8 · Base Model（必选）") + "\n\n" + m.baseList.View() + "\n" + m.hintStyle.Render("选择后 Enter，返回：Esc，退出：q")
+		return m.titleStyle.Render("上传 · Step 4/9 · Base Model（必选）") + "\n\n" + m.baseList.View() + "\n" + m.hintStyle.Render("选择后 Enter，返回：Esc，退出：q")
+	case stepCoverMethod:
+		if _, ih := m.innerSize(); ih > 0 {
+			h := ih - 12
+			if h < 5 {
+				h = 5
+			}
+			m.coverMethodList.SetHeight(h)
+		}
+		return m.titleStyle.Render("上传 · Step 5/9 · 选择封面上传方式") + "\n\n" + m.coverMethodList.View() + "\n" + m.hintStyle.Render("选择后 Enter，返回：Esc，退出：q")
 	case stepCover:
 		var content strings.Builder
-		content.WriteString(m.titleStyle.Render("上传 · Step 5/8 · 选择封面（必填，默认文件选择器，Tab 在 URL/路径/文件选择器之间切换）"))
-		content.WriteString("\n\n")
-		urlLabel := "封面 URL（必填，仅 1 个图片或视频链接；本地文件请在下方选择）："
-		if m.coverUrlInputFocused {
-			urlLabel = m.titleStyle.Render("► " + urlLabel + "（当前焦点，按 Tab 切换）")
-		} else {
-			urlLabel = m.hintStyle.Render(urlLabel)
-		}
-		content.WriteString(urlLabel + "\n" + m.inpCover.View() + "\n\n")
-		pathLabel := "本地文件路径输入（按 Enter 确认并进入下一步）："
-		if m.coverPathInputFocused {
-			pathLabel = m.titleStyle.Render("► " + pathLabel + "（当前焦点，按 Tab 切换）")
-		} else {
-			pathLabel = m.hintStyle.Render(pathLabel)
-		}
-		content.WriteString(pathLabel + "\n" + m.inpPath.View() + "\n\n")
-		pickerLabel := "文件选择器："
-		if !m.coverUrlInputFocused && !m.coverPathInputFocused {
-			pickerLabel = m.titleStyle.Render("► 文件选择器：（当前焦点，按 Tab 切换）")
-		} else {
-			pickerLabel = m.hintStyle.Render(pickerLabel)
-		}
-		content.WriteString(pickerLabel + "\n")
-		if m.act.filePickerErr != nil {
-			content.WriteString(m.filepicker.Styles.DisabledFile.Render(m.act.filePickerErr.Error()) + "\n")
-		}
-		content.WriteString(m.filepicker.View() + "\n")
-		if m.coverUrlInputFocused {
-			content.WriteString(m.hintStyle.Render("输入封面 URL（图片或视频，视频限 100MB），回车确认并进入下一步；Tab 切换焦点；Esc 返回"))
-		} else if m.coverPathInputFocused {
-			content.WriteString(m.hintStyle.Render("输入本地文件路径（视频限 100MB），按 Enter 确认并进入下一步；Tab 切换焦点；Esc 返回"))
-		} else {
-			content.WriteString(m.hintStyle.Render("方向键导航，Enter 选择封面文件（视频限 100MB）并进入下一步；Tab 切换焦点；Esc 返回"))
+
+		if m.act.coverUploadMethod == "url" {
+			content.WriteString(m.titleStyle.Render("上传 · Step 6/9 · 输入封面URL"))
+			content.WriteString("\n\n")
+			content.WriteString("封面 URL（必填，仅 1 个图片或视频链接）：\n")
+			content.WriteString(m.inpCover.View() + "\n\n")
+			if m.act.filePickerErr != nil {
+				content.WriteString(m.filepicker.Styles.DisabledFile.Render(m.act.filePickerErr.Error()) + "\n\n")
+			}
+			content.WriteString(m.hintStyle.Render("输入封面 URL（图片或视频，视频限 100MB），回车确认并进入下一步；Esc 返回选择上传方式"))
+		} else if m.act.coverUploadMethod == "local" {
+			content.WriteString(m.titleStyle.Render("上传 · Step 6/9 · 选择本地封面文件"))
+			content.WriteString("\n\n")
+			pathLabel := "本地文件路径输入："
+			if m.coverPathInputFocused {
+				pathLabel = m.titleStyle.Render("► " + pathLabel + "（当前焦点，按 Tab 切换）")
+			} else {
+				pathLabel = m.hintStyle.Render(pathLabel)
+			}
+			content.WriteString(pathLabel + "\n" + m.inpPath.View() + "\n\n")
+
+			pickerLabel := "文件选择器："
+			if !m.coverPathInputFocused {
+				pickerLabel = m.titleStyle.Render("► 文件选择器：（当前焦点，按 Tab 切换）")
+			} else {
+				pickerLabel = m.hintStyle.Render(pickerLabel)
+			}
+			content.WriteString(pickerLabel + "\n")
+			if m.act.filePickerErr != nil {
+				content.WriteString(m.filepicker.Styles.DisabledFile.Render(m.act.filePickerErr.Error()) + "\n")
+			}
+			content.WriteString(m.filepicker.View() + "\n")
+
+			if m.coverPathInputFocused {
+				content.WriteString(m.hintStyle.Render("输入本地文件路径（视频限 100MB），Enter 确认；Tab 切换焦点；Esc 返回选择上传方式"))
+			} else {
+				content.WriteString(m.hintStyle.Render("方向键导航，Enter 选择封面文件（视频限 100MB）；Tab 切换焦点；Esc 返回选择上传方式"))
+			}
 		}
 		return content.String()
 	case stepIntro:
 		charCount := len([]rune(m.taIntro.Value()))
 		charInfo := fmt.Sprintf("（%d/5000 字）", charCount)
-		return m.titleStyle.Render("上传 · Step 6/8 · 模型介绍") + " " + m.hintStyle.Render(charInfo) + "\n\n" + m.taIntro.View() + "\n" + m.hintStyle.Render("提交：Ctrl+D，返回：Esc，退出：q")
+		return m.titleStyle.Render("上传 · Step 7/9 · 模型介绍") + " " + m.hintStyle.Render(charInfo) + "\n\n" + m.taIntro.View() + "\n" + m.hintStyle.Render("提交：Ctrl+D，返回：Esc，退出：q")
 	case stepPath:
 		var content strings.Builder
-		content.WriteString(m.titleStyle.Render("上传 · Step 7/8 · 选择文件") + "\n\n")
+		content.WriteString(m.titleStyle.Render("上传 · Step 8/9 · 选择文件") + "\n\n")
 		pathInputLabel := "路径输入："
 		if m.act.pathInputFocused {
 			pathInputLabel = m.titleStyle.Render("► 路径输入：（当前焦点，按Tab切换至文件选择器）")
@@ -702,7 +750,7 @@ func (m *mainModel) renderUploadStepsView() string {
 		return content.String()
 	case stepAskMore:
 		var b strings.Builder
-		b.WriteString(m.titleStyle.Render("上传 · Step 8/8 · 是否继续添加版本？") + "\n\n")
+		b.WriteString(m.titleStyle.Render("上传 · Step 9/9 · 是否继续添加版本？") + "\n\n")
 		if len(m.act.versions) > 0 {
 			b.WriteString("已添加版本：\n")
 			for i, v := range m.act.versions {
