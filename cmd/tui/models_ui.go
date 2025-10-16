@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/siliconflow/bizyair-cli/lib"
 	"github.com/siliconflow/bizyair-cli/lib/format"
 )
 
@@ -23,6 +24,7 @@ func (m *mainModel) updateListModelsInputs(msg tea.Msg) tea.Cmd {
 			if m.viewingModelDetail {
 				m.viewingModelDetail = false
 				m.modelDetail = nil
+				m.detailContent = ""
 				return nil
 			}
 			m.step = mainStepMenu
@@ -31,11 +33,29 @@ func (m *mainModel) updateListModelsInputs(msg tea.Msg) tea.Cmd {
 			m.modelList = nil
 			m.viewingModelDetail = false
 			m.modelDetail = nil
+			m.detailContent = ""
 			return nil
 		case "r":
 			if !m.viewingModelDetail {
 				m.loadingModelList = true
 				return loadModelList(m.apiKey)
+			}
+			return nil
+		case "up", "k", "down", "j":
+			// 在详情视图中处理滚动
+			if m.viewingModelDetail && !m.loadingModelDetail {
+				var cmd tea.Cmd
+				m.detailViewport, cmd = m.detailViewport.Update(msg)
+				return cmd
+			}
+			// 在列表视图中，让这些按键继续传递到 modelTable
+			// 不要在这里 return，让代码继续执行到底部的 modelTable.Update
+		case "pgup", "pgdown", "home", "end":
+			// 这些按键只在详情视图中使用
+			if m.viewingModelDetail && !m.loadingModelDetail {
+				var cmd tea.Cmd
+				m.detailViewport, cmd = m.detailViewport.Update(msg)
+				return cmd
 			}
 			return nil
 		case "ctrl+d":
@@ -121,37 +141,18 @@ func (m *mainModel) renderListModelsView() string {
 		if m.modelDetail == nil {
 			return m.titleStyle.Render("模型详情") + "\n\n" + "未加载到数据" + "\n\n" + m.hintStyle.Render("返回：Esc/q")
 		}
+
+		// 使用 viewport 展示详情内容
 		var b strings.Builder
-		b.WriteString(m.titleStyle.Render(fmt.Sprintf("%s (#%d) · %s", m.modelDetail.Name, m.modelDetail.Id, m.modelDetail.Type)))
-		b.WriteString("\n")
-		b.WriteString(fmt.Sprintf("作者：%s\n创建：%s  更新：%s\n", dash(m.modelDetail.UserName), dash(m.modelDetail.CreatedAt), dash(m.modelDetail.UpdatedAt)))
-		b.WriteString("\n")
-		if len(m.modelDetail.Versions) == 0 {
-			b.WriteString("暂无版本\n")
-		} else {
-			for i, v := range m.modelDetail.Versions {
-				b.WriteString(m.hintStyle.Render(fmt.Sprintf("[%d] 版本 %s", i+1, dash(v.Version))))
-				b.WriteString("\n")
-				b.WriteString(fmt.Sprintf("  基础模型: %s\n", dash(v.BaseModel)))
-				if v.FileSize > 0 {
-					b.WriteString(fmt.Sprintf("  文件: %s (%s)\n", dash(v.FileName), format.FormatBytes(v.FileSize)))
-				} else {
-					b.WriteString(fmt.Sprintf("  文件: %s\n", dash(v.FileName)))
-				}
-				if v.Sign != "" {
-					b.WriteString(fmt.Sprintf("  文件签名: %s\n", v.Sign))
-				}
-				if v.Intro != "" {
-					b.WriteString(fmt.Sprintf("  介绍: %s\n", v.Intro))
-				}
-				if v.ModelId > 0 {
-					b.WriteString(fmt.Sprintf("  模型ID: %d\n", v.ModelId))
-				}
-				b.WriteString(fmt.Sprintf("  创建: %s  更新: %s\n", dash(v.CreatedAt), dash(v.UpdatedAt)))
-				b.WriteString("\n")
-			}
-		}
-		b.WriteString(m.hintStyle.Render("返回：Esc/q，删除：Ctrl+D，列表：Enter 选择前需回退到列表"))
+		b.WriteString(m.titleStyle.Render("模型详情"))
+		b.WriteString("\n\n")
+		b.WriteString(m.detailViewport.View())
+		b.WriteString("\n\n")
+
+		// 滚动提示信息
+		scrollInfo := fmt.Sprintf("%.f%%", m.detailViewport.ScrollPercent()*100)
+		hints := fmt.Sprintf("返回：Esc/q，删除：Ctrl+D，滚动：↑↓/PgUp/PgDn/Home/End (%s)", scrollInfo)
+		b.WriteString(m.hintStyle.Render(hints))
 		return b.String()
 	}
 	if m.loadingModelList {
@@ -171,4 +172,131 @@ func (m *mainModel) renderListModelsView() string {
 		m.resizeModelTable(w)
 	}
 	return m.titleStyle.Render(fmt.Sprintf("列出模型（共 %d 个）", m.modelListTotal)) + "\n\n" + m.modelTable.View() + "\n\n" + m.hintStyle.Render("导航：↑↓，进入详情：Enter，删除：Ctrl+D，返回：Esc/q，刷新：r")
+}
+
+// buildModelDetailMarkdown 生成模型详情的 Markdown 内容
+func buildModelDetailMarkdown(detail *lib.BizyModelDetail) string {
+	if detail == nil {
+		return "# 错误\n\n未加载到模型数据"
+	}
+
+	var b strings.Builder
+
+	// 标题和基本信息（普通换行显示）
+	b.WriteString(fmt.Sprintf("# %s\n\n", detail.Name))
+	b.WriteString(fmt.Sprintf("**模型 ID**: #%d\n\n", detail.Id))
+	b.WriteString(fmt.Sprintf("**类型**: %s\n\n", dash(detail.Type)))
+	b.WriteString(fmt.Sprintf("**作者**: %s\n\n", dash(detail.UserName)))
+	if detail.Source != "" {
+		b.WriteString(fmt.Sprintf("**来源**: %s\n\n", detail.Source))
+	}
+	b.WriteString(fmt.Sprintf("**创建时间**: %s\n\n", dash(detail.CreatedAt)))
+	b.WriteString(fmt.Sprintf("**更新时间**: %s\n\n", dash(detail.UpdatedAt)))
+	b.WriteString("\n")
+
+	// 统计信息
+	if detail.Counter.UsedCount > 0 || detail.Counter.LikedCount > 0 || detail.Counter.DownloadedCount > 0 {
+		b.WriteString("## 📊 统计信息\n\n")
+		if detail.Counter.UsedCount > 0 {
+			b.WriteString(fmt.Sprintf("- 使用次数: %d\n", detail.Counter.UsedCount))
+		}
+		if detail.Counter.LikedCount > 0 {
+			b.WriteString(fmt.Sprintf("- 点赞数: %d\n", detail.Counter.LikedCount))
+		}
+		if detail.Counter.DownloadedCount > 0 {
+			b.WriteString(fmt.Sprintf("- 下载次数: %d\n", detail.Counter.DownloadedCount))
+		}
+		if detail.Counter.ForkedCount > 0 {
+			b.WriteString(fmt.Sprintf("- Fork 次数: %d\n", detail.Counter.ForkedCount))
+		}
+		if detail.Counter.ViewCount > 0 {
+			b.WriteString(fmt.Sprintf("- 浏览次数: %d\n", detail.Counter.ViewCount))
+		}
+		b.WriteString("\n")
+	}
+
+	// 版本信息
+	b.WriteString("## 📦 版本列表\n\n")
+	if len(detail.Versions) == 0 {
+		b.WriteString("*暂无版本*\n\n")
+	} else {
+		for i, v := range detail.Versions {
+			b.WriteString(fmt.Sprintf("### 版本 %d: %s\n\n", i+1, dash(v.Version)))
+
+			// 使用表格展示版本基本信息
+			b.WriteString("| 属性 | 值 |\n")
+			b.WriteString("|------|----|\n")
+
+			if v.BaseModel != "" {
+				b.WriteString(fmt.Sprintf("| 基础模型 | %s |\n", v.BaseModel))
+			}
+			if v.FileName != "" {
+				if v.FileSize > 0 {
+					b.WriteString(fmt.Sprintf("| 文件名 | %s |\n", v.FileName))
+					b.WriteString(fmt.Sprintf("| 文件大小 | %s |\n", format.FormatBytes(v.FileSize)))
+				} else {
+					b.WriteString(fmt.Sprintf("| 文件名 | %s |\n", v.FileName))
+				}
+			}
+			if v.Sign != "" {
+				b.WriteString(fmt.Sprintf("| 文件签名 | `%s` |\n", v.Sign))
+			}
+			if v.Path != "" {
+				b.WriteString(fmt.Sprintf("| 路径 | %s |\n", v.Path))
+			}
+			if v.ModelId > 0 {
+				b.WriteString(fmt.Sprintf("| 模型 ID | %d |\n", v.ModelId))
+			}
+			if v.Available {
+				b.WriteString("| 状态 | ✓ 可用 |\n")
+			} else {
+				b.WriteString("| 状态 | ✗ 不可用 |\n")
+			}
+			b.WriteString(fmt.Sprintf("| 创建时间 | %s |\n", dash(v.CreatedAt)))
+			b.WriteString(fmt.Sprintf("| 更新时间 | %s |\n", dash(v.UpdatedAt)))
+
+			// 版本统计信息
+			if v.Counter.UsedCount > 0 || v.Counter.LikedCount > 0 || v.Counter.DownloadedCount > 0 {
+				if v.Counter.UsedCount > 0 {
+					b.WriteString(fmt.Sprintf("| 使用次数 | %d |\n", v.Counter.UsedCount))
+				}
+				if v.Counter.LikedCount > 0 {
+					b.WriteString(fmt.Sprintf("| 点赞数 | %d |\n", v.Counter.LikedCount))
+				}
+				if v.Counter.DownloadedCount > 0 {
+					b.WriteString(fmt.Sprintf("| 下载次数 | %d |\n", v.Counter.DownloadedCount))
+				}
+				if v.Counter.ForkedCount > 0 {
+					b.WriteString(fmt.Sprintf("| Fork 次数 | %d |\n", v.Counter.ForkedCount))
+				}
+			}
+
+			b.WriteString("\n")
+
+			// 封面图片（如果有）
+			if len(v.CoverUrls) > 0 {
+				b.WriteString("**封面图片**:\n\n")
+				for idx, url := range v.CoverUrls {
+					b.WriteString(fmt.Sprintf("%d. %s\n", idx+1, url))
+				}
+				b.WriteString("\n")
+			}
+
+			// 版本介绍（可能是 Markdown 格式）
+			if v.Intro != "" {
+				b.WriteString("#### 📝 介绍\n\n")
+				// 直接输出介绍内容，glamour 会处理 Markdown 格式
+				intro := strings.TrimSpace(v.Intro)
+				b.WriteString(intro)
+				b.WriteString("\n\n")
+			}
+
+			// 版本分隔线
+			if i < len(detail.Versions)-1 {
+				b.WriteString("---\n\n")
+			}
+		}
+	}
+
+	return b.String()
 }

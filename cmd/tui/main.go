@@ -14,7 +14,9 @@ import (
 	"github.com/charmbracelet/bubbles/table"
 	"github.com/charmbracelet/bubbles/textarea"
 	"github.com/charmbracelet/bubbles/textinput"
+	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/glamour"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/siliconflow/bizyair-cli/lib"
 	"github.com/siliconflow/bizyair-cli/meta"
@@ -58,6 +60,8 @@ type mainModel struct {
 	viewingModelDetail bool
 	modelDetail        *lib.BizyModelDetail
 	loadingModelDetail bool
+	detailViewport     viewport.Model
+	detailContent      string
 
 	confirmingDelete bool
 	deleteTargetId   int64
@@ -224,6 +228,10 @@ func newMainModel() mainModel {
 	s.Selected = s.Selected.Foreground(lipgloss.Color("229")).Background(lipgloss.Color("57")).Bold(false)
 	modelTable.SetStyles(s)
 
+	// 初始化模型详情 viewport
+	detailViewport := viewport.New(80, 20)
+	detailViewport.Style = lipgloss.NewStyle()
+
 	m := mainModel{
 		step:            mainStepHome,
 		menu:            menuList,
@@ -241,6 +249,7 @@ func newMainModel() mainModel {
 		taIntro:         taIntro,
 		filepicker:      fp,
 		modelTable:      modelTable,
+		detailViewport:  detailViewport,
 		titleStyle:      lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("#36A3F7")),
 		hintStyle:       lipgloss.NewStyle().Faint(true).Foreground(lipgloss.Color("244")),
 		panelStyle:      lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).BorderForeground(lipgloss.Color("63")).Padding(1, 2),
@@ -332,6 +341,54 @@ func (m mainModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.filepicker.SetHeight(5)
 		}
 		m.resizeModelTable(innerW)
+
+		// 动态调整模型详情 viewport 大小
+		detailViewportHeight := innerH - 12
+		if detailViewportHeight < 5 {
+			detailViewportHeight = 5
+		}
+		detailViewportWidth := innerW - 4
+		if detailViewportWidth < 40 {
+			detailViewportWidth = 40
+		}
+
+		// 检查尺寸是否变化
+		needRerender := false
+		if m.detailViewport.Width != detailViewportWidth || m.detailViewport.Height != detailViewportHeight {
+			m.detailViewport.Width = detailViewportWidth
+			m.detailViewport.Height = detailViewportHeight
+			needRerender = true
+		}
+
+		// 如果正在查看详情且尺寸变化了，需要重新渲染内容
+		if needRerender && m.viewingModelDetail && m.modelDetail != nil && m.detailContent != "" {
+			// 重新生成 Markdown
+			markdown := buildModelDetailMarkdown(m.modelDetail)
+
+			// 使用新的宽度重新渲染
+			renderer, err := glamour.NewTermRenderer(
+				glamour.WithAutoStyle(),
+				glamour.WithWordWrap(detailViewportWidth),
+			)
+
+			if err == nil {
+				if rendered, err := renderer.Render(markdown); err == nil {
+					m.detailContent = rendered
+					// 保持当前滚动位置（如果可能）
+					yOffset := m.detailViewport.YOffset
+					m.detailViewport.SetContent(m.detailContent)
+					m.detailViewport.YOffset = yOffset
+					// 确保不超出范围
+					if m.detailViewport.YOffset > m.detailViewport.TotalLineCount()-m.detailViewport.Height {
+						m.detailViewport.YOffset = m.detailViewport.TotalLineCount() - m.detailViewport.Height
+						if m.detailViewport.YOffset < 0 {
+							m.detailViewport.YOffset = 0
+						}
+					}
+				}
+			}
+		}
+
 		return m, nil
 	case tea.KeyMsg:
 		if m.err != nil {
@@ -463,6 +520,33 @@ func (m mainModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 		m.modelDetail = msg.detail
+
+		// 生成 Markdown 内容并使用 glamour 渲染
+		markdown := buildModelDetailMarkdown(msg.detail)
+
+		// 使用 glamour 渲染 Markdown，使用深色主题并设置合适的宽度
+		renderer, err := glamour.NewTermRenderer(
+			glamour.WithAutoStyle(),
+			glamour.WithWordWrap(m.detailViewport.Width),
+		)
+
+		if err != nil {
+			// 如果 glamour 初始化失败，降级到纯文本显示
+			m.detailContent = markdown
+		} else {
+			rendered, err := renderer.Render(markdown)
+			if err != nil {
+				// 如果渲染失败，降级到纯文本显示
+				m.detailContent = markdown
+			} else {
+				m.detailContent = rendered
+			}
+		}
+
+		// 设置到 viewport 并重置滚动位置
+		m.detailViewport.SetContent(m.detailContent)
+		m.detailViewport.GotoTop()
+
 		return m, nil
 	case deleteModelDoneMsg:
 		m.running = false
