@@ -103,7 +103,7 @@ func (m *mainModel) renderUploadRunningView() string {
 	var summaryBuilder strings.Builder
 	summaryBuilder.WriteString(fmt.Sprintf("- type: %s\n- name: %s\n", dash(m.act.u.typ), dash(m.act.u.name)))
 	for i, v := range m.act.versions {
-		summaryBuilder.WriteString(fmt.Sprintf("  [%d] version=%s base=%s cover=%s path=%s intro=%s\n", i+1, dash(v.version), dash(v.base), dash(v.cover), dash(v.path), dash(v.intro)))
+		summaryBuilder.WriteString(fmt.Sprintf("  [%d] version=%s base=%s cover=%s path=%s intro=%s\n", i+1, dash(v.version), dash(v.base), dash(v.cover), dash(v.path), dash(truncateToLines(v.intro, 2))))
 	}
 	summary := summaryBuilder.String()
 
@@ -966,7 +966,7 @@ func (m *mainModel) renderUploadStepsView() string {
 		b.WriteString(fmt.Sprintf("模型名称：%s\n类型：%s\n\n", m.act.u.name, m.act.u.typ))
 		for i, v := range m.act.versions {
 			b.WriteString(fmt.Sprintf("[%d] 版本=%s  base=%s\n", i+1, dash(v.version), dash(v.base)))
-			b.WriteString(fmt.Sprintf("cover=%s\npath=%s\nintro=%s\n\n", dash(v.cover), dash(v.path), dash(v.intro)))
+			b.WriteString(fmt.Sprintf("cover=%s\npath=%s\nintro=%s\n\n", dash(v.cover), dash(v.path), dash(truncateToLines(v.intro, 2))))
 		}
 		b.WriteString(m.hintStyle.Render("按 Enter 开始上传；Esc 返回上一步；q 退出"))
 		return b.String()

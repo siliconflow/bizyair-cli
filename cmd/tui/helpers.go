@@ -87,3 +87,54 @@ func readIntroFile(path string) (string, error) {
 
 	return string(runes), nil
 }
+
+// truncateToLines 将文本截断为指定行数的预览
+// maxLines: 最大行数，默认2行
+// maxLineLength: 单行最大字符数，默认80
+func truncateToLines(text string, maxLines int) string {
+	if text == "" {
+		return ""
+	}
+
+	const maxLineLength = 80
+
+	// 按换行符分割文本
+	lines := strings.Split(text, "\n")
+
+	// 如果文本行数超过限制
+	if len(lines) > maxLines {
+		// 取前 maxLines 行
+		truncated := strings.Join(lines[:maxLines], "\n")
+		return truncated + "..."
+	}
+
+	// 如果行数不超过，但需要检查单行是否过长
+	var result strings.Builder
+	needsTruncation := false
+
+	for i, line := range lines {
+		if i >= maxLines {
+			needsTruncation = true
+			break
+		}
+
+		lineRunes := []rune(strings.TrimSpace(line))
+		if len(lineRunes) > maxLineLength {
+			// 单行过长，截断
+			result.WriteString(string(lineRunes[:maxLineLength]))
+			needsTruncation = true
+			break
+		}
+
+		if i > 0 {
+			result.WriteString("\n")
+		}
+		result.WriteString(string(lineRunes))
+	}
+
+	if needsTruncation {
+		return result.String() + "..."
+	}
+
+	return result.String()
+}
