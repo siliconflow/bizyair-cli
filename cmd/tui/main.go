@@ -36,6 +36,7 @@ type mainModel struct {
 	typeList        list.Model
 	baseList        list.Model
 	coverMethodList list.Model
+	introMethodList list.Model
 	moreList        list.Model
 	inpName         textinput.Model
 	inpPath         textinput.Model
@@ -148,6 +149,15 @@ func newMainModel() mainModel {
 	cml.SetShowStatusBar(false)
 	cml.SetShowPagination(false)
 
+	introMethodItems := []list.Item{
+		listItem{title: "通过文件导入", desc: "从 .txt 或 .md 文件导入介绍内容"},
+		listItem{title: "直接输入", desc: "在文本编辑器中直接输入"},
+	}
+	iml := list.New(introMethodItems, d, 30, 12)
+	iml.Title = "选择介绍输入方式"
+	iml.SetShowStatusBar(false)
+	iml.SetShowPagination(false)
+
 	moreItems := []list.Item{listItem{title: "是，继续添加版本"}, listItem{title: "否，进入确认"}}
 	ml := list.New(moreItems, d, 30, 12)
 	ml.Title = "是否继续添加版本？"
@@ -221,6 +231,7 @@ func newMainModel() mainModel {
 		typeList:        tp,
 		baseList:        bl,
 		coverMethodList: cml,
+		introMethodList: iml,
 		moreList:        ml,
 		inpName:         inName,
 		inpPath:         inPath,
@@ -284,6 +295,7 @@ func (m mainModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.typeList.SetWidth(lw)
 		m.baseList.SetWidth(lw)
 		m.coverMethodList.SetWidth(lw)
+		m.introMethodList.SetWidth(lw)
 		m.moreList.SetWidth(lw)
 		m.inpApi.Width = lw
 		m.inpName.Width = lw

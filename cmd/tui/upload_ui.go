@@ -72,6 +72,8 @@ func (m *mainModel) resetUploadState() {
 	m.act.useFilePicker = false
 	m.act.filePickerErr = nil
 	m.act.coverUploadMethod = ""
+	m.act.introInputMethod = ""
+	m.act.introPathInputFocused = false
 }
 
 // 路径校验与设置
@@ -355,11 +357,11 @@ func (m *mainModel) updateUploadInputs(msg tea.Msg) tea.Cmd {
 						return clearFilePickerErrorAfter(3 * time.Second)
 					}
 					m.act.cur.cover = first
-					m.upStep = stepIntro
+					m.upStep = stepIntroMethod
 					if warned {
-						return tea.Batch(m.taIntro.Focus(), clearFilePickerErrorAfter(3*time.Second))
+						return clearFilePickerErrorAfter(3 * time.Second)
 					}
-					return m.taIntro.Focus()
+					return nil
 				}
 			}
 			m.inpCover, urlCmd = m.inpCover.Update(msg)
@@ -406,8 +408,8 @@ func (m *mainModel) updateUploadInputs(msg tea.Msg) tea.Cmd {
 						ap := absPath(p)
 						m.inpCover.SetValue(ap)
 						m.act.cur.cover = ap
-						m.upStep = stepIntro
-						return m.taIntro.Focus()
+						m.upStep = stepIntroMethod
+						return nil
 					}
 				}
 			}
@@ -442,8 +444,8 @@ func (m *mainModel) updateUploadInputs(msg tea.Msg) tea.Cmd {
 						ap := absPath(p)
 						m.inpCover.SetValue(ap)
 						m.act.cur.cover = ap
-						m.upStep = stepIntro
-						return m.taIntro.Focus()
+						m.upStep = stepIntroMethod
+						return nil
 					}
 				}
 				if didSelect, p := m.filepicker.DidSelectDisabledFile(msg); didSelect {
@@ -456,28 +458,174 @@ func (m *mainModel) updateUploadInputs(msg tea.Msg) tea.Cmd {
 			return tea.Batch(pathCmd, fpCmd)
 		}
 		return nil
-	case stepIntro:
+	case stepIntroMethod:
 		var cmd tea.Cmd
-		m.taIntro, cmd = m.taIntro.Update(msg)
+		m.introMethodList, cmd = m.introMethodList.Update(msg)
 		if km, ok := msg.(tea.KeyMsg); ok {
 			switch km.String() {
-			case "ctrl+d":
-				intro := strings.TrimSpace(m.taIntro.Value())
-				if len([]rune(intro)) > 5000 {
-					intro = string([]rune(intro)[:5000])
+			case "enter":
+				if it, ok := m.introMethodList.SelectedItem().(listItem); ok {
+					method := it.title
+					if strings.Contains(method, "文件导入") {
+						m.act.introInputMethod = "file"
+						m.act.useFilePicker = true
+						m.act.introPathInputFocused = true
+						m.inpPath.SetValue(ensureTrailingSep(m.filepicker.CurrentDirectory))
+						m.filepicker.AllowedTypes = []string{".txt", ".md"}
+						m.filepicker.DirAllowed = true
+						m.filepicker.FileAllowed = true
+						m.filepicker.Path = ""
+						m.upStep = stepIntro
+						return tea.Batch(m.inpPath.Focus(), m.filepicker.Init())
+					} else {
+						m.act.introInputMethod = "direct"
+						m.upStep = stepIntro
+						return m.taIntro.Focus()
+					}
 				}
-				m.act.cur.intro = intro
-				m.act.useFilePicker = true
-				m.act.pathInputFocused = false
-				m.inpPath.SetValue(ensureTrailingSep(m.filepicker.CurrentDirectory))
-				m.upStep = stepPath
-				return m.filepicker.Init()
 			case "esc":
 				m.upStep = stepCover
-				return m.inpCover.Focus()
+				if m.act.coverUploadMethod == "url" {
+					return m.inpCover.Focus()
+				}
+				return nil
 			}
 		}
 		return cmd
+	case stepIntro:
+		if m.act.introInputMethod == "file" {
+			// 文件导入模式
+			var pathCmd, fpCmd tea.Cmd
+			if km, ok := msg.(tea.KeyMsg); ok {
+				switch km.String() {
+				case "esc":
+					m.act.useFilePicker = false
+					m.act.introPathInputFocused = false
+					m.act.filePickerErr = nil
+					m.filepicker.Path = ""
+					m.taIntro.SetValue("")
+					m.upStep = stepIntroMethod
+					return nil
+				case "tab":
+					if m.act.introPathInputFocused {
+						path := strings.TrimSpace(m.inpPath.Value())
+						if path != "" {
+							if info, err := os.Stat(path); err == nil && info.IsDir() {
+								m.filepicker.CurrentDirectory = path
+								m.act.introPathInputFocused = false
+								m.inpPath.Blur()
+								return m.filepicker.Init()
+							}
+						}
+						m.act.introPathInputFocused = false
+						m.inpPath.Blur()
+						return nil
+					} else {
+						m.act.introPathInputFocused = true
+						return m.inpPath.Focus()
+					}
+				case "enter":
+					if m.act.introPathInputFocused && m.inpPath.Value() != "" {
+						p := strings.TrimSpace(m.inpPath.Value())
+						info, err := os.Stat(p)
+						if err != nil {
+							m.act.filePickerErr = fmt.Errorf("路径不存在: %s", p)
+							return clearFilePickerErrorAfter(3 * time.Second)
+						}
+						if info.IsDir() {
+							m.filepicker.CurrentDirectory = p
+							return m.filepicker.Init()
+						}
+						if err := validateIntroFile(p); err != nil {
+							m.act.filePickerErr = err
+							return clearFilePickerErrorAfter(3 * time.Second)
+						}
+						content, err := readIntroFile(p)
+						if err != nil {
+							m.act.filePickerErr = err
+							return clearFilePickerErrorAfter(3 * time.Second)
+						}
+						m.taIntro.SetValue(content)
+						m.act.introInputMethod = "direct"
+						m.act.useFilePicker = false
+						m.act.introPathInputFocused = false
+						return m.taIntro.Focus()
+					}
+				}
+			}
+			if m.act.introPathInputFocused {
+				m.inpPath, pathCmd = m.inpPath.Update(msg)
+				typedPath := strings.TrimSpace(m.inpPath.Value())
+				if typedPath != "" {
+					if info, err := os.Stat(typedPath); err == nil && info.IsDir() {
+						if filepath.Clean(m.filepicker.CurrentDirectory) != filepath.Clean(typedPath) {
+							m.filepicker.CurrentDirectory = typedPath
+							fpCmd = m.filepicker.Init()
+						}
+					}
+				}
+			}
+			if !m.act.introPathInputFocused {
+				oldDir := m.filepicker.CurrentDirectory
+				var fc tea.Cmd
+				m.filepicker, fc = m.filepicker.Update(msg)
+				if fc != nil {
+					fpCmd = fc
+				}
+				if m.filepicker.CurrentDirectory != oldDir {
+					m.inpPath.SetValue(ensureTrailingSep(m.filepicker.CurrentDirectory))
+				}
+				if did, p := m.filepicker.DidSelectFile(msg); did {
+					if info, err := os.Stat(p); err == nil && !info.IsDir() {
+						if err := validateIntroFile(p); err != nil {
+							m.act.filePickerErr = err
+							return clearFilePickerErrorAfter(3 * time.Second)
+						}
+						content, err := readIntroFile(p)
+						if err != nil {
+							m.act.filePickerErr = err
+							return clearFilePickerErrorAfter(3 * time.Second)
+						}
+						m.taIntro.SetValue(content)
+						m.act.introInputMethod = "direct"
+						m.act.useFilePicker = false
+						m.act.introPathInputFocused = false
+						return m.taIntro.Focus()
+					}
+				}
+				if didSelect, p := m.filepicker.DidSelectDisabledFile(msg); didSelect {
+					if info, err := os.Stat(p); err == nil && !info.IsDir() {
+						m.act.filePickerErr = errors.New(p + " 文件格式不支持")
+						return clearFilePickerErrorAfter(3 * time.Second)
+					}
+				}
+			}
+			return tea.Batch(pathCmd, fpCmd)
+		} else {
+			// 直接输入模式
+			var cmd tea.Cmd
+			m.taIntro, cmd = m.taIntro.Update(msg)
+			if km, ok := msg.(tea.KeyMsg); ok {
+				switch km.String() {
+				case "ctrl+d":
+					intro := strings.TrimSpace(m.taIntro.Value())
+					if len([]rune(intro)) > 5000 {
+						intro = string([]rune(intro)[:5000])
+					}
+					m.act.cur.intro = intro
+					m.act.useFilePicker = true
+					m.act.pathInputFocused = false
+					m.inpPath.SetValue(ensureTrailingSep(m.filepicker.CurrentDirectory))
+					m.filepicker.AllowedTypes = []string{".safetensors"}
+					m.upStep = stepPath
+					return m.filepicker.Init()
+				case "esc":
+					m.upStep = stepIntroMethod
+					return nil
+				}
+			}
+			return cmd
+		}
 	case stepPath:
 		var pathCmd, fpCmd tea.Cmd
 		if km, ok := msg.(tea.KeyMsg); ok {
@@ -713,13 +861,56 @@ func (m *mainModel) renderUploadStepsView() string {
 			}
 		}
 		return content.String()
+	case stepIntroMethod:
+		if _, ih := m.innerSize(); ih > 0 {
+			h := ih - 12
+			if h < 5 {
+				h = 5
+			}
+			m.introMethodList.SetHeight(h)
+		}
+		return m.titleStyle.Render("上传 · Step 7/10 · 选择介绍输入方式") + "\n\n" + m.introMethodList.View() + "\n" + m.hintStyle.Render("选择后 Enter，返回：Esc，退出：q")
 	case stepIntro:
-		charCount := len([]rune(m.taIntro.Value()))
-		charInfo := fmt.Sprintf("（%d/5000 字）", charCount)
-		return m.titleStyle.Render("上传 · Step 7/9 · 模型介绍") + " " + m.hintStyle.Render(charInfo) + "\n\n" + m.taIntro.View() + "\n" + m.hintStyle.Render("提交：Ctrl+D，返回：Esc，退出：q")
+		if m.act.introInputMethod == "file" {
+			// 文件导入模式渲染
+			var content strings.Builder
+			content.WriteString(m.titleStyle.Render("上传 · Step 8/10 · 从文件导入介绍内容"))
+			content.WriteString("\n\n")
+			pathLabel := "本地文件路径输入："
+			if m.act.introPathInputFocused {
+				pathLabel = m.titleStyle.Render("► " + pathLabel + "（当前焦点，按 Tab 切换）")
+			} else {
+				pathLabel = m.hintStyle.Render(pathLabel)
+			}
+			content.WriteString(pathLabel + "\n" + m.inpPath.View() + "\n\n")
+
+			pickerLabel := "文件选择器："
+			if !m.act.introPathInputFocused {
+				pickerLabel = m.titleStyle.Render("► 文件选择器：（当前焦点，按 Tab 切换）")
+			} else {
+				pickerLabel = m.hintStyle.Render(pickerLabel)
+			}
+			content.WriteString(pickerLabel + "\n")
+			if m.act.filePickerErr != nil {
+				content.WriteString(m.filepicker.Styles.DisabledFile.Render(m.act.filePickerErr.Error()) + "\n")
+			}
+			content.WriteString(m.filepicker.View() + "\n")
+
+			if m.act.introPathInputFocused {
+				content.WriteString(m.hintStyle.Render("输入 .txt 或 .md 文件路径，Enter 确认；Tab 切换焦点；Esc 返回选择输入方式"))
+			} else {
+				content.WriteString(m.hintStyle.Render("方向键导航，Enter 选择介绍文件（.txt 或 .md，自动截断到 5000 字）；Tab 切换焦点；Esc 返回选择输入方式"))
+			}
+			return content.String()
+		} else {
+			// 直接输入模式渲染
+			charCount := len([]rune(m.taIntro.Value()))
+			charInfo := fmt.Sprintf("（%d/5000 字）", charCount)
+			return m.titleStyle.Render("上传 · Step 8/10 · 模型介绍") + " " + m.hintStyle.Render(charInfo) + "\n\n" + m.taIntro.View() + "\n" + m.hintStyle.Render("支持 Markdown 格式；提交：Ctrl+D，返回：Esc，退出：q")
+		}
 	case stepPath:
 		var content strings.Builder
-		content.WriteString(m.titleStyle.Render("上传 · Step 8/9 · 选择文件") + "\n\n")
+		content.WriteString(m.titleStyle.Render("上传 · Step 9/10 · 选择文件") + "\n\n")
 		pathInputLabel := "路径输入："
 		if m.act.pathInputFocused {
 			pathInputLabel = m.titleStyle.Render("► 路径输入：（当前焦点，按Tab切换至文件选择器）")
@@ -750,7 +941,7 @@ func (m *mainModel) renderUploadStepsView() string {
 		return content.String()
 	case stepAskMore:
 		var b strings.Builder
-		b.WriteString(m.titleStyle.Render("上传 · Step 9/9 · 是否继续添加版本？") + "\n\n")
+		b.WriteString(m.titleStyle.Render("上传 · Step 10/10 · 是否继续添加版本？") + "\n\n")
 		if len(m.act.versions) > 0 {
 			b.WriteString("已添加版本：\n")
 			for i, v := range m.act.versions {
