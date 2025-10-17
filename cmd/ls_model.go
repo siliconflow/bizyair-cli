@@ -8,6 +8,7 @@ import (
 
 	"github.com/cloudwego/hertz/cmd/hz/util/logs"
 	"github.com/siliconflow/bizyair-cli/lib"
+	"github.com/siliconflow/bizyair-cli/lib/actions"
 	"github.com/siliconflow/bizyair-cli/meta"
 	"github.com/urfave/cli/v2"
 )
@@ -20,39 +21,36 @@ func ListModel(c *cli.Context) error {
 	setLogVerbose(args.Verbose)
 	logs.Debugf("args: %#v\n", args)
 
+	// 获取API Key
 	var apiKey string
 	if args.ApiKey != "" {
 		apiKey = args.ApiKey
 	} else {
 		apiKey, err = lib.NewSfFolder().GetKey()
 		if err != nil {
-			return err
+			return cli.Exit(err, meta.LoadError)
 		}
 	}
 
-	client := lib.NewClient(args.BaseDomain, apiKey)
-
-	// 构建模型类型列表
-	var modelTypes []string
-	if args.Type != "" {
-		modelTypes = []string{args.Type}
-	} else {
-		// 如果未指定类型，查询所有类型
-		for _, t := range meta.ModelTypes {
-			modelTypes = append(modelTypes, string(t))
-		}
+	// 准备输入参数
+	input := actions.ListModelsInput{
+		ApiKey:     apiKey,
+		BaseDomain: args.BaseDomain,
+		ModelType:  args.Type,
+		Public:     args.Public,
+		Current:    1,
+		PageSize:   100,
+		Sort:       "Recently",
 	}
 
-	// 调用新接口
-	// current=1, pageSize=100, keyword="", sort="Recently", modelTypes, baseModels=[]
-	modelResp, err := client.ListModel(1, 100, "", "Recently", modelTypes, []string{})
-	if err != nil {
-		return err
+	// 调用统一的业务逻辑
+	result := actions.ListModels(input)
+	if result.Error != nil {
+		return cli.Exit(result.Error, meta.ServerError)
 	}
 
-	modelList := modelResp.Data.List
-
-	if len(modelList) < 1 {
+	// 格式化输出
+	if len(result.Models) < 1 {
 		fmt.Fprintln(os.Stdout, "No models found.")
 		return nil
 	}
@@ -61,7 +59,7 @@ func ListModel(c *cli.Context) error {
 	fmt.Fprintln(w, "ID\tNAME\tTYPE\tVERSIONS\tUSED\tFORKED\tLIKED\tUPDATED AT\t")
 
 	// 打印数据行
-	for _, model := range modelList {
+	for _, model := range result.Models {
 		// 获取版本信息
 		versionCount := len(model.Versions)
 		var versionStr string
@@ -92,7 +90,7 @@ func ListModel(c *cli.Context) error {
 	w.Flush()
 
 	// 显示统计信息
-	fmt.Fprintf(os.Stdout, "\nTotal: %d models (showing page 1)\n", modelResp.Data.Total)
+	fmt.Fprintf(os.Stdout, "\nTotal: %d models (showing page 1)\n", result.Total)
 
 	return nil
 }

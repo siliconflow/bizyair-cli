@@ -14,6 +14,7 @@ const (
 	CmdModel   = "model"
 	CmdLs      = "ls"
 	CmdLsFiles = "ls-files"
+	CmdDetail  = "detail"
 	CmdRm      = "rm"
 	CmdCommit  = "commit"
 )

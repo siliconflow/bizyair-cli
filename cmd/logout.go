@@ -2,11 +2,12 @@ package cmd
 
 import (
 	"fmt"
+	"os"
+
 	"github.com/cloudwego/hertz/cmd/hz/util/logs"
-	"github.com/siliconflow/bizyair-cli/lib"
+	"github.com/siliconflow/bizyair-cli/lib/actions"
 	"github.com/siliconflow/bizyair-cli/meta"
 	"github.com/urfave/cli/v2"
-	"os"
 )
 
 func Logout(c *cli.Context) error {
@@ -17,9 +18,10 @@ func Logout(c *cli.Context) error {
 	setLogVerbose(args.Verbose)
 	logs.Debugf("args: %#v\n", args)
 
-	err = lib.NewSfFolder().RemoveKey()
+	// 调用统一的登出业务逻辑
+	err = actions.ExecuteLogout()
 	if err != nil {
-		return err
+		return cli.Exit(err, meta.LoadError)
 	}
 
 	fmt.Fprintln(os.Stdout, "Logged out successfully")

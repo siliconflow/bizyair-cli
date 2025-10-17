@@ -2,11 +2,13 @@ package cmd
 
 import (
 	"fmt"
+	"os"
+
 	"github.com/cloudwego/hertz/cmd/hz/util/logs"
 	"github.com/siliconflow/bizyair-cli/lib"
+	"github.com/siliconflow/bizyair-cli/lib/actions"
 	"github.com/siliconflow/bizyair-cli/meta"
 	"github.com/urfave/cli/v2"
-	"os"
 )
 
 func Whoami(c *cli.Context) error {
@@ -17,26 +19,28 @@ func Whoami(c *cli.Context) error {
 	setLogVerbose(args.Verbose)
 	logs.Debugf("args: %#v\n", args)
 
+	// 获取API Key
 	var apiKey string
 	if args.ApiKey != "" {
 		apiKey = args.ApiKey
 	} else {
 		apiKey, err = lib.NewSfFolder().GetKey()
 		if err != nil {
-			return err
+			return cli.Exit(err, meta.LoadError)
 		}
 	}
 
-	client := lib.NewClient(meta.AuthDomain, apiKey)
-	info, err := client.UserInfo()
-	if err != nil {
-		return err
+	// 调用统一的whoami业务逻辑
+	result := actions.ExecuteWhoami(apiKey)
+	if result.Error != nil {
+		return cli.Exit(result.Error, meta.LoadError)
 	}
 
-	if info.Data.Name != "" {
-		fmt.Fprintf(os.Stdout, "Your account name: %s\n", info.Data.Name)
+	// 格式化输出
+	if result.Name != "" {
+		fmt.Fprintf(os.Stdout, "Your account name: %s\n", result.Name)
 	} else {
-		fmt.Fprintf(os.Stdout, "Your account email: %s\n", info.Data.Email)
+		fmt.Fprintf(os.Stdout, "Your account email: %s\n", result.Email)
 	}
 
 	return nil

@@ -2,11 +2,12 @@ package cmd
 
 import (
 	"fmt"
+	"os"
+
 	"github.com/cloudwego/hertz/cmd/hz/util/logs"
-	"github.com/siliconflow/bizyair-cli/lib"
+	"github.com/siliconflow/bizyair-cli/lib/actions"
 	"github.com/siliconflow/bizyair-cli/meta"
 	"github.com/urfave/cli/v2"
-	"os"
 )
 
 func Login(c *cli.Context) error {
@@ -21,15 +22,10 @@ func Login(c *cli.Context) error {
 		return cli.Exit(fmt.Errorf("api key is required, you can specify \"--api_key\" or environment variable \"%s\" to set", meta.EnvAPIKey), meta.LoadError)
 	}
 
-	client := lib.NewClient(meta.AuthDomain, args.ApiKey)
-	_, err = client.UserInfo()
-	if err != nil {
-		return err
-	}
-
-	err = lib.NewSfFolder().SaveKey(args.ApiKey)
-	if err != nil {
-		return err
+	// 调用统一的登录业务逻辑
+	result := actions.ExecuteLogin(args.ApiKey)
+	if !result.Success {
+		return cli.Exit(result.Error, meta.LoadError)
 	}
 
 	fmt.Fprintln(os.Stdout, "Login successfully")

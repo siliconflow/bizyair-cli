@@ -1,53 +1,51 @@
 package tui
 
 import (
-	"bytes"
-	"os"
-	"os/exec"
+	"fmt"
 
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/siliconflow/bizyair-cli/lib"
-	"github.com/siliconflow/bizyair-cli/meta"
+	"github.com/siliconflow/bizyair-cli/lib/actions"
 )
 
 // 登录校验 + 保存
 func loginCmd(apiKey string) tea.Cmd {
 	return func() tea.Msg {
-		client := lib.NewClient(meta.AuthDomain, apiKey)
-		if _, err := client.UserInfo(); err != nil {
-			return loginDoneMsg{ok: false, err: withStep("登录校验", err)}
-		}
-		if err := lib.NewSfFolder().SaveKey(apiKey); err != nil {
-			return loginDoneMsg{ok: false, err: withStep("保存凭据", err)}
+		// 调用统一的登录业务逻辑
+		result := actions.ExecuteLogin(apiKey)
+		if !result.Success {
+			return loginDoneMsg{ok: false, err: result.Error}
 		}
 		return loginDoneMsg{ok: true}
 	}
 }
 
-// 运行 whoami（复用现有子命令）
+// 运行 whoami
 func runWhoami(apiKey string) tea.Cmd {
 	return func() tea.Msg {
-		exe, _ := os.Executable()
-		args := []string{}
-		if apiKey != "" {
-			args = append(args, "--api_key", apiKey)
+		// 调用统一的whoami业务逻辑
+		result := actions.ExecuteWhoami(apiKey)
+		if result.Error != nil {
+			return actionDoneMsg{out: "", err: result.Error}
 		}
-		args = append(args, "whoami")
-		cmd := exec.Command(exe, args...)
-		var buf bytes.Buffer
-		cmd.Stdout = &buf
-		cmd.Stderr = &buf
-		err := cmd.Run()
-		return actionDoneMsg{out: buf.String(), err: withStep("whoami 执行", err)}
+
+		// 格式化输出
+		var out string
+		if result.Name != "" {
+			out = fmt.Sprintf("Your account name: %s\n", result.Name)
+		} else {
+			out = fmt.Sprintf("Your account email: %s\n", result.Email)
+		}
+		return actionDoneMsg{out: out, err: nil}
 	}
 }
 
 // 运行 logout
 func runLogout() tea.Cmd {
 	return func() tea.Msg {
-		err := lib.NewSfFolder().RemoveKey()
+		// 调用统一的登出业务逻辑
+		err := actions.ExecuteLogout()
 		if err != nil {
-			return actionDoneMsg{out: "", err: withStep("登出", err)}
+			return actionDoneMsg{out: "", err: err}
 		}
 		return actionDoneMsg{out: "Logged out successfully\n", err: nil}
 	}

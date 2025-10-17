@@ -44,3 +44,8 @@ func GetStep(err error) string {
 	}
 	return ""
 }
+
+// NewValidationError 创建一个验证错误
+func NewValidationError(message string) error {
+	return fmt.Errorf("%s", message)
+}

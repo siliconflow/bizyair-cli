@@ -20,8 +20,6 @@ func Init() *cli.App {
 	typeFlag := cli.StringFlag{Name: "type", Aliases: []string{"t"}, Usage: fmt.Sprintf("Specify the mode type. (Only works for %s)", meta.ModelTypesStr), Destination: &globalArgs.Type}
 	pathFlag := cli.StringSliceFlag{Name: "path", Aliases: []string{"p"}, Usage: "Specify the path to upload.", Destination: &cli.StringSlice{}}
 	nameFlag := cli.StringFlag{Name: "name", Aliases: []string{"n"}, Usage: "Specify the name of model.", Destination: &globalArgs.Name}
-	formatTreeFlag := cli.BoolFlag{Name: "tree", Usage: "Display in file tree format.", Destination: &globalArgs.FormatTree, Required: false}
-	extFlag := cli.StringFlag{Name: "ext", Usage: "Specify the ext name of file.", Destination: &globalArgs.ExtName, Required: false}
 	overwriteFlag := cli.BoolFlag{Name: "overwrite", Usage: "Overwrite existent model", Destination: &globalArgs.Overwrite, Value: false, Required: false}
 	publicFlag := cli.BoolFlag{Name: "public", Usage: "Only show public model", Destination: &globalArgs.Public, Value: false, Required: false}
 	// hostFlag := cli.StringFlag{Name: "host", Usage: fmt.Sprintf("Specify the request host, default: %s", meta.DefaultHost), Destination: &globalArgs.Host, Value: meta.DefaultHost}
@@ -54,7 +52,7 @@ func Init() *cli.App {
 	app.Commands = []*cli.Command{
 		{
 			Name:  meta.CmdLogin,
-			Usage: "Login to the BizyAir",
+			Usage: "登录到 BizyAir",
 			Flags: []cli.Flag{
 				&apiKeyFlag,
 			},
@@ -62,19 +60,19 @@ func Init() *cli.App {
 		},
 		{
 			Name:   meta.CmdWhoami,
-			Usage:  "Find out which user is logged in",
+			Usage:  "查看当前登录的用户",
 			Flags:  []cli.Flag{},
 			Action: Whoami,
 		},
 		{
 			Name:   meta.CmdLogout,
-			Usage:  "Log out",
+			Usage:  "退出登录",
 			Flags:  []cli.Flag{},
 			Action: Logout,
 		},
 		{
 			Name:  meta.CmdUpload,
-			Usage: "Upload a file or a folder to your model directory on BizyAir",
+			Usage: "上传文件或文件夹到 BizyAir 模型目录",
 			Flags: []cli.Flag{
 				&typeFlag,
 				&pathFlag,
@@ -92,11 +90,11 @@ func Init() *cli.App {
 		},
 		{
 			Name:  meta.CmdModel,
-			Usage: "{ls, ls-files, rm} Commands to interact with your models.",
+			Usage: "{ls, detail, rm} 与模型交互的命令集",
 			Subcommands: []*cli.Command{
 				{
 					Name:  meta.CmdLs,
-					Usage: "List your models",
+					Usage: "列出你的模型",
 					Flags: []cli.Flag{
 						&typeFlag,
 						&publicFlag,
@@ -104,20 +102,17 @@ func Init() *cli.App {
 					Action: ListModel,
 				},
 				{
-					Name:  meta.CmdLsFiles,
-					Usage: "List files in your model",
+					Name:  meta.CmdDetail,
+					Usage: "查看模型详情",
 					Flags: []cli.Flag{
 						&typeFlag,
 						&nameFlag,
-						&extFlag,
-						&formatTreeFlag,
-						&publicFlag,
 					},
-					Action: ListFilesModel,
+					Action: ModelDetail,
 				},
 				{
 					Name:  meta.CmdRm,
-					Usage: "Remove your model",
+					Usage: "删除你的模型",
 					Flags: []cli.Flag{
 						&typeFlag,
 						&nameFlag,
