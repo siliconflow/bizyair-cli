@@ -111,6 +111,10 @@ type mainModel struct {
 	verLastTime  []time.Time
 	verLastBytes []int64
 	verSpeed     []int64
+
+	// 封面状态追踪
+	coverStatus        string // 当前封面状态信息
+	coverStatusWarning bool   // 是否为警告状态（如转换失败回退）
 }
 
 func newMainModel() mainModel {
@@ -626,6 +630,10 @@ func (m mainModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		cmds = append(cmds, waitForUploadEvent(m.uploadCh))
 		return m, tea.Batch(cmds...)
+	case coverStatusMsg:
+		m.coverStatus = msg.message
+		m.coverStatusWarning = (msg.status == "fallback")
+		return m, waitForUploadEvent(m.uploadCh)
 	case clearFilePickerErrorMsg:
 		m.act.filePickerErr = nil
 		return m, nil

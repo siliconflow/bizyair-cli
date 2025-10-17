@@ -152,3 +152,14 @@ func (t *tuiUploadCallback) OnVersionStart(index, total int, fileName string) {
 func (t *tuiUploadCallback) OnVersionComplete(index, total int, fileName string, err error) {
 	// TUI可以选择不实现这个回调，或者发送特定消息
 }
+
+func (t *tuiUploadCallback) OnCoverStatus(index, total int, status, message string) {
+	select {
+	case t.ch <- coverStatusMsg{
+		versionIndex: index,
+		status:       status,
+		message:      message,
+	}:
+	default:
+	}
+}

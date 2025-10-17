@@ -103,4 +103,8 @@ type UploadCallback interface {
 
 	// OnVersionComplete 某个版本上传完成（成功或失败）
 	OnVersionComplete(index, total int, fileName string, err error)
+
+	// OnCoverStatus 封面处理状态更新
+	// status: "converting" (转换中), "ready" (已准备), "fallback" (回退原格式), "done" (完成)
+	OnCoverStatus(index, total int, status, message string)
 }

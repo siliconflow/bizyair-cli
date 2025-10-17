@@ -70,6 +70,12 @@ type uploadProgMsg struct {
 type uploadCancelMsg struct{}
 type clearFilePickerErrorMsg struct{}
 
+type coverStatusMsg struct {
+	versionIndex int
+	status       string // "converting", "ready", "fallback", "done"
+	message      string
+}
+
 type checkModelExistsDoneMsg struct {
 	exists bool
 	err    error

@@ -31,3 +31,6 @@ execs
 
 # vscode debug
 __debug*
+
+# WebP 工具（首次运行时自动下载，如需预打包可以保留此目录）
+.bin/

@@ -252,7 +252,14 @@ func uploadSingleVersion(
 	callback UploadCallback,
 ) singleVersionResult {
 	// 1. 上传封面
-	coverUrl, err := lib.UploadCover(client, version.CoverUrl, ctx)
+	var coverStatusCallback func(status, message string)
+	if callback != nil {
+		coverStatusCallback = func(status, message string) {
+			callback.OnCoverStatus(index, total, status, message)
+		}
+	}
+
+	coverUrl, err := lib.UploadCover(client, version.CoverUrl, ctx, coverStatusCallback)
 	if err != nil {
 		if errors.Is(err, context.Canceled) {
 			return singleVersionResult{Canceled: true}

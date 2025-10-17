@@ -123,6 +123,13 @@ func (c *cliUploadCallback) OnVersionComplete(index, total int, fileName string,
 	}
 }
 
+func (c *cliUploadCallback) OnCoverStatus(index, total int, status, message string) {
+	// CLI模式输出警告信息
+	if status == "fallback" {
+		fmt.Fprintf(os.Stderr, "⚠ 警告 - 版本 %d/%d: %s\n", index+1, total, message)
+	}
+}
+
 // 辅助函数
 func getVersionAt(versions []string, index int, defaultValue string) string {
 	if index < len(versions) && versions[index] != "" {

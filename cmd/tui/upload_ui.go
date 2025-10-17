@@ -9,6 +9,7 @@ import (
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
 	"github.com/siliconflow/bizyair-cli/lib/format"
 )
 
@@ -74,6 +75,8 @@ func (m *mainModel) resetUploadState() {
 	m.act.coverUploadMethod = ""
 	m.act.introInputMethod = ""
 	m.act.introPathInputFocused = false
+	m.coverStatus = ""
+	m.coverStatusWarning = false
 }
 
 // 路径校验与设置
@@ -110,9 +113,25 @@ func (m *mainModel) renderUploadRunningView() string {
 	var progressSection strings.Builder
 	if len(m.verProgress) > 0 {
 		if m.uploadProg.total > 0 {
+			// 进入文件上传阶段，清空封面状态
+			if m.coverStatus != "" {
+				m.coverStatus = ""
+				m.coverStatusWarning = false
+			}
 			progressSection.WriteString(fmt.Sprintf("当前: (%s) %s\n", m.uploadProg.fileIndex, m.uploadProg.fileName))
 		} else {
-			progressSection.WriteString("准备上传…\n")
+			// 准备阶段，显示封面状态或默认提示
+			if m.coverStatus != "" {
+				if m.coverStatusWarning {
+					// 警告样式（黄色）
+					warningStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("226"))
+					progressSection.WriteString(warningStyle.Render(m.coverStatus) + "\n")
+				} else {
+					progressSection.WriteString(m.coverStatus + "\n")
+				}
+			} else {
+				progressSection.WriteString("准备上传…\n")
+			}
 		}
 		for i := range m.verProgress {
 			versionLabel := ""
@@ -148,12 +167,28 @@ func (m *mainModel) renderUploadRunningView() string {
 		var progLine string
 		var speedLine string
 		if m.uploadProg.total > 0 {
+			// 进入文件上传阶段，清空封面状态
+			if m.coverStatus != "" {
+				m.coverStatus = ""
+				m.coverStatusWarning = false
+			}
 			percent := float64(m.uploadProg.consumed) / float64(m.uploadProg.total)
 			fileLine = fmt.Sprintf("(%s) %s", m.uploadProg.fileIndex, m.uploadProg.fileName)
 			progLine = m.progress.View()
 			speedLine = fmt.Sprintf("%.1f%% (%s/%s) %s/s", percent*100, format.FormatBytes(m.uploadProg.consumed), format.FormatBytes(m.uploadProg.total), format.FormatBytes(m.currentUploadSpeed))
 		} else {
-			fileLine = "准备上传…"
+			// 准备阶段，显示封面状态或默认提示
+			if m.coverStatus != "" {
+				if m.coverStatusWarning {
+					// 警告样式（黄色）
+					warningStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("226"))
+					fileLine = warningStyle.Render(m.coverStatus)
+				} else {
+					fileLine = m.coverStatus
+				}
+			} else {
+				fileLine = "准备上传…"
+			}
 			progLine = m.progress.View()
 			speedLine = ""
 		}
