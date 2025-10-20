@@ -67,6 +67,8 @@ type mainModel struct {
 	deleteTargetId   int64
 	deleteTargetName string
 
+	confirmingExit bool
+
 	act    actionInputs
 	upStep uploadStep
 
@@ -403,7 +405,8 @@ func (m mainModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		}
 		switch msg.String() {
-		case "ctrl+c", "q":
+		case "ctrl+c":
+			// 如果正在上传，保持取消上传逻辑
 			if m.running && m.currentAction == actionUpload && m.cancelFn != nil {
 				// 设置取消标志，等待后台任务完成
 				if !m.canceling {
@@ -412,8 +415,18 @@ func (m mainModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 				return m, nil
 			}
-			return m, tea.Quit
+			// 如果已经在确认退出状态，直接退出
+			if m.confirmingExit {
+				return m, tea.Quit
+			}
+			// 否则进入退出确认状态
+			m.confirmingExit = true
+			return m, nil
 		case "enter":
+			// 如果在退出确认界面，Enter 确认退出
+			if m.confirmingExit {
+				return m, tea.Quit
+			}
 			// 登录/菜单/输出页行为保持
 			// 其余交给 updateActionInputs
 			switch m.step {
@@ -464,6 +477,11 @@ func (m mainModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return m, nil
 			}
 		case "esc":
+			// 如果在退出确认界面，Esc 取消退出
+			if m.confirmingExit {
+				m.confirmingExit = false
+				return m, nil
+			}
 			switch m.step {
 			case mainStepLogin:
 				m.step = mainStepHome
@@ -584,7 +602,7 @@ func (m mainModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.inpApi.Focus() // 设置焦点以便用户可以输入新的 API Key
 			return m, nil
 		}
-		
+
 		m.output = msg.out
 		if msg.err != nil {
 			m.err = msg.err
@@ -754,6 +772,16 @@ func (m mainModel) View() string {
 	panel := m.panelStyle.Width(panelW)
 	header := lipgloss.PlaceHorizontal(innerW, lipgloss.Left, m.renderGradientLogo(m.smallLogo))
 
+	// 退出确认界面优先级最高
+	if m.confirmingExit {
+		var b strings.Builder
+		b.WriteString(m.titleStyle.Render("确认退出"))
+		b.WriteString("\n\n")
+		b.WriteString("确定要退出 BizyAir CLI 吗？\n\n")
+		b.WriteString(m.hintStyle.Render("确认退出：Enter，取消：Esc，再次按 Ctrl+C 也可退出"))
+		return m.renderFrame(header + "\n" + panel.Render(b.String()))
+	}
+
 	if m.err != nil && m.step != mainStepOutput {
 		defer func() { m.err = nil }()
 		var body strings.Builder
@@ -777,7 +805,7 @@ func (m mainModel) View() string {
 	}
 	switch m.step {
 	case mainStepLogin:
-		return m.renderFrame(header + "\n" + panel.Render(m.titleStyle.Render("登录 · 请输入 API Key")+"\n\n"+m.inpApi.View()+"\n"+m.hintStyle.Render("确认：Enter，返回：Esc，退出：q")))
+		return m.renderFrame(header + "\n" + panel.Render(m.titleStyle.Render("登录 · 请输入 API Key")+"\n\n"+m.inpApi.View()+"\n"+m.hintStyle.Render("确认：Enter，返回：Esc，退出：Ctrl+C")))
 	case mainStepMenu:
 		logoStr := m.renderGradientLogo(m.logo)
 		menuTop := strings.Count(logoStr, "\n") + 2
@@ -786,7 +814,7 @@ func (m mainModel) View() string {
 			h = 6
 		}
 		m.menu.SetHeight(h)
-		return m.renderFrame(logoStr + "\n\n" + m.titleStyle.Render("功能选择") + "\n\n" + m.menu.View() + "\n" + m.hintStyle.Render("确认：Enter，返回：Esc，退出：q"))
+		return m.renderFrame(logoStr + "\n\n" + m.titleStyle.Render("功能选择") + "\n\n" + m.menu.View() + "\n" + m.hintStyle.Render("确认：Enter，返回：Esc，退出：Ctrl+C"))
 	case mainStepAction:
 		return m.renderFrame(header + "\n" + panel.Render(m.renderActionView()))
 	case mainStepOutput:

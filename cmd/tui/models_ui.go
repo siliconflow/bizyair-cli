@@ -14,7 +14,7 @@ import (
 func (m *mainModel) updateListModelsInputs(msg tea.Msg) tea.Cmd {
 	if km, ok := msg.(tea.KeyMsg); ok {
 		switch km.String() {
-		case "esc", "q":
+		case "esc":
 			if m.confirmingDelete {
 				m.confirmingDelete = false
 				m.deleteTargetId = 0
@@ -136,10 +136,10 @@ func (m *mainModel) renderListModelsView() string {
 	}
 	if m.viewingModelDetail {
 		if m.loadingModelDetail {
-			return m.titleStyle.Render("模型详情") + "\n\n" + m.sp.View() + " 加载中...\n\n" + m.hintStyle.Render("返回：Esc/q")
+			return m.titleStyle.Render("模型详情") + "\n\n" + m.sp.View() + " 加载中...\n\n" + m.hintStyle.Render("返回：Esc")
 		}
 		if m.modelDetail == nil {
-			return m.titleStyle.Render("模型详情") + "\n\n" + "未加载到数据" + "\n\n" + m.hintStyle.Render("返回：Esc/q")
+			return m.titleStyle.Render("模型详情") + "\n\n" + "未加载到数据" + "\n\n" + m.hintStyle.Render("返回：Esc")
 		}
 
 		// 使用 viewport 展示详情内容
@@ -151,7 +151,7 @@ func (m *mainModel) renderListModelsView() string {
 
 		// 滚动提示信息
 		scrollInfo := fmt.Sprintf("%.f%%", m.detailViewport.ScrollPercent()*100)
-		hints := fmt.Sprintf("返回：Esc/q，删除：Ctrl+D，滚动：↑↓/PgUp/PgDn/Home/End (%s)", scrollInfo)
+		hints := fmt.Sprintf("返回：Esc，删除：Ctrl+D，滚动：↑↓/PgUp/PgDn/Home/End (%s)", scrollInfo)
 		b.WriteString(m.hintStyle.Render(hints))
 		return b.String()
 	}
@@ -159,7 +159,7 @@ func (m *mainModel) renderListModelsView() string {
 		return m.titleStyle.Render("列出模型") + "\n\n" + m.sp.View() + " 加载中...\n\n" + m.hintStyle.Render("请稍候")
 	}
 	if len(m.modelList) == 0 {
-		return m.titleStyle.Render("列出模型") + "\n\n" + "暂无模型数据\n\n" + m.hintStyle.Render("返回：Esc/q，刷新：r")
+		return m.titleStyle.Render("列出模型") + "\n\n" + "暂无模型数据\n\n" + m.hintStyle.Render("返回：Esc，刷新：r")
 	}
 	if _, ih := m.innerSize(); ih > 0 {
 		h := ih - 12
@@ -171,7 +171,7 @@ func (m *mainModel) renderListModelsView() string {
 	if w, _ := m.innerSize(); w > 0 {
 		m.resizeModelTable(w)
 	}
-	return m.titleStyle.Render(fmt.Sprintf("列出模型（共 %d 个）", m.modelListTotal)) + "\n\n" + m.modelTable.View() + "\n\n" + m.hintStyle.Render("导航：↑↓，进入详情：Enter，删除：Ctrl+D，返回：Esc/q，刷新：r")
+	return m.titleStyle.Render(fmt.Sprintf("列出模型（共 %d 个）", m.modelListTotal)) + "\n\n" + m.modelTable.View() + "\n\n" + m.hintStyle.Render("导航：↑↓，进入详情：Enter，删除：Ctrl+D，返回：Esc，刷新：r")
 }
 
 // buildModelDetailMarkdown 生成模型详情的 Markdown 内容

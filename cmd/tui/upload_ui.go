@@ -202,7 +202,7 @@ func (m *mainModel) renderUploadRunningView() string {
 	if m.canceling {
 		hint = m.hintStyle.Render("正在取消上传，请稍候...（已上传部分会保存，支持断点续传）")
 	} else {
-		hint = m.hintStyle.Render("按 q 或 Ctrl+C 取消上传（已上传部分会保存，支持断点续传）")
+		hint = m.hintStyle.Render("按 Ctrl+C 取消上传（已上传部分会保存，支持断点续传）")
 	}
 
 	return m.titleStyle.Render("上传中 · 请稍候") + "\n\n" + summary + "\n\n" + progressSection.String() + "\n\n" + hint
@@ -289,8 +289,26 @@ func (m *mainModel) updateUploadInputs(msg tea.Msg) tea.Cmd {
 				m.upStep = stepBase
 				return nil
 			case "esc":
-				m.upStep = stepName
-				return m.inpName.Focus()
+				// 判断是否在添加更多版本
+				if len(m.act.versions) > 0 {
+					// 正在添加更多版本，需要恢复状态并回退到 stepAskMore
+					// 取出最后一个版本，恢复为当前版本
+					lastIdx := len(m.act.versions) - 1
+					m.act.cur = m.act.versions[lastIdx]
+					m.act.versions = m.act.versions[:lastIdx]
+
+					// 恢复输入框的值
+					m.inpVersion.SetValue(m.act.cur.version)
+					m.inpCover.SetValue(m.act.cur.cover)
+					m.taIntro.SetValue(m.act.cur.intro)
+
+					m.upStep = stepAskMore
+					return nil
+				} else {
+					// 首次输入版本，回退到 stepName
+					m.upStep = stepName
+					return m.inpName.Focus()
+				}
 			}
 		}
 		return cmd
@@ -823,11 +841,11 @@ func (m *mainModel) renderUploadStepsView() string {
 			}
 			m.typeList.SetHeight(h)
 		}
-		return m.titleStyle.Render("上传 · Step 1/9 · 选择模型类型") + "\n\n" + m.typeList.View() + "\n" + m.hintStyle.Render("确认：Enter，返回：Esc，退出：q")
+		return m.titleStyle.Render("上传 · Step 1/9 · 选择模型类型") + "\n\n" + m.typeList.View() + "\n" + m.hintStyle.Render("确认：Enter，返回：Esc")
 	case stepName:
-		return m.titleStyle.Render("上传 · Step 2/9 · 模型名称") + "\n\n" + m.inpName.View() + "\n" + m.hintStyle.Render("确认：Enter，返回：Esc，退出：q")
+		return m.titleStyle.Render("上传 · Step 2/9 · 模型名称") + "\n\n" + m.inpName.View() + "\n" + m.hintStyle.Render("确认：Enter，返回：Esc")
 	case stepVersion:
-		return m.titleStyle.Render("上传 · Step 3/9 · 版本名称（默认 v1.0）") + "\n\n" + m.inpVersion.View() + "\n" + m.hintStyle.Render("确认：Enter，返回：Esc，退出：q")
+		return m.titleStyle.Render("上传 · Step 3/9 · 版本名称（默认 v1.0）") + "\n\n" + m.inpVersion.View() + "\n" + m.hintStyle.Render("确认：Enter，返回：Esc")
 	case stepBase:
 		if _, ih := m.innerSize(); ih > 0 {
 			h := ih - 12
@@ -838,13 +856,13 @@ func (m *mainModel) renderUploadStepsView() string {
 		}
 		// 如果基础模型类型还在加载中
 		if m.loadingBaseModelTypes {
-			return m.titleStyle.Render("上传 · Step 4/9 · Base Model（必选）") + "\n\n" + m.sp.View() + " 正在加载基础模型类型列表…\n" + m.hintStyle.Render("返回：Esc，退出：q")
+			return m.titleStyle.Render("上传 · Step 4/9 · Base Model（必选）") + "\n\n" + m.sp.View() + " 正在加载基础模型类型列表…\n" + m.hintStyle.Render("返回：Esc")
 		}
 		// 如果列表为空（加载失败），显示提示
 		if len(m.baseModelTypes) == 0 {
-			return m.titleStyle.Render("上传 · Step 4/9 · Base Model（必选）") + "\n\n" + m.baseList.View() + "\n" + m.hintStyle.Render("（使用本地列表）选择后 Enter，返回：Esc，退出：q")
+			return m.titleStyle.Render("上传 · Step 4/9 · Base Model（必选）") + "\n\n" + m.baseList.View() + "\n" + m.hintStyle.Render("（使用本地列表）选择后 Enter，返回：Esc")
 		}
-		return m.titleStyle.Render("上传 · Step 4/9 · Base Model（必选）") + "\n\n" + m.baseList.View() + "\n" + m.hintStyle.Render("选择后 Enter，返回：Esc，退出：q")
+		return m.titleStyle.Render("上传 · Step 4/9 · Base Model（必选）") + "\n\n" + m.baseList.View() + "\n" + m.hintStyle.Render("选择后 Enter，返回：Esc")
 	case stepCoverMethod:
 		if _, ih := m.innerSize(); ih > 0 {
 			h := ih - 12
@@ -853,7 +871,7 @@ func (m *mainModel) renderUploadStepsView() string {
 			}
 			m.coverMethodList.SetHeight(h)
 		}
-		return m.titleStyle.Render("上传 · Step 5/9 · 选择封面上传方式") + "\n\n" + m.coverMethodList.View() + "\n" + m.hintStyle.Render("选择后 Enter，返回：Esc，退出：q")
+		return m.titleStyle.Render("上传 · Step 5/9 · 选择封面上传方式") + "\n\n" + m.coverMethodList.View() + "\n" + m.hintStyle.Render("选择后 Enter，返回：Esc")
 	case stepCover:
 		var content strings.Builder
 
@@ -904,7 +922,7 @@ func (m *mainModel) renderUploadStepsView() string {
 			}
 			m.introMethodList.SetHeight(h)
 		}
-		return m.titleStyle.Render("上传 · Step 7/10 · 选择介绍输入方式") + "\n\n" + m.introMethodList.View() + "\n" + m.hintStyle.Render("选择后 Enter，返回：Esc，退出：q")
+		return m.titleStyle.Render("上传 · Step 7/10 · 选择介绍输入方式") + "\n\n" + m.introMethodList.View() + "\n" + m.hintStyle.Render("选择后 Enter，返回：Esc")
 	case stepIntro:
 		if m.act.introInputMethod == "file" {
 			// 文件导入模式渲染
@@ -941,7 +959,7 @@ func (m *mainModel) renderUploadStepsView() string {
 			// 直接输入模式渲染
 			charCount := len([]rune(m.taIntro.Value()))
 			charInfo := fmt.Sprintf("（%d/5000 字）", charCount)
-			return m.titleStyle.Render("上传 · Step 8/10 · 模型介绍") + " " + m.hintStyle.Render(charInfo) + "\n\n" + m.taIntro.View() + "\n" + m.hintStyle.Render("支持 Markdown 格式；提交：Ctrl+D，返回：Esc，退出：q")
+			return m.titleStyle.Render("上传 · Step 8/10 · 模型介绍") + " " + m.hintStyle.Render(charInfo) + "\n\n" + m.taIntro.View() + "\n" + m.hintStyle.Render("支持 Markdown 格式；提交：Ctrl+D，返回：Esc")
 		}
 	case stepPath:
 		var content strings.Builder
@@ -1003,7 +1021,7 @@ func (m *mainModel) renderUploadStepsView() string {
 			b.WriteString(fmt.Sprintf("[%d] 版本=%s  base=%s\n", i+1, dash(v.version), dash(v.base)))
 			b.WriteString(fmt.Sprintf("cover=%s\npath=%s\nintro=%s\n\n", dash(v.cover), dash(v.path), dash(truncateToLines(v.intro, 2))))
 		}
-		b.WriteString(m.hintStyle.Render("按 Enter 开始上传；Esc 返回上一步；q 退出"))
+		b.WriteString(m.hintStyle.Render("按 Enter 开始上传；Esc 返回上一步"))
 		return b.String()
 	}
 	return ""
