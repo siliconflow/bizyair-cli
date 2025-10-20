@@ -288,6 +288,7 @@ func newMainModel() mainModel {
 		m.step = mainStepMenu
 	} else {
 		m.step = mainStepLogin
+		m.inpApi.Focus()
 	}
 	return m
 }
@@ -568,6 +569,22 @@ func (m mainModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case actionDoneMsg:
 		m.running = false
 		m.canceling = false
+
+		// 特殊处理 logout：清除登录状态并返回到登录页面
+		if m.currentAction == actionLogout {
+			if msg.err != nil {
+				// 即使登出失败也显示错误并返回登录页面
+				m.err = msg.err
+			}
+			// 清除登录状态
+			m.loggedIn = false
+			m.apiKey = ""
+			m.step = mainStepLogin
+			m.inpApi.SetValue("")
+			m.inpApi.Focus() // 设置焦点以便用户可以输入新的 API Key
+			return m, nil
+		}
+		
 		m.output = msg.out
 		if msg.err != nil {
 			m.err = msg.err
