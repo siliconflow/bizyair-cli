@@ -3,6 +3,7 @@ package cmd
 import (
 	"fmt"
 	"os"
+	"time"
 
 	"github.com/cloudwego/hertz/cmd/hz/util/logs"
 	"github.com/siliconflow/bizyair-cli/lib"
@@ -85,8 +86,71 @@ func Upload(c *cli.Context) error {
 		for _, err := range result.Errors {
 			fmt.Fprintf(os.Stderr, "  - %v\n", err)
 		}
+		return nil
 	}
+
+	// 全部成功时，显示模型详情
+	displayUploadedModelDetail(apiKey, args.BaseDomain, result.ModelName, result.ModelType)
 	return nil
+}
+
+// displayUploadedModelDetail 显示刚上传的模型详情
+func displayUploadedModelDetail(apiKey, baseDomain, modelName, modelType string) {
+	// 后端需要时间处理，先等待1秒
+	time.Sleep(time.Second)
+
+	// 查询模型列表，带重试逻辑
+	listInput := actions.ListModelsInput{
+		ApiKey:     apiKey,
+		BaseDomain: baseDomain,
+		ModelType:  modelType,
+		Current:    1,
+		PageSize:   100,
+		Sort:       "Recently",
+	}
+
+	var targetModel *lib.BizyModelInfo
+	maxRetries := 3
+	retryDelay := time.Second
+
+	// 重试查询模型
+	for i := 0; i < maxRetries; i++ {
+		if i > 0 {
+			// 后续重试等待
+			time.Sleep(retryDelay)
+		}
+
+		listResult := actions.ListModels(listInput)
+		if listResult.Error != nil {
+			fmt.Fprintf(os.Stderr, "\n获取模型ID失败: %v\n", listResult.Error)
+			return
+		}
+
+		// 查找匹配的模型
+		for _, model := range listResult.Models {
+			if model.Name == modelName {
+				targetModel = model
+				break
+			}
+		}
+
+		if targetModel != nil {
+			break
+		}
+
+		// 如果不是最后一次重试，显示等待信息
+		if i < maxRetries-1 {
+			logs.Debugf("未找到模型，%d秒后重试...\n", retryDelay/time.Second)
+		}
+	}
+
+	if targetModel == nil {
+		fmt.Fprintf(os.Stderr, "\n未找到刚上传的模型（已重试%d次），请稍后手动通过 TUI 或 API 查看\n", maxRetries)
+		return
+	}
+
+	// 显示成功提示和链接
+	fmt.Fprintf(os.Stdout, "\n模型发布成功，请在浏览器登录 https://bizyair.cn 在：https://bizyair.cn/community/models/my/%d 查看\n", targetModel.Id)
 }
 
 // cliUploadCallback CLI的进度回调实现

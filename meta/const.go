@@ -8,7 +8,6 @@ import (
 
 const (
 	CmdLogin   = "login"
-	CmdWhoami  = "whoami"
 	CmdLogout  = "logout"
 	CmdUpload  = "upload"
 	CmdModel   = "model"

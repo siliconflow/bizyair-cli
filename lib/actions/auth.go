@@ -49,26 +49,3 @@ func ExecuteLogout() error {
 	}
 	return nil
 }
-
-// ExecuteWhoami 执行whoami操作
-// 查询当前登录用户的信息
-func ExecuteWhoami(apiKey string) WhoamiResult {
-	if apiKey == "" {
-		return WhoamiResult{
-			Error: lib.WithStep("whoami", lib.NewValidationError("未登录或缺少API Key")),
-		}
-	}
-
-	client := lib.NewClient(meta.AuthDomain, apiKey)
-	info, err := client.UserInfo()
-	if err != nil {
-		return WhoamiResult{
-			Error: lib.WithStep("查询用户信息", err),
-		}
-	}
-
-	return WhoamiResult{
-		Name:  info.Data.Name,
-		Email: info.Data.Email,
-	}
-}

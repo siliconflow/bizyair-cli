@@ -60,7 +60,7 @@ func runUploadActionMulti(u uploadInputs, versions []versionItem) tea.Cmd {
 					BaseModel:    v.base,
 					Introduction: v.intro,
 					CoverUrl:     v.cover,
-					Public:       false,
+					Public:       v.public,
 				}
 			}
 

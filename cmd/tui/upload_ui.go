@@ -350,7 +350,7 @@ func (m *mainModel) updateUploadInputs(msg tea.Msg) tea.Cmd {
 						m.coverUrlInputFocused = false
 						m.coverPathInputFocused = true
 						m.inpPath.SetValue(ensureTrailingSep(m.filepicker.CurrentDirectory))
-						m.filepicker.AllowedTypes = nil
+						m.filepicker.AllowedTypes = []string{".jpg", ".jpeg", ".png", ".gif", ".webp", ".mp4", ".webm", ".mov"}
 						m.filepicker.DirAllowed = true
 						m.filepicker.FileAllowed = true
 						m.filepicker.Path = ""
@@ -669,7 +669,7 @@ func (m *mainModel) updateUploadInputs(msg tea.Msg) tea.Cmd {
 					m.act.useFilePicker = true
 					m.act.pathInputFocused = false
 					m.inpPath.SetValue(ensureTrailingSep(m.filepicker.CurrentDirectory))
-					m.filepicker.AllowedTypes = []string{".safetensors"}
+					m.filepicker.AllowedTypes = []string{".safetensors", ".bin", ".pt", ".ckpt", ".pth"}
 					m.upStep = stepPath
 					return m.filepicker.Init()
 				case "esc":
@@ -702,7 +702,7 @@ func (m *mainModel) updateUploadInputs(msg tea.Msg) tea.Cmd {
 					}
 				}
 				m.act.cur.path = absPath(path)
-				m.upStep = stepAskMore
+				m.upStep = stepPublic
 				return nil
 			case "tab":
 				if m.act.pathInputFocused {
@@ -770,7 +770,7 @@ func (m *mainModel) updateUploadInputs(msg tea.Msg) tea.Cmd {
 						m.act.filePickerErr = err
 						return clearFilePickerErrorAfter(3 * time.Second)
 					}
-					m.upStep = stepAskMore
+					m.upStep = stepPublic
 					return nil
 				}
 			}
@@ -782,6 +782,30 @@ func (m *mainModel) updateUploadInputs(msg tea.Msg) tea.Cmd {
 			}
 		}
 		return tea.Batch(pathCmd, fpCmd)
+	case stepPublic:
+		var cmd tea.Cmd
+		m.publicList, cmd = m.publicList.Update(msg)
+		if km, ok := msg.(tea.KeyMsg); ok {
+			switch km.String() {
+			case "enter":
+				if it, ok := m.publicList.SelectedItem().(listItem); ok {
+					title := it.title
+					// 默认第一个是"否，保持私有"，第二个是"是，公开模型"
+					if strings.HasPrefix(title, "是") {
+						m.act.cur.public = true
+					} else {
+						m.act.cur.public = false
+					}
+					m.upStep = stepAskMore
+					return nil
+				}
+			case "esc":
+				m.upStep = stepPath
+				m.act.useFilePicker = true
+				return nil
+			}
+		}
+		return cmd
 	case stepAskMore:
 		var cmd tea.Cmd
 		m.moreList, cmd = m.moreList.Update(msg)
@@ -806,8 +830,7 @@ func (m *mainModel) updateUploadInputs(msg tea.Msg) tea.Cmd {
 					return nil
 				}
 			case "esc":
-				m.upStep = stepPath
-				m.act.useFilePicker = true
+				m.upStep = stepPublic
 				return nil
 			}
 		}
@@ -963,7 +986,7 @@ func (m *mainModel) renderUploadStepsView() string {
 		}
 	case stepPath:
 		var content strings.Builder
-		content.WriteString(m.titleStyle.Render("上传 · Step 9/10 · 选择文件") + "\n\n")
+		content.WriteString(m.titleStyle.Render("上传 · Step 9/11 · 选择文件") + "\n\n")
 		pathInputLabel := "路径输入："
 		if m.act.pathInputFocused {
 			pathInputLabel = m.titleStyle.Render("► 路径输入：（当前焦点，按Tab切换至文件选择器）")
@@ -992,9 +1015,18 @@ func (m *mainModel) renderUploadStepsView() string {
 			content.WriteString(m.hintStyle.Render("方向键导航，Enter选择文件，Tab切换输入（输入框实时同步），Esc返回"))
 		}
 		return content.String()
+	case stepPublic:
+		if _, ih := m.innerSize(); ih > 0 {
+			h := ih - 12
+			if h < 5 {
+				h = 5
+			}
+			m.publicList.SetHeight(h)
+		}
+		return m.titleStyle.Render("上传 · Step 10/11 · 是否公开此版本？") + "\n\n" + m.publicList.View() + "\n" + m.hintStyle.Render("Enter 确认选择，Esc 返回上一页")
 	case stepAskMore:
 		var b strings.Builder
-		b.WriteString(m.titleStyle.Render("上传 · Step 10/10 · 是否继续添加版本？") + "\n\n")
+		b.WriteString(m.titleStyle.Render("上传 · Step 11/11 · 是否继续添加版本？") + "\n\n")
 		if len(m.act.versions) > 0 {
 			b.WriteString("已添加版本：\n")
 			for i, v := range m.act.versions {

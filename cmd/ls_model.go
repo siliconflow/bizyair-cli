@@ -37,7 +37,6 @@ func ListModel(c *cli.Context) error {
 		ApiKey:     apiKey,
 		BaseDomain: args.BaseDomain,
 		ModelType:  args.Type,
-		Public:     args.Public,
 		Current:    1,
 		PageSize:   100,
 		Sort:       "Recently",

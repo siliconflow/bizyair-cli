@@ -1,8 +1,6 @@
 package tui
 
 import (
-	"fmt"
-
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/siliconflow/bizyair-cli/lib/actions"
 )
@@ -16,26 +14,6 @@ func loginCmd(apiKey string) tea.Cmd {
 			return loginDoneMsg{ok: false, err: result.Error}
 		}
 		return loginDoneMsg{ok: true}
-	}
-}
-
-// 运行 whoami
-func runWhoami(apiKey string) tea.Cmd {
-	return func() tea.Msg {
-		// 调用统一的whoami业务逻辑
-		result := actions.ExecuteWhoami(apiKey)
-		if result.Error != nil {
-			return actionDoneMsg{out: "", err: result.Error}
-		}
-
-		// 格式化输出
-		var out string
-		if result.Name != "" {
-			out = fmt.Sprintf("Your account name: %s\n", result.Name)
-		} else {
-			out = fmt.Sprintf("Your account email: %s\n", result.Email)
-		}
-		return actionDoneMsg{out: out, err: nil}
 	}
 }
 

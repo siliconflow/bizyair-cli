@@ -40,6 +40,7 @@ type mainModel struct {
 	coverMethodList list.Model
 	introMethodList list.Model
 	moreList        list.Model
+	publicList      list.Model
 	inpName         textinput.Model
 	inpPath         textinput.Model
 	inpCover        textinput.Model
@@ -123,7 +124,6 @@ func newMainModel() mainModel {
 	mItems := []list.Item{
 		menuEntry{listItem{title: "上传模型", desc: "交互式收集参数并上传"}, actionUpload},
 		menuEntry{listItem{title: "我的模型", desc: "浏览我的模型"}, actionLsModel},
-		menuEntry{listItem{title: "当前账户信息", desc: "显示 whoami"}, actionWhoami},
 		menuEntry{listItem{title: "退出登录", desc: "清除本地 API Key"}, actionLogout},
 		menuEntry{listItem{title: "退出程序", desc: "离开 BizyAir CLI"}, actionExit},
 	}
@@ -173,6 +173,15 @@ func newMainModel() mainModel {
 	ml.Title = "是否继续添加版本？"
 	ml.SetShowStatusBar(false)
 	ml.SetShowPagination(false)
+
+	publicItems := []list.Item{
+		listItem{title: "否，保持私有", desc: "该版本仅自己可见"},
+		listItem{title: "是，公开模型", desc: "该版本对所有用户公开"},
+	}
+	pl := list.New(publicItems, d, 30, 12)
+	pl.Title = "是否公开此版本？"
+	pl.SetShowStatusBar(false)
+	pl.SetShowPagination(false)
 
 	inApi := textinput.New()
 	inApi.Placeholder = "请输入 API Key"
@@ -247,6 +256,7 @@ func newMainModel() mainModel {
 		coverMethodList: cml,
 		introMethodList: iml,
 		moreList:        ml,
+		publicList:      pl,
 		inpName:         inName,
 		inpPath:         inPath,
 		inpCover:        inCover,
@@ -447,9 +457,6 @@ func (m mainModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					case actionLogout:
 						m.running = true
 						return m, runLogout()
-					case actionWhoami:
-						m.running = true
-						return m, runWhoami(m.apiKey)
 					case actionUpload:
 						m.step = mainStepAction
 						m.act = actionInputs{}

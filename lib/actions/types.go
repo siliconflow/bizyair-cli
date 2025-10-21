@@ -13,13 +13,6 @@ type LoginResult struct {
 	Error   error
 }
 
-// WhoamiResult whoami操作的结果
-type WhoamiResult struct {
-	Name  string
-	Email string
-	Error error
-}
-
 // ListModelsInput 查询模型列表的输入参数
 type ListModelsInput struct {
 	ApiKey     string
@@ -31,7 +24,6 @@ type ListModelsInput struct {
 	Sort       string
 	Current    int
 	PageSize   int
-	Public     bool
 }
 
 // ListModelsResult 查询模型列表的结果
@@ -90,6 +82,8 @@ type UploadResult struct {
 	TotalCount     int
 	Errors         []error
 	CanceledByUser bool
+	ModelName      string // 模型名称
+	ModelType      string // 模型类型
 }
 
 // UploadCallback 上传过程的回调接口

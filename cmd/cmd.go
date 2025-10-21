@@ -21,11 +21,10 @@ func Init() *cli.App {
 	pathFlag := cli.StringSliceFlag{Name: "path", Aliases: []string{"p"}, Usage: "Specify the path to upload.", Destination: &cli.StringSlice{}}
 	nameFlag := cli.StringFlag{Name: "name", Aliases: []string{"n"}, Usage: "Specify the name of model.", Destination: &globalArgs.Name}
 	overwriteFlag := cli.BoolFlag{Name: "overwrite", Usage: "Overwrite existent model", Destination: &globalArgs.Overwrite, Value: false, Required: false}
-	publicFlag := cli.BoolFlag{Name: "public", Usage: "Only show public model", Destination: &globalArgs.Public, Value: false, Required: false}
 	// hostFlag := cli.StringFlag{Name: "host", Usage: fmt.Sprintf("Specify the request host, default: %s", meta.DefaultHost), Destination: &globalArgs.Host, Value: meta.DefaultHost}
 	// portFlag := cli.StringFlag{Name: "port", Usage: fmt.Sprintf("Specify the request port, default: %s", meta.DefaultPort), Destination: &globalArgs.Port, Value: meta.DefaultPort}
 	versionFlag := cli.StringSliceFlag{Name: "version", Aliases: []string{"v", "V"}, Usage: "Specify the version of model.", Destination: &cli.StringSlice{}}
-	versionPublicFlag := cli.StringSliceFlag{Name: "vpub", Aliases: []string{"vp"}, Usage: "Set corresponding model version public.", Destination: &cli.StringSlice{}}
+	versionPublicFlag := cli.StringSliceFlag{Name: "public", Aliases: []string{"pub"}, Usage: "Set corresponding model version public (true/false). Can be specified multiple times for multiple versions.", Destination: &cli.StringSlice{}}
 	introFlag := cli.StringSliceFlag{Name: "intro", Aliases: []string{"i"}, Usage: "An introduction to the model version.", Destination: &cli.StringSlice{}}
 	coverUrlsFlag := cli.StringSliceFlag{Name: "cover", Usage: "Urls of model covers, use ';' as separator.", Destination: &cli.StringSlice{}}
 	baseModelFlag := cli.StringSliceFlag{Name: "base", Aliases: []string{"b"}, Usage: fmt.Sprintf("Specify the base model of uploaded model. (Only works for %s)", meta.BaseModelStr), Required: false, Destination: &cli.StringSlice{}}
@@ -59,12 +58,6 @@ func Init() *cli.App {
 			Action: Login,
 		},
 		{
-			Name:   meta.CmdWhoami,
-			Usage:  "查看当前登录的用户",
-			Flags:  []cli.Flag{},
-			Action: Whoami,
-		},
-		{
 			Name:   meta.CmdLogout,
 			Usage:  "退出登录",
 			Flags:  []cli.Flag{},
@@ -90,25 +83,15 @@ func Init() *cli.App {
 		},
 		{
 			Name:  meta.CmdModel,
-			Usage: "{ls, detail, rm} 与模型交互的命令集",
+			Usage: "{ls, rm} 与模型交互的命令集",
 			Subcommands: []*cli.Command{
 				{
 					Name:  meta.CmdLs,
 					Usage: "列出你的模型",
 					Flags: []cli.Flag{
 						&typeFlag,
-						&publicFlag,
 					},
 					Action: ListModel,
-				},
-				{
-					Name:  meta.CmdDetail,
-					Usage: "查看模型详情",
-					Flags: []cli.Flag{
-						&typeFlag,
-						&nameFlag,
-					},
-					Action: ModelDetail,
 				},
 				{
 					Name:  meta.CmdRm,

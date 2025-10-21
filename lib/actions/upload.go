@@ -231,6 +231,8 @@ func uploadVersionsConcurrently(
 		SuccessCount: len(successVersions),
 		TotalCount:   total,
 		Errors:       uploadErrors,
+		ModelName:    input.ModelName,
+		ModelType:    input.ModelType,
 	}
 }
 

@@ -21,7 +21,6 @@ type actionKind string
 const (
 	actionUpload  actionKind = "upload"
 	actionLsModel actionKind = "ls_model"
-	actionWhoami  actionKind = "whoami"
 	actionLogout  actionKind = "logout"
 	actionExit    actionKind = "exit"
 )
@@ -39,6 +38,7 @@ const (
 	stepIntroMethod // 选择介绍输入方式
 	stepIntro
 	stepPath
+	stepPublic // 询问是否公开
 	stepAskMore
 	stepConfirm
 )
@@ -117,6 +117,7 @@ type versionItem struct {
 	cover   string
 	intro   string
 	path    string
+	public  bool // 是否公开
 }
 
 // 动作输入状态
