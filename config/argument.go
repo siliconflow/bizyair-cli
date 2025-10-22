@@ -24,6 +24,7 @@ type Argument struct {
 	BaseModel     []string
 	CoverUrls     []string
 	Intro         []string
+	IntroPath     []string // 从文件读取 intro
 	Current       int
 	PageSize      int
 }
@@ -46,6 +47,7 @@ func (arg *Argument) parseStringSlice(c *cli.Context) {
 	// parse string slice
 	arg.ModelVersion = c.StringSlice("version")
 	arg.Intro = c.StringSlice("intro")
+	arg.IntroPath = c.StringSlice("intro-path")
 	arg.Path = c.StringSlice("path")
 	arg.CoverUrls = c.StringSlice("cover")
 	arg.BaseModel = c.StringSlice("base")

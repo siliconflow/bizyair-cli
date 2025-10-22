@@ -1,0 +1,42 @@
+# 批量上传配置文件
+# 
+# 命令行使用示例：
+# 单个版本，从文件读取 intro：
+#   bizyair upload -t LoRA -n my_model -p model.safetensors --intro-path intro.md
+#
+# 多个版本，分别指定 intro-path：
+#   bizyair upload -t LoRA -n my_model \
+#     -p v1.safetensors --intro-path intro_v1.txt \
+#     -p v2.safetensors --intro-path intro_v2.md
+#
+# 混合使用（版本1用文件，版本2用直接文本）：
+#   bizyair upload -t LoRA -n my_model \
+#     -p v1.safetensors --intro-path intro.txt \
+#     -p v2.safetensors --intro "直接输入的介绍"
+#
+models:
+  - name: "anime_style_lora"
+    type: "LoRA"
+    versions:
+      - name: "v1.0"  # 可选，默认 v1.0
+        base_model: "Flux.D 1"
+        model_path: "models/anime_v1.safetensors"
+        cover_path: "covers/anime_v1.jpg"  # 本地文件路径
+        intro: "第一版动漫风格模型"  # 直接文本
+        public: true  # 可选，默认 false
+        
+      - name: "v2.0"  # 可选，默认 v2.0
+        base_model: "Flux.D 1"
+        model_path: "models/anime_v2.safetensors"
+        cover_url: "https://example.com/cover.jpg"  # 网络URL
+        intro_path: "descriptions/v2_intro.txt"  # 从文件读取
+        public: false
+        
+  - name: "realistic_checkpoint"
+    type: "Checkpoint"
+    versions:
+      - base_model: "SD 1.5"  # name 省略时自动为 v1.0
+        model_path: "checkpoints/realistic.ckpt"
+        cover_path: "covers/realistic.webp"
+        intro_path: "descriptions/realistic.md"
+        # public 省略时默认 false

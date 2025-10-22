@@ -63,29 +63,14 @@ func validateCoverFile(path string) error {
 	return lib.ValidateCoverFile(path)
 }
 
-// validateIntroFile 验证介绍文件格式
+// validateIntroFile 验证介绍文件格式（复用 lib 层）
 func validateIntroFile(path string) error {
-	ext := strings.ToLower(filepath.Ext(path))
-	if ext != ".txt" && ext != ".md" {
-		return fmt.Errorf("不支持的文件格式，仅支持 .txt 和 .md 文件")
-	}
-	return validatePath(path)
+	return lib.ValidateIntroFile(path)
 }
 
-// readIntroFile 读取介绍文件内容并截断到5000字
+// readIntroFile 读取介绍文件内容并截断到5000字（复用 lib 层）
 func readIntroFile(path string) (string, error) {
-	content, err := os.ReadFile(path)
-	if err != nil {
-		return "", fmt.Errorf("读取文件失败: %w", err)
-	}
-
-	text := strings.TrimSpace(string(content))
-	runes := []rune(text)
-	if len(runes) > 5000 {
-		runes = runes[:5000]
-	}
-
-	return string(runes), nil
+	return lib.ReadIntroFile(path)
 }
 
 // truncateToLines 将文本截断为指定行数的预览

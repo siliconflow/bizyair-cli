@@ -104,3 +104,42 @@ func IsSupportedCoverFormat(url string) bool {
 func GetSupportedCoverFormats() string {
 	return ".jpg, .jpeg, .png, .gif, .webp, .mp4, .webm, .mov"
 }
+
+// ValidateIntroFile 验证介绍文件格式
+func ValidateIntroFile(path string) error {
+	if path == "" {
+		return fmt.Errorf("intro 文件路径不能为空")
+	}
+
+	info, err := os.Stat(path)
+	if err != nil {
+		return fmt.Errorf("文件不存在: %w", err)
+	}
+
+	if info.IsDir() {
+		return fmt.Errorf("路径是目录，需要文件: %s", path)
+	}
+
+	ext := strings.ToLower(filepath.Ext(path))
+	if ext != ".txt" && ext != ".md" {
+		return fmt.Errorf("不支持的文件格式，仅支持 .txt 和 .md 文件")
+	}
+
+	return nil
+}
+
+// ReadIntroFile 读取介绍文件内容并截断到5000字
+func ReadIntroFile(path string) (string, error) {
+	content, err := os.ReadFile(path)
+	if err != nil {
+		return "", fmt.Errorf("读取文件失败: %w", err)
+	}
+
+	text := strings.TrimSpace(string(content))
+	runes := []rune(text)
+	if len(runes) > 5000 {
+		runes = runes[:5000]
+	}
+
+	return string(runes), nil
+}

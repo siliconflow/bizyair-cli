@@ -12,6 +12,7 @@ require (
 	github.com/nickalie/go-webpbin v0.0.0-20220110095747-f10016bf2dc1
 	github.com/samber/lo v1.46.0
 	github.com/urfave/cli/v2 v2.27.2
+	gopkg.in/yaml.v3 v3.0.1
 )
 
 require (

@@ -21,6 +21,15 @@ func Upload(c *cli.Context) error {
 	setLogVerbose(args.Verbose)
 	logs.Debugf("args: %#v\n", args)
 
+	// 检查是否使用 YAML 配置文件批量上传
+	if args.FilePath != "" {
+		// 使用 YAML 配置文件
+		if err := uploadFromYaml(args.FilePath, args); err != nil {
+			return cli.Exit(err, meta.LoadError)
+		}
+		return nil
+	}
+
 	// 获取 API Key
 	apiKey := args.ApiKey
 	if apiKey == "" {
@@ -33,11 +42,30 @@ func Upload(c *cli.Context) error {
 	// 准备版本输入参数
 	versions := make([]actions.VersionInput, len(args.Path))
 	for i := range args.Path {
+		// 优先从文件读取 intro，其次使用直接提供的 intro
+		intro := ""
+		introPath := getStringAt(args.IntroPath, i, "")
+		if introPath != "" {
+			// 从文件读取
+			if err := lib.ValidateIntroFile(introPath); err != nil {
+				return cli.Exit(fmt.Errorf("intro 文件验证失败 [版本 %d]: %w", i+1, err), meta.LoadError)
+			}
+			content, err := lib.ReadIntroFile(introPath)
+			if err != nil {
+				return cli.Exit(fmt.Errorf("读取 intro 文件失败 [版本 %d]: %w", i+1, err), meta.LoadError)
+			}
+			intro = content
+			fmt.Fprintf(os.Stdout, "已从文件读取 intro (版本 %d/%d): %s\n", i+1, len(args.Path), introPath)
+		} else {
+			// 使用直接提供的 intro
+			intro = getStringAt(args.Intro, i, "")
+		}
+
 		versions[i] = actions.VersionInput{
-			Version:      getVersionAt(args.ModelVersion, i, fmt.Sprintf("v%d", i)),
+			Version:      getVersionAt(args.ModelVersion, i, fmt.Sprintf("v%d.0", i+1)),
 			Path:         args.Path[i],
 			BaseModel:    getStringAt(args.BaseModel, i, ""),
-			Introduction: getStringAt(args.Intro, i, ""),
+			Introduction: intro,
 			CoverUrl:     getStringAt(args.CoverUrls, i, ""),
 			Public:       getBoolAt(args.VersionPublic, i, false),
 		}
