@@ -660,7 +660,7 @@ func (m *mainModel) updateUploadInputs(msg tea.Msg) tea.Cmd {
 			m.taIntro, cmd = m.taIntro.Update(msg)
 			if km, ok := msg.(tea.KeyMsg); ok {
 				switch km.String() {
-				case "ctrl+d":
+				case "ctrl+s":
 					intro := strings.TrimSpace(m.taIntro.Value())
 					if len([]rune(intro)) > 5000 {
 						intro = string([]rune(intro)[:5000])
@@ -982,7 +982,7 @@ func (m *mainModel) renderUploadStepsView() string {
 			// 直接输入模式渲染
 			charCount := len([]rune(m.taIntro.Value()))
 			charInfo := fmt.Sprintf("（%d/5000 字）", charCount)
-			return m.titleStyle.Render("上传 · Step 8/10 · 模型介绍") + " " + m.hintStyle.Render(charInfo) + "\n\n" + m.taIntro.View() + "\n" + m.hintStyle.Render("支持 Markdown 格式；提交：Ctrl+D，返回：Esc")
+			return m.titleStyle.Render("上传 · Step 8/10 · 模型介绍") + " " + m.hintStyle.Render(charInfo) + "\n\n" + m.taIntro.View() + "\n" + m.hintStyle.Render("支持 Markdown 格式；提交：Ctrl+S，返回：Esc")
 		}
 	case stepPath:
 		var content strings.Builder

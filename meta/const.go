@@ -19,7 +19,7 @@ const (
 )
 
 const (
-	DefaultDomain = "https://bizyair-api.siliconflow.cn"
+	DefaultDomain = "https://api.bizyair.cn"
 	AuthDomain    = "https://api.siliconflow.cn"
 )
 

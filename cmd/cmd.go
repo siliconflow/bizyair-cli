@@ -34,7 +34,7 @@ func Init() *cli.App {
 	app := cli.NewApp()
 	app.Name = meta.Name
 	app.Usage = meta.Description
-	app.Version = fmt.Sprintf("v%s", meta.Version)
+	app.Version = meta.Version
 	cli.VersionPrinter = func(cCtx *cli.Context) {
 		fmt.Printf("Version: %s\nRevision: %s\nBuild At: %s\n", cCtx.App.Version, meta.Commit, meta.BuildDate)
 	}

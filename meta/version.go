@@ -1,7 +1,7 @@
 package meta
 
 const (
-	Name        = "bizyair"
+	Name        = "bizyair-cli"
 	Description = "A CLI tools for BizyAir."
 )
 
