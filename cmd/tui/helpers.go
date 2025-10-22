@@ -123,3 +123,82 @@ func truncateToLines(text string, maxLines int) string {
 
 	return result.String()
 }
+
+// getContextualHint 根据当前状态返回上下文相关的操作提示
+func (m *mainModel) getContextualHint() string {
+	// 退出确认优先级最高
+	if m.confirmingExit {
+		return "确认：Enter\n取消：Esc"
+	}
+
+	// 正在运行的上传任务
+	if m.running && m.currentAction == actionUpload && m.step == mainStepAction {
+		if m.canceling {
+			return "正在取消..."
+		}
+		return "取消：Ctrl+C"
+	}
+
+	// 其他运行状态
+	if m.running {
+		return "请稍候..."
+	}
+
+	// 根据主步骤返回提示
+	switch m.step {
+	case mainStepLogin:
+		return "确认：Enter\n返回：Esc"
+	case mainStepMenu:
+		return "↑/k 上 • ↓/j 下\n/ 筛选 • Enter 选择"
+	case mainStepAction:
+		// 根据上传步骤细分
+		switch m.upStep {
+		case stepType:
+			return "↑/k 上 • ↓/j 下\nEnter 选择 • Esc 返回"
+		case stepName:
+			return "输入模型名称\nEnter 确认 • Esc 返回"
+		case stepVersion:
+			return "输入版本名称\nEnter 确认 • Esc 返回"
+		case stepBase:
+			return "↑/k 上 • ↓/j 下\nEnter 选择 • Esc 返回"
+		case stepCoverMethod:
+			return "↑/k 上 • ↓/j 下\nEnter 选择 • Esc 返回"
+		case stepCover:
+			if m.act.coverUploadMethod == "url" {
+				return "输入封面 URL\nEnter 确认 • Esc 返回"
+			}
+			// 本地文件上传模式 - 根据焦点显示不同提示
+			if m.coverPathInputFocused {
+				return "当前焦点：路径输入框\n输入文件路径，Enter 确认\nTab 切换至文件选择器 • Esc 返回"
+			}
+			return "当前焦点：文件选择器\n← → 进入/退出文件夹 • ↑ ↓ 选择\nEnter 确认 • Tab 切换至路径输入框 • Esc 返回"
+		case stepIntroMethod:
+			return "↑/k 上 • ↓/j 下\nEnter 选择 • Esc 返回"
+		case stepIntro:
+			if m.act.introInputMethod == "file" {
+				// 文件导入模式 - 根据焦点显示不同提示
+				if m.act.introPathInputFocused {
+					return "当前焦点：路径输入框\n输入 .txt 或 .md 文件路径\nEnter 确认 • Tab 切换至文件选择器 • Esc 返回"
+				}
+				return "当前焦点：文件选择器\n← → 进入/退出文件夹 • ↑ ↓ 选择\nEnter 确认 • Tab 切换至路径输入框 • Esc 返回"
+			}
+			return "支持 Markdown 格式\nCtrl+S 提交 • Esc 返回"
+		case stepPath:
+			// 文件路径选择 - 根据焦点显示不同提示
+			if m.act.pathInputFocused {
+				return "当前焦点：路径输入框\n输入文件路径，Enter 确认\nTab 切换至文件选择器 • Esc 返回"
+			}
+			return "当前焦点：文件选择器\n← → 进入/退出文件夹 • ↑ ↓ 选择\nEnter 确认 • Tab 切换至路径输入框 • Esc 返回"
+		case stepPublic:
+			return "↑/k 上 • ↓/j 下\nEnter 选择 • Esc 返回"
+		case stepAskMore:
+			return "↑/k 上 • ↓/j 下\nEnter 选择 • Esc 返回"
+		case stepConfirm:
+			return "Enter 开始上传\nEsc 返回"
+		}
+	case mainStepOutput:
+		return "Enter 返回菜单"
+	}
+
+	return ""
+}

@@ -62,10 +62,11 @@ type mainModel struct {
 	verConsumed []int64
 	verTotal    []int64
 
-	titleStyle lipgloss.Style
-	hintStyle  lipgloss.Style
-	panelStyle lipgloss.Style
-	btnStyle   lipgloss.Style
+	titleStyle       lipgloss.Style
+	hintStyle        lipgloss.Style
+	contextHintStyle lipgloss.Style // 上下文提示样式（粉色）
+	panelStyle       lipgloss.Style
+	btnStyle         lipgloss.Style
 
 	framePadX int
 	framePadY int
@@ -202,28 +203,29 @@ func newMainModel() mainModel {
 	pr := progress.New(progress.WithDefaultGradient())
 
 	m := mainModel{
-		step:            mainStepHome,
-		menu:            menuList,
-		inpApi:          inApi,
-		typeList:        tp,
-		baseList:        bl,
-		coverMethodList: cml,
-		introMethodList: iml,
-		moreList:        ml,
-		publicList:      pl,
-		inpName:         inName,
-		inpPath:         inPath,
-		inpCover:        inCover,
-		inpExt:          inExt,
-		inpVersion:      inVer,
-		taIntro:         taIntro,
-		filepicker:      fp,
-		titleStyle:      lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("#36A3F7")),
-		hintStyle:       lipgloss.NewStyle().Faint(true).Foreground(lipgloss.Color("244")),
-		panelStyle:      lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).BorderForeground(lipgloss.Color("63")).Padding(1, 2),
-		btnStyle:        lipgloss.NewStyle().Foreground(lipgloss.Color("#FFFFFF")).Background(lipgloss.Color("#04B575")).Padding(0, 1).Bold(true),
-		sp:              sp,
-		progress:        pr,
+		step:             mainStepHome,
+		menu:             menuList,
+		inpApi:           inApi,
+		typeList:         tp,
+		baseList:         bl,
+		coverMethodList:  cml,
+		introMethodList:  iml,
+		moreList:         ml,
+		publicList:       pl,
+		inpName:          inName,
+		inpPath:          inPath,
+		inpCover:         inCover,
+		inpExt:           inExt,
+		inpVersion:       inVer,
+		taIntro:          taIntro,
+		filepicker:       fp,
+		titleStyle:       lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("#36A3F7")),
+		hintStyle:        lipgloss.NewStyle().Faint(true).Foreground(lipgloss.Color("244")),
+		contextHintStyle: lipgloss.NewStyle().Foreground(lipgloss.Color("#EC4899")),
+		panelStyle:       lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).BorderForeground(lipgloss.Color("63")).Padding(1, 2),
+		btnStyle:         lipgloss.NewStyle().Foreground(lipgloss.Color("#FFFFFF")).Background(lipgloss.Color("#04B575")).Padding(0, 1).Bold(true),
+		sp:               sp,
+		progress:         pr,
 		logo: strings.Join([]string{
 			` .-. .-')              .-') _              ('-.             _  .-')   `,
 			` \  ( OO )            (  OO) )            ( OO ).-.        ( \( -O )  `,
@@ -622,7 +624,12 @@ func (m mainModel) View() string {
 		panelW = 40
 	}
 	panel := m.panelStyle.Width(panelW)
-	header := lipgloss.PlaceHorizontal(innerW, lipgloss.Left, m.renderGradientLogo(m.smallLogo))
+
+	// 创建 header：将 smallLogo 和上下文提示横向排列
+	logoRendered := m.renderGradientLogo(m.smallLogo)
+	hint := m.contextHintStyle.Render(m.getContextualHint())
+	headerContent := lipgloss.JoinHorizontal(lipgloss.Top, logoRendered, "  ", hint)
+	header := lipgloss.PlaceHorizontal(innerW, lipgloss.Left, headerContent)
 
 	// 退出确认界面优先级最高
 	if m.confirmingExit {
