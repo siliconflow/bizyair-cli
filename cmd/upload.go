@@ -177,8 +177,21 @@ func displayUploadedModelDetail(apiKey, baseDomain, modelName, modelType string)
 		return
 	}
 
+	// 构建模型详情页面 URL
+	modelURL := fmt.Sprintf("https://bizyair.cn/community/models/my/%d", targetModel.Id)
+
 	// 显示成功提示和链接
-	fmt.Fprintf(os.Stdout, "\n模型发布成功，请在浏览器登录 https://bizyair.cn 在：https://bizyair.cn/community/models/my/%d 查看\n", targetModel.Id)
+	fmt.Fprintf(os.Stdout, "\n模型发布成功！\n")
+	fmt.Fprintf(os.Stdout, "模型链接: %s\n", modelURL)
+
+	// 尝试在浏览器中打开模型详情页面
+	msg, err := lib.OpenBrowser(modelURL)
+	if err != nil {
+		// 如果无法打开浏览器，只是提示，不影响整体流程
+		fmt.Fprintf(os.Stdout, "提示: 无法自动打开浏览器，请手动访问上述链接查看\n")
+	} else {
+		fmt.Fprintf(os.Stdout, "%s\n", msg)
+	}
 }
 
 // cliUploadCallback CLI的进度回调实现

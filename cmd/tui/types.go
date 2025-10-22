@@ -148,11 +148,11 @@ type actionInputs struct {
 	introPathInputFocused bool
 }
 
-// 列表消息
-type modelListLoadedMsg struct {
-	models []*lib.BizyModelInfo
-	total  int
-	err    error
+// 打开浏览器结果消息
+type openBrowserDoneMsg struct {
+	msg string
+	url string
+	err error
 }
 
 // 基础模型类型列表加载消息

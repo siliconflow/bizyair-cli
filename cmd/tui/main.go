@@ -11,12 +11,9 @@ import (
 	"github.com/charmbracelet/bubbles/list"
 	"github.com/charmbracelet/bubbles/progress"
 	"github.com/charmbracelet/bubbles/spinner"
-	"github.com/charmbracelet/bubbles/table"
 	"github.com/charmbracelet/bubbles/textarea"
 	"github.com/charmbracelet/bubbles/textinput"
-	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/glamour"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/siliconflow/bizyair-cli/lib"
 	"github.com/siliconflow/bizyair-cli/meta"
@@ -50,23 +47,6 @@ type mainModel struct {
 
 	filepicker   filepicker.Model
 	selectedFile string
-
-	modelTable       table.Model
-	modelList        []*lib.BizyModelInfo
-	modelListTotal   int
-	loadingModelList bool
-	nameColWidth     int
-	fileColWidth     int
-
-	viewingModelDetail bool
-	modelDetail        *lib.BizyModelDetail
-	loadingModelDetail bool
-	detailViewport     viewport.Model
-	detailContent      string
-
-	confirmingDelete bool
-	deleteTargetId   int64
-	deleteTargetName string
 
 	confirmingExit bool
 
@@ -123,7 +103,7 @@ type mainModel struct {
 func newMainModel() mainModel {
 	mItems := []list.Item{
 		menuEntry{listItem{title: "上传模型", desc: "交互式收集参数并上传"}, actionUpload},
-		menuEntry{listItem{title: "我的模型", desc: "浏览我的模型"}, actionLsModel},
+		menuEntry{listItem{title: "我的模型", desc: "在浏览器中查看我的模型"}, actionLsModel},
 		menuEntry{listItem{title: "退出登录", desc: "清除本地 API Key"}, actionLogout},
 		menuEntry{listItem{title: "退出程序", desc: "离开 BizyAir CLI"}, actionExit},
 	}
@@ -221,32 +201,6 @@ func newMainModel() mainModel {
 	sp.Spinner = spinner.Dot
 	pr := progress.New(progress.WithDefaultGradient())
 
-	columns := []table.Column{
-		{Title: "ID", Width: 10},
-		{Title: "名称", Width: 25},
-		{Title: "类型", Width: 12},
-		{Title: "版本数", Width: 8},
-		{Title: "基础模型", Width: 15},
-		{Title: "文件名", Width: 60},
-	}
-	modelTable := table.New(table.WithColumns(columns), table.WithFocused(true), table.WithHeight(10))
-	s := table.DefaultStyles()
-	s.Header = s.Header.
-		BorderStyle(lipgloss.NormalBorder()).
-		BorderForeground(lipgloss.Color("240")).
-		BorderBottom(true).
-		Bold(true).
-		Foreground(lipgloss.Color("#36A3F7"))
-	s.Cell = s.Cell.PaddingLeft(0).PaddingRight(0)
-	s.Header = s.Header.PaddingLeft(0).PaddingRight(0)
-	s.Selected = s.Selected.PaddingLeft(0).PaddingRight(0)
-	s.Selected = s.Selected.Foreground(lipgloss.Color("229")).Background(lipgloss.Color("57")).Bold(false)
-	modelTable.SetStyles(s)
-
-	// 初始化模型详情 viewport
-	detailViewport := viewport.New(80, 20)
-	detailViewport.Style = lipgloss.NewStyle()
-
 	m := mainModel{
 		step:            mainStepHome,
 		menu:            menuList,
@@ -264,8 +218,6 @@ func newMainModel() mainModel {
 		inpVersion:      inVer,
 		taIntro:         taIntro,
 		filepicker:      fp,
-		modelTable:      modelTable,
-		detailViewport:  detailViewport,
 		titleStyle:      lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("#36A3F7")),
 		hintStyle:       lipgloss.NewStyle().Faint(true).Foreground(lipgloss.Color("244")),
 		panelStyle:      lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).BorderForeground(lipgloss.Color("63")).Padding(1, 2),
@@ -357,54 +309,6 @@ func (m mainModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		} else {
 			m.filepicker.SetHeight(5)
 		}
-		m.resizeModelTable(innerW)
-
-		// 动态调整模型详情 viewport 大小
-		detailViewportHeight := innerH - 12
-		if detailViewportHeight < 5 {
-			detailViewportHeight = 5
-		}
-		detailViewportWidth := innerW - 4
-		if detailViewportWidth < 40 {
-			detailViewportWidth = 40
-		}
-
-		// 检查尺寸是否变化
-		needRerender := false
-		if m.detailViewport.Width != detailViewportWidth || m.detailViewport.Height != detailViewportHeight {
-			m.detailViewport.Width = detailViewportWidth
-			m.detailViewport.Height = detailViewportHeight
-			needRerender = true
-		}
-
-		// 如果正在查看详情且尺寸变化了，需要重新渲染内容
-		if needRerender && m.viewingModelDetail && m.modelDetail != nil && m.detailContent != "" {
-			// 重新生成 Markdown
-			markdown := buildModelDetailMarkdown(m.modelDetail)
-
-			// 使用新的宽度重新渲染
-			renderer, err := glamour.NewTermRenderer(
-				glamour.WithAutoStyle(),
-				glamour.WithWordWrap(detailViewportWidth),
-			)
-
-			if err == nil {
-				if rendered, err := renderer.Render(markdown); err == nil {
-					m.detailContent = rendered
-					// 保持当前滚动位置（如果可能）
-					yOffset := m.detailViewport.YOffset
-					m.detailViewport.SetContent(m.detailContent)
-					m.detailViewport.YOffset = yOffset
-					// 确保不超出范围
-					if m.detailViewport.YOffset > m.detailViewport.TotalLineCount()-m.detailViewport.Height {
-						m.detailViewport.YOffset = m.detailViewport.TotalLineCount() - m.detailViewport.Height
-						if m.detailViewport.YOffset < 0 {
-							m.detailViewport.YOffset = 0
-						}
-					}
-				}
-			}
-		}
 
 		return m, nil
 	case tea.KeyMsg:
@@ -468,10 +372,8 @@ func (m mainModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 						}
 						return m, nil
 					case actionLsModel:
-						m.step = mainStepAction
-						m.act = actionInputs{}
-						m.loadingModelList = true
-						return m, loadModelList(m.apiKey)
+						m.running = true
+						return m, openMyModelsInBrowser()
 					}
 				}
 			case mainStepAction:
@@ -530,67 +432,15 @@ func (m mainModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.apiKey = m.inpApi.Value()
 		m.step = mainStepMenu
 		return m, nil
-	case modelListLoadedMsg:
-		m.loadingModelList = false
-		if msg.err != nil {
-			m.err = withStep("加载模型列表", msg.err)
-			m.step = mainStepOutput
-			m.output = fmt.Sprintf("加载模型列表失败: %v", msg.err)
-			return m, nil
-		}
-		m.modelList = msg.models
-		m.modelListTotal = msg.total
-		m.rebuildModelTableRows()
-		return m, nil
-	case modelDetailLoadedMsg:
-		m.loadingModelDetail = false
-		if msg.err != nil {
-			m.err = msg.err
-			m.viewingModelDetail = false
-			return m, nil
-		}
-		m.modelDetail = msg.detail
-
-		// 生成 Markdown 内容并使用 glamour 渲染
-		markdown := buildModelDetailMarkdown(msg.detail)
-
-		// 使用 glamour 渲染 Markdown，使用深色主题并设置合适的宽度
-		renderer, err := glamour.NewTermRenderer(
-			glamour.WithAutoStyle(),
-			glamour.WithWordWrap(m.detailViewport.Width),
-		)
-
-		if err != nil {
-			// 如果 glamour 初始化失败，降级到纯文本显示
-			m.detailContent = markdown
-		} else {
-			rendered, err := renderer.Render(markdown)
-			if err != nil {
-				// 如果渲染失败，降级到纯文本显示
-				m.detailContent = markdown
-			} else {
-				m.detailContent = rendered
-			}
-		}
-
-		// 设置到 viewport 并重置滚动位置
-		m.detailViewport.SetContent(m.detailContent)
-		m.detailViewport.GotoTop()
-
-		return m, nil
-	case deleteModelDoneMsg:
+	case openBrowserDoneMsg:
 		m.running = false
-		m.confirmingDelete = false
-		m.deleteTargetId = 0
-		m.deleteTargetName = ""
-		m.viewingModelDetail = false
-		m.modelDetail = nil
 		if msg.err != nil {
-			m.err = msg.err
-			return m, nil
+			m.output = fmt.Sprintf("无法打开浏览器，请在 %s 查看", msg.url)
+		} else {
+			m.output = msg.msg
 		}
-		m.loadingModelList = true
-		return m, loadModelList(m.apiKey)
+		m.step = mainStepOutput
+		return m, nil
 	case actionDoneMsg:
 		m.running = false
 		m.canceling = false
@@ -756,11 +606,6 @@ func (m mainModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		}
 	}
-	if m.loadingModelList {
-		var cmd tea.Cmd
-		m.sp, cmd = m.sp.Update(msg)
-		return m, cmd
-	}
 	return m, nil
 }
 
@@ -867,6 +712,18 @@ func (m mainModel) renderGradientLogo(logoText string) string {
 		logoB.WriteString("\n")
 	}
 	return strings.TrimRight(logoB.String(), "\n")
+}
+
+// openMyModelsInBrowser 在浏览器中打开我的模型页面
+func openMyModelsInBrowser() tea.Cmd {
+	return func() tea.Msg {
+		msg, err := lib.OpenBrowser(lib.MyModelsURL)
+		return openBrowserDoneMsg{
+			msg: msg,
+			url: lib.MyModelsURL,
+			err: err,
+		}
+	}
 }
 
 // 入口

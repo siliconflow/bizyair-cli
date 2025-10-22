@@ -208,13 +208,11 @@ func (m *mainModel) renderUploadRunningView() string {
 	return m.titleStyle.Render("上传中 · 请稍候") + "\n\n" + summary + "\n\n" + progressSection.String() + "\n\n" + hint
 }
 
-// 根据当前动作处理输入与触发命令（仅上传和列表两个分支）
+// 根据当前动作处理输入与触发命令
 func (m *mainModel) updateActionInputs(msg tea.Msg) tea.Cmd {
 	switch m.currentAction {
 	case actionUpload:
 		return m.updateUploadInputs(msg)
-	case actionLsModel:
-		return m.updateListModelsInputs(msg)
 	default:
 		return nil
 	}
@@ -225,8 +223,6 @@ func (m *mainModel) renderActionView() string {
 	switch m.currentAction {
 	case actionUpload:
 		return m.renderUploadStepsView()
-	case actionLsModel:
-		return m.renderListModelsView()
 	default:
 		return ""
 	}
