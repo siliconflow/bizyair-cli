@@ -594,6 +594,10 @@ func (m *mainModel) updateUploadInputs(msg tea.Msg) tea.Cmd {
 							m.act.filePickerErr = err
 							return clearFilePickerErrorAfter(3 * time.Second)
 						}
+						if strings.TrimSpace(content) == "" {
+							m.act.filePickerErr = fmt.Errorf("模型介绍（intro）是必填项，文件内容不能为空")
+							return clearFilePickerErrorAfter(3 * time.Second)
+						}
 						m.taIntro.SetValue(content)
 						m.act.introInputMethod = "direct"
 						m.act.useFilePicker = false
@@ -635,6 +639,10 @@ func (m *mainModel) updateUploadInputs(msg tea.Msg) tea.Cmd {
 							m.act.filePickerErr = err
 							return clearFilePickerErrorAfter(3 * time.Second)
 						}
+						if strings.TrimSpace(content) == "" {
+							m.act.filePickerErr = fmt.Errorf("模型介绍（intro）是必填项，文件内容不能为空")
+							return clearFilePickerErrorAfter(3 * time.Second)
+						}
 						m.taIntro.SetValue(content)
 						m.act.introInputMethod = "direct"
 						m.act.useFilePicker = false
@@ -658,6 +666,10 @@ func (m *mainModel) updateUploadInputs(msg tea.Msg) tea.Cmd {
 				switch km.String() {
 				case "ctrl+s":
 					intro := strings.TrimSpace(m.taIntro.Value())
+					if intro == "" {
+						m.err = fmt.Errorf("模型介绍（intro）是必填项，请提供介绍文本或通过文件导入")
+						return nil
+					}
 					if len([]rune(intro)) > 5000 {
 						intro = string([]rune(intro)[:5000])
 					}

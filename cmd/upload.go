@@ -3,6 +3,7 @@ package cmd
 import (
 	"fmt"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/cloudwego/hertz/cmd/hz/util/logs"
@@ -59,6 +60,11 @@ func Upload(c *cli.Context) error {
 		} else {
 			// 使用直接提供的 intro
 			intro = getStringAt(args.Intro, i, "")
+		}
+
+		// 验证 intro 不能为空
+		if strings.TrimSpace(intro) == "" {
+			return cli.Exit(fmt.Errorf("模型介绍（intro）是必填项，请提供介绍文本或通过 intro_path 指定介绍文件 [版本 %d]", i+1), meta.LoadError)
 		}
 
 		versions[i] = actions.VersionInput{

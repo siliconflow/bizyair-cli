@@ -3,6 +3,7 @@ package config
 import (
 	"fmt"
 	"os"
+	"path/filepath"
 	"regexp"
 	"strconv"
 	"strings"
@@ -123,6 +124,11 @@ func validateYamlVersion(version YamlVersion, modelName string, versionIndex int
 		return fmt.Errorf("%s: intro 和 intro_path 不能同时指定", prefix)
 	}
 
+	// 验证 intro 必填（至少要有一个）
+	if !hasIntro && !hasIntroPath {
+		return fmt.Errorf("%s: 模型介绍（intro）是必填项，请提供介绍文本或通过 intro_path 指定介绍文件", prefix)
+	}
+
 	// 如果是 intro_path，验证文件存在
 	if hasIntroPath {
 		if err := lib.ValidateIntroFile(version.IntroPath); err != nil {
@@ -212,7 +218,13 @@ func (v *YamlVersion) GetIntroduction() (string, error) {
 		if err != nil {
 			return "", fmt.Errorf("读取 intro 文件失败: %w", err)
 		}
+		if strings.TrimSpace(content) == "" {
+			return "", fmt.Errorf("模型介绍（intro）是必填项，文件内容不能为空")
+		}
 		return content, nil
+	}
+	if strings.TrimSpace(v.Intro) == "" {
+		return "", fmt.Errorf("模型介绍（intro）是必填项，请提供介绍文本")
 	}
 	return v.Intro, nil
 }
@@ -232,17 +244,17 @@ func NormalizeModelPaths(config *YamlConfig, yamlDir string) error {
 			ver := &config.Models[i].Versions[j]
 
 			// 规范化 model_path
-			if ver.ModelPath != "" && !strings.HasPrefix(ver.ModelPath, "/") && !strings.HasPrefix(ver.ModelPath, "http://") && !strings.HasPrefix(ver.ModelPath, "https://") {
+			if ver.ModelPath != "" && !filepath.IsAbs(ver.ModelPath) && !isURL(ver.ModelPath) {
 				ver.ModelPath = normalizeRelativePath(yamlDir, ver.ModelPath)
 			}
 
 			// 规范化 cover_path（如果是本地路径）
-			if ver.CoverPath != "" && !strings.HasPrefix(ver.CoverPath, "/") && !strings.HasPrefix(ver.CoverPath, "http://") && !strings.HasPrefix(ver.CoverPath, "https://") {
+			if ver.CoverPath != "" && !filepath.IsAbs(ver.CoverPath) && !isURL(ver.CoverPath) {
 				ver.CoverPath = normalizeRelativePath(yamlDir, ver.CoverPath)
 			}
 
 			// 规范化 intro_path
-			if ver.IntroPath != "" && !strings.HasPrefix(ver.IntroPath, "/") {
+			if ver.IntroPath != "" && !filepath.IsAbs(ver.IntroPath) {
 				ver.IntroPath = normalizeRelativePath(yamlDir, ver.IntroPath)
 			}
 		}
@@ -250,11 +262,22 @@ func NormalizeModelPaths(config *YamlConfig, yamlDir string) error {
 	return nil
 }
 
+// isURL 判断路径是否为 URL
+func isURL(path string) bool {
+	return strings.HasPrefix(path, "http://") || strings.HasPrefix(path, "https://")
+}
+
 // normalizeRelativePath 将相对路径转换为基于指定目录的绝对路径
 func normalizeRelativePath(baseDir, relativePath string) string {
 	if baseDir == "" {
 		return relativePath
 	}
-	return strings.TrimSpace(baseDir + "/" + relativePath)
+	// 使用 filepath.Join 确保跨平台兼容性
+	joined := filepath.Join(baseDir, relativePath)
+	// 转换为绝对路径
+	absPath, err := filepath.Abs(joined)
+	if err != nil {
+		return joined
+	}
+	return absPath
 }
-
