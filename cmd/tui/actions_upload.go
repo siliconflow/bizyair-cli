@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/siliconflow/bizyair-cli/lib"
@@ -161,5 +162,16 @@ func (t *tuiUploadCallback) OnCoverStatus(index, total int, status, message stri
 		message:      message,
 	}:
 	default:
+	}
+}
+
+// checkVPN 执行VPN检测
+func checkVPN() tea.Cmd {
+	return func() tea.Msg {
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+
+		result := lib.DetectVPN(ctx)
+		return vpnCheckMsg{result: result, err: nil}
 	}
 }

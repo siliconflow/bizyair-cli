@@ -457,3 +457,12 @@ func (m *mainModel) renderStyledHint(hint string) string {
 
 	return strings.Join(rows, "\n")
 }
+
+// renderVPNWarning 渲染简短的VPN警告提示
+func (m *mainModel) renderVPNWarning() string {
+	warningStyle := lipgloss.NewStyle().
+		Foreground(lipgloss.Color("#FFA500")). // 橙色
+		Bold(true)
+
+	return warningStyle.Render("⚠️ 检测到VPN，可能影响上传")
+}

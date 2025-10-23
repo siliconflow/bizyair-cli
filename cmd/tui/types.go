@@ -164,3 +164,9 @@ type baseModelTypesLoadedMsg struct {
 	items []*lib.BaseModelTypeItem
 	err   error
 }
+
+// vpnCheckMsg VPN检测完成消息
+type vpnCheckMsg struct {
+	result *lib.VPNDetectionResult
+	err    error
+}

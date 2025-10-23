@@ -99,6 +99,10 @@ type mainModel struct {
 	// 封面状态追踪
 	coverStatus        string // 当前封面状态信息
 	coverStatusWarning bool   // 是否为警告状态（如转换失败回退）
+
+	// VPN检测相关
+	vpnCheckResult *lib.VPNDetectionResult
+	checkingVPN    bool
 }
 
 func newMainModel() mainModel {
@@ -364,15 +368,23 @@ func (m mainModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 						m.running = true
 						return m, runLogout()
 					case actionUpload:
+						m.checkingVPN = true
 						m.step = mainStepAction
 						m.act = actionInputs{}
 						m.upStep = stepType
+
+						var cmds []tea.Cmd
+
+						// 启动VPN检测
+						cmds = append(cmds, checkVPN())
+
 						// 如果还没有加载基础模型类型，则开始加载
 						if len(m.baseModelTypes) == 0 && !m.loadingBaseModelTypes {
 							m.loadingBaseModelTypes = true
-							return m, loadBaseModelTypes(m.apiKey)
+							cmds = append(cmds, loadBaseModelTypes(m.apiKey))
 						}
-						return m, nil
+
+						return m, tea.Batch(cmds...)
 					case actionLsModel:
 						m.running = true
 						return m, openMyModelsInBrowser()
@@ -555,6 +567,12 @@ func (m mainModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		m.baseList.SetItems(bItems)
 		return m, nil
+	case vpnCheckMsg:
+		m.checkingVPN = false
+		if msg.err == nil && msg.result != nil {
+			m.vpnCheckResult = msg.result
+		}
+		return m, nil
 	case checkModelExistsDoneMsg:
 		m.running = false
 		if msg.err != nil {
@@ -628,7 +646,15 @@ func (m mainModel) View() string {
 	// 创建 header：将 smallLogo 和上下文提示横向排列
 	logoRendered := m.renderGradientLogo(m.smallLogo)
 	hint := m.renderStyledHint(m.getContextualHint())
-	headerContent := lipgloss.JoinHorizontal(lipgloss.Top, logoRendered, "  ", hint)
+
+	// 如果检测到VPN且在上传流程中，添加VPN警告
+	var headerContent string
+	if m.step == mainStepAction && m.vpnCheckResult != nil && m.vpnCheckResult.IsUsingVPN {
+		vpnWarning := m.renderVPNWarning()
+		headerContent = lipgloss.JoinHorizontal(lipgloss.Top, logoRendered, "  ", hint, "  ", vpnWarning)
+	} else {
+		headerContent = lipgloss.JoinHorizontal(lipgloss.Top, logoRendered, "  ", hint)
+	}
 	header := lipgloss.PlaceHorizontal(innerW, lipgloss.Left, headerContent)
 
 	// 退出确认界面优先级最高
