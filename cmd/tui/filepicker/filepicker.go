@@ -143,6 +143,9 @@ type Model struct {
 	// If empty the user may select any file.
 	AllowedTypes []string
 
+	// FilterPrefix 文件名过滤前缀（用于实时过滤显示）
+	FilterPrefix string
+
 	KeyMap          KeyMap
 	files           []os.DirEntry
 	ShowPermissions bool
@@ -279,6 +282,11 @@ func (m Model) Update(msg tea.Msg) (Model, tea.Cmd) {
 			m.selected = len(m.files) - 1
 		}
 
+		// 如果当前选中的文件不可见（被过滤隐藏），跳转到第一个可见的文件
+		if len(m.files) > 0 && !m.isFileVisible(m.selected) {
+			m.selected = m.findFirstVisibleFile()
+		}
+
 		// 同时调整 min 和 max 以确保视图范围有效
 		if m.min >= len(m.files) && len(m.files) > 0 {
 			m.min = 0
@@ -294,15 +302,19 @@ func (m Model) Update(msg tea.Msg) (Model, tea.Cmd) {
 	case tea.KeyMsg:
 		switch {
 		case key.Matches(msg, m.KeyMap.GoToTop):
-			m.selected = 0
+			m.selected = m.findFirstVisibleFile()
 			m.min = 0
 			m.max = m.Height - 1
 		case key.Matches(msg, m.KeyMap.GoToLast):
-			m.selected = len(m.files) - 1
+			m.selected = m.findLastVisibleFile()
 			m.min = len(m.files) - m.Height
 			m.max = len(m.files) - 1
 		case key.Matches(msg, m.KeyMap.Down):
-			m.selected++
+			// 查找下一个可见的文件
+			nextVisible := m.findNextVisibleFile(m.selected + 1)
+			if nextVisible != m.selected+1 || m.isFileVisible(nextVisible) {
+				m.selected = nextVisible
+			}
 			if m.selected >= len(m.files) {
 				m.selected = len(m.files) - 1
 			}
@@ -311,7 +323,11 @@ func (m Model) Update(msg tea.Msg) (Model, tea.Cmd) {
 				m.max++
 			}
 		case key.Matches(msg, m.KeyMap.Up):
-			m.selected--
+			// 查找上一个可见的文件
+			prevVisible := m.findPrevVisibleFile(m.selected - 1)
+			if prevVisible != m.selected-1 || m.isFileVisible(prevVisible) {
+				m.selected = prevVisible
+			}
 			if m.selected < 0 {
 				m.selected = 0
 			}
@@ -411,11 +427,17 @@ func (m Model) View() string {
 			continue
 		}
 
+		name := f.Name()
+
+		// 应用过滤：跳过不匹配的文件和目录
+		if !m.matchesFilter(name) {
+			continue
+		}
+
 		var symlinkPath string
 		info, _ := f.Info()
 		isSymlink := info.Mode()&os.ModeSymlink != 0
 		size := strings.Replace(humanize.Bytes(uint64(info.Size())), " ", "", 1) //nolint:gosec
-		name := f.Name()
 
 		if isSymlink {
 			symlinkPath, _ = filepath.EvalSymlinks(filepath.Join(m.CurrentDirectory, name))
@@ -550,4 +572,55 @@ func (m Model) canSelect(file string) bool {
 		}
 	}
 	return false
+}
+
+// matchesFilter 检查文件名是否匹配过滤前缀
+func (m Model) matchesFilter(name string) bool {
+	if m.FilterPrefix == "" {
+		return true
+	}
+	return strings.HasPrefix(strings.ToLower(name), strings.ToLower(m.FilterPrefix))
+}
+
+// isFileVisible 检查文件是否可见（匹配过滤条件）
+func (m Model) isFileVisible(index int) bool {
+	if index < 0 || index >= len(m.files) {
+		return false
+	}
+	return m.matchesFilter(m.files[index].Name())
+}
+
+// findNextVisibleFile 查找下一个可见的文件索引
+func (m Model) findNextVisibleFile(start int) int {
+	for i := start; i < len(m.files); i++ {
+		if m.isFileVisible(i) {
+			return i
+		}
+	}
+	return start // 如果没找到，返回起始位置
+}
+
+// findPrevVisibleFile 查找上一个可见的文件索引
+func (m Model) findPrevVisibleFile(start int) int {
+	for i := start; i >= 0; i-- {
+		if m.isFileVisible(i) {
+			return i
+		}
+	}
+	return start // 如果没找到，返回起始位置
+}
+
+// findFirstVisibleFile 查找第一个可见的文件索引
+func (m Model) findFirstVisibleFile() int {
+	return m.findNextVisibleFile(0)
+}
+
+// findLastVisibleFile 查找最后一个可见的文件索引
+func (m Model) findLastVisibleFile() int {
+	for i := len(m.files) - 1; i >= 0; i-- {
+		if m.isFileVisible(i) {
+			return i
+		}
+	}
+	return 0
 }

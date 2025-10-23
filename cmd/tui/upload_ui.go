@@ -27,6 +27,106 @@ func waitForUploadEvent(ch <-chan tea.Msg) tea.Cmd {
 	}
 }
 
+// updatePathCompletion 更新路径补全建议
+func (m *mainModel) updatePathCompletion(typedPath string) tea.Cmd {
+	// 计算补全建议
+	matches, dir, prefix := findPathCompletions(
+		typedPath,
+		m.filepicker.CurrentDirectory,
+		m.filepicker.AllowedTypes,
+		m.filepicker.DirAllowed,
+		m.filepicker.FileAllowed,
+	)
+
+	// 更新补全建议
+	if len(matches) > 0 {
+		m.act.pathCompletionSuggestion = buildCompletionSuggestion(typedPath, matches)
+		m.act.pathMatchCount = len(matches)
+
+		// 更新 filepicker 过滤（提取最后的文件名部分）
+		m.filepicker.FilterPrefix = prefix
+
+		// 如果目录改变，重新读取
+		if dir != m.filepicker.CurrentDirectory {
+			m.filepicker.CurrentDirectory = dir
+			return m.filepicker.Init()
+		}
+	} else {
+		m.act.pathCompletionSuggestion = ""
+		m.act.pathMatchCount = 0
+		m.filepicker.FilterPrefix = ""
+	}
+
+	return nil
+}
+
+// applyPathCompletion 应用路径补全建议
+// 返回是否需要更新 filepicker 的命令
+func (m *mainModel) applyPathCompletion() tea.Cmd {
+	if m.act.pathCompletionSuggestion == "" {
+		return nil
+	}
+
+	suggestion := m.act.pathCompletionSuggestion
+
+	// 设置新值
+	m.inpPath.SetValue(suggestion)
+
+	// 将光标移动到行末
+	m.inpPath.SetCursor(len(suggestion))
+
+	// 检查补全的路径是否是目录
+	if info, err := os.Stat(suggestion); err == nil && info.IsDir() {
+		// 是目录，自动添加路径分隔符（如果没有的话）
+		if !strings.HasSuffix(suggestion, string(filepath.Separator)) {
+			suggestion = ensureTrailingSep(suggestion)
+			m.inpPath.SetValue(suggestion)
+			m.inpPath.SetCursor(len(suggestion))
+		}
+
+		// 更新 filepicker 到这个目录
+		m.filepicker.CurrentDirectory = suggestion
+		m.filepicker.FilterPrefix = ""
+
+		// 重新计算补全建议（清空，因为我们已经进入了目录）
+		m.act.pathCompletionSuggestion = ""
+		m.act.pathMatchCount = 0
+
+		// 返回初始化 filepicker 的命令
+		return m.filepicker.Init()
+	}
+
+	// 如果不是目录，重新计算补全（用于连续补全）
+	return m.updatePathCompletion(suggestion)
+}
+
+// renderPathInputWithCompletion 渲染带补全预览的路径输入框
+func (m *mainModel) renderPathInputWithCompletion() string {
+	var result strings.Builder
+	// 先渲染输入框本身
+	result.WriteString(m.inpPath.View())
+	result.WriteString("\n") // 换行，在下一行显示补全提示
+
+	// 如果有补全建议，在下一行显示灰色预览和匹配数量
+	if m.act.pathCompletionSuggestion != "" {
+		suggestion := m.act.pathCompletionSuggestion
+
+		// 渲染灰色预览提示（在独立的一行）
+		grayStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("240"))
+		previewText := fmt.Sprintf("建议: %s", suggestion)
+		result.WriteString(grayStyle.Render(previewText))
+
+		// 显示匹配数量
+		if m.act.pathMatchCount > 1 {
+			countHint := fmt.Sprintf(" (%d 个匹配)", m.act.pathMatchCount)
+			hintStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("244"))
+			result.WriteString(hintStyle.Render(countHint))
+		}
+	}
+
+	return result.String()
+}
+
 // 清除filepicker错误
 func clearFilePickerErrorAfter(t time.Duration) tea.Cmd {
 	return tea.Tick(t, func(_ time.Time) tea.Msg { return clearFilePickerErrorMsg{} })
@@ -75,6 +175,9 @@ func (m *mainModel) resetUploadState() {
 	m.act.coverUploadMethod = ""
 	m.act.introInputMethod = ""
 	m.act.introPathInputFocused = false
+	m.act.pathCompletionSuggestion = ""
+	m.act.pathMatchCount = 0
+	m.filepicker.FilterPrefix = ""
 	m.coverStatus = ""
 	m.coverStatusWarning = false
 }
@@ -350,6 +453,10 @@ func (m *mainModel) updateUploadInputs(msg tea.Msg) tea.Cmd {
 						m.filepicker.DirAllowed = true
 						m.filepicker.FileAllowed = true
 						m.filepicker.Path = ""
+						// 清除补全状态
+						m.act.pathCompletionSuggestion = ""
+						m.act.pathMatchCount = 0
+						m.filepicker.FilterPrefix = ""
 						m.upStep = stepCover
 						return tea.Batch(m.inpPath.Focus(), m.filepicker.Init())
 					}
@@ -368,6 +475,10 @@ func (m *mainModel) updateUploadInputs(msg tea.Msg) tea.Cmd {
 				m.coverPathInputFocused = false
 				m.act.filePickerErr = nil
 				m.filepicker.Path = ""
+				// 清除补全状态
+				m.act.pathCompletionSuggestion = ""
+				m.act.pathMatchCount = 0
+				m.filepicker.FilterPrefix = ""
 				m.upStep = stepCoverMethod
 				return nil
 			}
@@ -420,7 +531,12 @@ func (m *mainModel) updateUploadInputs(msg tea.Msg) tea.Cmd {
 			var pathCmd, fpCmd tea.Cmd
 			if km, ok := msg.(tea.KeyMsg); ok {
 				switch km.String() {
-				case "tab":
+				case "tab": // Tab 补全
+					if m.coverPathInputFocused && m.act.pathCompletionSuggestion != "" {
+						// 应用补全建议（包括光标移动到行末、自动进入目录等）
+						fpCmd = m.applyPathCompletion()
+					}
+				case "ctrl+p": // Ctrl+P 切换焦点
 					if m.coverPathInputFocused {
 						path := strings.TrimSpace(m.inpPath.Value())
 						if path != "" {
@@ -428,11 +544,15 @@ func (m *mainModel) updateUploadInputs(msg tea.Msg) tea.Cmd {
 								m.filepicker.CurrentDirectory = path
 								m.coverPathInputFocused = false
 								m.inpPath.Blur()
+								// 清除补全建议，但保留过滤前缀以维持 filepicker 的过滤状态
+								m.act.pathCompletionSuggestion = ""
+								m.act.pathMatchCount = 0
 								return m.filepicker.Init()
 							}
 						}
 						m.coverPathInputFocused = false
 						m.inpPath.Blur()
+						// 保持 FilterPrefix 不变，让 filepicker 保持过滤状态
 						return nil
 					} else {
 						m.coverPathInputFocused = true
@@ -448,6 +568,9 @@ func (m *mainModel) updateUploadInputs(msg tea.Msg) tea.Cmd {
 						}
 						if info.IsDir() {
 							m.filepicker.CurrentDirectory = p
+							m.filepicker.FilterPrefix = ""
+							m.act.pathCompletionSuggestion = ""
+							m.act.pathMatchCount = 0
 							return m.filepicker.Init()
 						}
 						if err := validateCoverFile(p); err != nil {
@@ -457,6 +580,10 @@ func (m *mainModel) updateUploadInputs(msg tea.Msg) tea.Cmd {
 						ap := absPath(p)
 						m.inpCover.SetValue(ap)
 						m.act.cur.cover = ap
+						// 清除补全状态
+						m.act.pathCompletionSuggestion = ""
+						m.act.pathMatchCount = 0
+						m.filepicker.FilterPrefix = ""
 						m.upStep = stepIntroMethod
 						return nil
 					}
@@ -465,6 +592,9 @@ func (m *mainModel) updateUploadInputs(msg tea.Msg) tea.Cmd {
 			if m.coverPathInputFocused {
 				m.inpPath, pathCmd = m.inpPath.Update(msg)
 				typedPath := strings.TrimSpace(m.inpPath.Value())
+				// 实时更新补全建议
+				fpCmd = m.updatePathCompletion(typedPath)
+				// 保持旧的目录切换逻辑
 				if typedPath != "" {
 					if info, err := os.Stat(typedPath); err == nil && info.IsDir() {
 						if filepath.Clean(m.filepicker.CurrentDirectory) != filepath.Clean(typedPath) {
@@ -475,6 +605,19 @@ func (m *mainModel) updateUploadInputs(msg tea.Msg) tea.Cmd {
 				}
 			}
 			if !m.coverPathInputFocused {
+				// 拦截 Back 键：如果有过滤条件，先清除过滤而不是返回上级目录
+				if km, ok := msg.(tea.KeyMsg); ok {
+					keyStr := km.String()
+					if (keyStr == "h" || keyStr == "backspace" || keyStr == "left") && m.filepicker.FilterPrefix != "" {
+						// 清除过滤，显示当前目录的所有文件
+						m.filepicker.FilterPrefix = ""
+						m.act.pathCompletionSuggestion = ""
+						m.act.pathMatchCount = 0
+						m.inpPath.SetValue(ensureTrailingSep(m.filepicker.CurrentDirectory))
+						return nil
+					}
+				}
+
 				oldDir := m.filepicker.CurrentDirectory
 				var fc tea.Cmd
 				m.filepicker, fc = m.filepicker.Update(msg)
@@ -483,6 +626,10 @@ func (m *mainModel) updateUploadInputs(msg tea.Msg) tea.Cmd {
 				}
 				if m.filepicker.CurrentDirectory != oldDir {
 					m.inpPath.SetValue(ensureTrailingSep(m.filepicker.CurrentDirectory))
+					// 目录改变时清除补全和过滤
+					m.act.pathCompletionSuggestion = ""
+					m.act.pathMatchCount = 0
+					m.filepicker.FilterPrefix = ""
 				}
 				if did, p := m.filepicker.DidSelectFile(msg); did {
 					if info, err := os.Stat(p); err == nil && !info.IsDir() {
@@ -493,6 +640,10 @@ func (m *mainModel) updateUploadInputs(msg tea.Msg) tea.Cmd {
 						ap := absPath(p)
 						m.inpCover.SetValue(ap)
 						m.act.cur.cover = ap
+						// 清除补全状态
+						m.act.pathCompletionSuggestion = ""
+						m.act.pathMatchCount = 0
+						m.filepicker.FilterPrefix = ""
 						m.upStep = stepIntroMethod
 						return nil
 					}
@@ -524,6 +675,10 @@ func (m *mainModel) updateUploadInputs(msg tea.Msg) tea.Cmd {
 						m.filepicker.DirAllowed = true
 						m.filepicker.FileAllowed = true
 						m.filepicker.Path = ""
+						// 清除补全状态
+						m.act.pathCompletionSuggestion = ""
+						m.act.pathMatchCount = 0
+						m.filepicker.FilterPrefix = ""
 						m.upStep = stepIntro
 						return tea.Batch(m.inpPath.Focus(), m.filepicker.Init())
 					} else {
@@ -536,6 +691,14 @@ func (m *mainModel) updateUploadInputs(msg tea.Msg) tea.Cmd {
 				m.upStep = stepCover
 				if m.act.coverUploadMethod == "url" {
 					return m.inpCover.Focus()
+				} else if m.act.coverUploadMethod == "local" {
+					// 恢复封面文件选择的配置
+					m.coverPathInputFocused = true
+					m.act.useFilePicker = true
+					m.filepicker.AllowedTypes = []string{".jpg", ".jpeg", ".png", ".gif", ".webp", ".mp4", ".webm", ".mov"}
+					m.filepicker.DirAllowed = true
+					m.filepicker.FileAllowed = true
+					return tea.Batch(m.inpPath.Focus(), m.filepicker.Init())
 				}
 				return nil
 			}
@@ -552,10 +715,18 @@ func (m *mainModel) updateUploadInputs(msg tea.Msg) tea.Cmd {
 					m.act.introPathInputFocused = false
 					m.act.filePickerErr = nil
 					m.filepicker.Path = ""
+					m.filepicker.FilterPrefix = ""
+					m.act.pathCompletionSuggestion = ""
+					m.act.pathMatchCount = 0
 					m.taIntro.SetValue("")
 					m.upStep = stepIntroMethod
 					return nil
-				case "tab":
+				case "tab": // Tab 补全
+					if m.act.introPathInputFocused && m.act.pathCompletionSuggestion != "" {
+						// 应用补全建议（包括光标移动到行末、自动进入目录等）
+						fpCmd = m.applyPathCompletion()
+					}
+				case "ctrl+p": // Ctrl+P 切换焦点
 					if m.act.introPathInputFocused {
 						path := strings.TrimSpace(m.inpPath.Value())
 						if path != "" {
@@ -563,11 +734,15 @@ func (m *mainModel) updateUploadInputs(msg tea.Msg) tea.Cmd {
 								m.filepicker.CurrentDirectory = path
 								m.act.introPathInputFocused = false
 								m.inpPath.Blur()
+								// 清除补全建议，但保留过滤前缀以维持 filepicker 的过滤状态
+								m.act.pathCompletionSuggestion = ""
+								m.act.pathMatchCount = 0
 								return m.filepicker.Init()
 							}
 						}
 						m.act.introPathInputFocused = false
 						m.inpPath.Blur()
+						// 保持 FilterPrefix 不变，让 filepicker 保持过滤状态
 						return nil
 					} else {
 						m.act.introPathInputFocused = true
@@ -583,6 +758,9 @@ func (m *mainModel) updateUploadInputs(msg tea.Msg) tea.Cmd {
 						}
 						if info.IsDir() {
 							m.filepicker.CurrentDirectory = p
+							m.filepicker.FilterPrefix = ""
+							m.act.pathCompletionSuggestion = ""
+							m.act.pathMatchCount = 0
 							return m.filepicker.Init()
 						}
 						if err := validateIntroFile(p); err != nil {
@@ -609,6 +787,9 @@ func (m *mainModel) updateUploadInputs(msg tea.Msg) tea.Cmd {
 			if m.act.introPathInputFocused {
 				m.inpPath, pathCmd = m.inpPath.Update(msg)
 				typedPath := strings.TrimSpace(m.inpPath.Value())
+				// 实时更新补全建议
+				fpCmd = m.updatePathCompletion(typedPath)
+				// 保持旧的目录切换逻辑
 				if typedPath != "" {
 					if info, err := os.Stat(typedPath); err == nil && info.IsDir() {
 						if filepath.Clean(m.filepicker.CurrentDirectory) != filepath.Clean(typedPath) {
@@ -619,6 +800,19 @@ func (m *mainModel) updateUploadInputs(msg tea.Msg) tea.Cmd {
 				}
 			}
 			if !m.act.introPathInputFocused {
+				// 拦截 Back 键：如果有过滤条件，先清除过滤而不是返回上级目录
+				if km, ok := msg.(tea.KeyMsg); ok {
+					keyStr := km.String()
+					if (keyStr == "h" || keyStr == "backspace" || keyStr == "left") && m.filepicker.FilterPrefix != "" {
+						// 清除过滤，显示当前目录的所有文件
+						m.filepicker.FilterPrefix = ""
+						m.act.pathCompletionSuggestion = ""
+						m.act.pathMatchCount = 0
+						m.inpPath.SetValue(ensureTrailingSep(m.filepicker.CurrentDirectory))
+						return nil
+					}
+				}
+
 				oldDir := m.filepicker.CurrentDirectory
 				var fc tea.Cmd
 				m.filepicker, fc = m.filepicker.Update(msg)
@@ -627,6 +821,10 @@ func (m *mainModel) updateUploadInputs(msg tea.Msg) tea.Cmd {
 				}
 				if m.filepicker.CurrentDirectory != oldDir {
 					m.inpPath.SetValue(ensureTrailingSep(m.filepicker.CurrentDirectory))
+					// 目录改变时清除补全和过滤
+					m.act.pathCompletionSuggestion = ""
+					m.act.pathMatchCount = 0
+					m.filepicker.FilterPrefix = ""
 				}
 				if did, p := m.filepicker.DidSelectFile(msg); did {
 					if info, err := os.Stat(p); err == nil && !info.IsDir() {
@@ -675,11 +873,18 @@ func (m *mainModel) updateUploadInputs(msg tea.Msg) tea.Cmd {
 					}
 					m.act.cur.intro = intro
 					m.act.useFilePicker = true
-					m.act.pathInputFocused = false
+					m.act.pathInputFocused = true
 					m.inpPath.SetValue(ensureTrailingSep(m.filepicker.CurrentDirectory))
 					m.filepicker.AllowedTypes = []string{".safetensors", ".bin", ".pt", ".ckpt", ".pth"}
+					m.filepicker.DirAllowed = true
+					m.filepicker.FileAllowed = true
+					m.filepicker.Path = ""
+					// 清除补全状态
+					m.act.pathCompletionSuggestion = ""
+					m.act.pathMatchCount = 0
+					m.filepicker.FilterPrefix = ""
 					m.upStep = stepPath
-					return m.filepicker.Init()
+					return tea.Batch(m.inpPath.Focus(), m.filepicker.Init())
 				case "esc":
 					m.upStep = stepIntroMethod
 					return nil
@@ -696,8 +901,23 @@ func (m *mainModel) updateUploadInputs(msg tea.Msg) tea.Cmd {
 				m.act.pathInputFocused = false
 				m.act.filePickerErr = nil
 				m.filepicker.Path = ""
+				m.filepicker.FilterPrefix = ""
+				m.act.pathCompletionSuggestion = ""
+				m.act.pathMatchCount = 0
 				m.upStep = stepIntro
-				return m.taIntro.Focus()
+				// 根据之前的输入方式恢复状态
+				if m.act.introInputMethod == "file" {
+					// 恢复文件导入模式
+					m.act.useFilePicker = true
+					m.act.introPathInputFocused = true
+					m.filepicker.AllowedTypes = []string{".txt", ".md"}
+					m.filepicker.DirAllowed = true
+					m.filepicker.FileAllowed = true
+					return tea.Batch(m.inpPath.Focus(), m.filepicker.Init())
+				} else {
+					// 返回直接输入模式
+					return m.taIntro.Focus()
+				}
 			case "ctrl+r":
 				path := strings.TrimSpace(m.inpPath.Value())
 				if path != "" {
@@ -712,7 +932,12 @@ func (m *mainModel) updateUploadInputs(msg tea.Msg) tea.Cmd {
 				m.act.cur.path = absPath(path)
 				m.upStep = stepPublic
 				return nil
-			case "tab":
+			case "tab": // Tab 补全
+				if m.act.pathInputFocused && m.act.pathCompletionSuggestion != "" {
+					// 应用补全建议（包括光标移动到行末、自动进入目录等）
+					fpCmd = m.applyPathCompletion()
+				}
+			case "ctrl+p": // Ctrl+P 切换焦点
 				if m.act.pathInputFocused {
 					path := strings.TrimSpace(m.inpPath.Value())
 					if path != "" {
@@ -720,11 +945,15 @@ func (m *mainModel) updateUploadInputs(msg tea.Msg) tea.Cmd {
 							m.filepicker.CurrentDirectory = path
 							m.act.pathInputFocused = false
 							m.inpPath.Blur()
+							// 清除补全建议，但保留过滤前缀以维持 filepicker 的过滤状态
+							m.act.pathCompletionSuggestion = ""
+							m.act.pathMatchCount = 0
 							return m.filepicker.Init()
 						}
 					}
 					m.act.pathInputFocused = false
 					m.inpPath.Blur()
+					// 保持 FilterPrefix 不变，让 filepicker 保持过滤状态
 					return nil
 				} else {
 					m.act.pathInputFocused = true
@@ -740,12 +969,17 @@ func (m *mainModel) updateUploadInputs(msg tea.Msg) tea.Cmd {
 					}
 					if info.IsDir() {
 						m.filepicker.CurrentDirectory = path
+						m.filepicker.FilterPrefix = ""
+						m.act.pathCompletionSuggestion = ""
+						m.act.pathMatchCount = 0
 						return m.filepicker.Init()
 					}
 					if err := m.validateAndSetPath(path); err != nil {
 						m.act.filePickerErr = err
 						return clearFilePickerErrorAfter(3 * time.Second)
 					}
+					// 文件选择成功，进入下一步
+					m.upStep = stepPublic
 					return nil
 				}
 			}
@@ -753,6 +987,9 @@ func (m *mainModel) updateUploadInputs(msg tea.Msg) tea.Cmd {
 		if m.act.pathInputFocused {
 			m.inpPath, pathCmd = m.inpPath.Update(msg)
 			typedPath := strings.TrimSpace(m.inpPath.Value())
+			// 实时更新补全建议
+			fpCmd = m.updatePathCompletion(typedPath)
+			// 保持旧的目录切换逻辑
 			if typedPath != "" {
 				if info, err := os.Stat(typedPath); err == nil && info.IsDir() {
 					if filepath.Clean(m.filepicker.CurrentDirectory) != filepath.Clean(typedPath) {
@@ -763,6 +1000,19 @@ func (m *mainModel) updateUploadInputs(msg tea.Msg) tea.Cmd {
 			}
 		}
 		if !m.act.pathInputFocused {
+			// 拦截 Back 键：如果有过滤条件，先清除过滤而不是返回上级目录
+			if km, ok := msg.(tea.KeyMsg); ok {
+				keyStr := km.String()
+				if (keyStr == "h" || keyStr == "backspace" || keyStr == "left") && m.filepicker.FilterPrefix != "" {
+					// 清除过滤，显示当前目录的所有文件
+					m.filepicker.FilterPrefix = ""
+					m.act.pathCompletionSuggestion = ""
+					m.act.pathMatchCount = 0
+					m.inpPath.SetValue(ensureTrailingSep(m.filepicker.CurrentDirectory))
+					return nil
+				}
+			}
+
 			oldDir := m.filepicker.CurrentDirectory
 			var fc tea.Cmd
 			m.filepicker, fc = m.filepicker.Update(msg)
@@ -771,6 +1021,10 @@ func (m *mainModel) updateUploadInputs(msg tea.Msg) tea.Cmd {
 			}
 			if m.filepicker.CurrentDirectory != oldDir {
 				m.inpPath.SetValue(ensureTrailingSep(m.filepicker.CurrentDirectory))
+				// 目录改变时清除补全和过滤
+				m.act.pathCompletionSuggestion = ""
+				m.act.pathMatchCount = 0
+				m.filepicker.FilterPrefix = ""
 			}
 			if didSelect, path := m.filepicker.DidSelectFile(msg); didSelect {
 				if info, err := os.Stat(path); err == nil && !info.IsDir() {
@@ -920,15 +1174,22 @@ func (m *mainModel) renderUploadStepsView() string {
 			content.WriteString("\n\n")
 			pathLabel := "本地文件路径输入："
 			if m.coverPathInputFocused {
-				pathLabel = m.titleStyle.Render("► " + pathLabel + "（当前焦点，按 Tab 切换）")
+				pathLabel = m.titleStyle.Render("► " + pathLabel + "（当前焦点，按 Ctrl+P 切换）")
 			} else {
 				pathLabel = m.hintStyle.Render(pathLabel)
 			}
-			content.WriteString(pathLabel + "\n" + m.inpPath.View() + "\n\n")
+			content.WriteString(pathLabel + "\n")
+			if m.coverPathInputFocused {
+				content.WriteString(m.renderPathInputWithCompletion())
+				content.WriteString("\n") // 添加额外换行
+			} else {
+				content.WriteString(m.inpPath.View())
+				content.WriteString("\n\n")
+			}
 
 			pickerLabel := "文件选择器："
 			if !m.coverPathInputFocused {
-				pickerLabel = m.titleStyle.Render("► 文件选择器：（当前焦点，按 Tab 切换）")
+				pickerLabel = m.titleStyle.Render("► 文件选择器：（当前焦点，按 Ctrl+P 切换）")
 			} else {
 				pickerLabel = m.hintStyle.Render(pickerLabel)
 			}
@@ -939,9 +1200,9 @@ func (m *mainModel) renderUploadStepsView() string {
 			content.WriteString(m.filepicker.View() + "\n")
 
 			if m.coverPathInputFocused {
-				content.WriteString(m.hintStyle.Render("输入本地文件路径（视频限 100MB），Enter 确认；Tab 切换焦点；Esc 返回选择上传方式"))
+				content.WriteString(m.hintStyle.Render("输入本地文件路径（视频限 100MB），Enter 确认；Ctrl+P 切换焦点；Esc 返回选择上传方式"))
 			} else {
-				content.WriteString(m.hintStyle.Render("方向键导航，Enter 选择封面文件（视频限 100MB）；Tab 切换焦点；Esc 返回选择上传方式"))
+				content.WriteString(m.hintStyle.Render("方向键导航，Enter 选择封面文件（视频限 100MB）；Ctrl+P 切换焦点；Esc 返回选择上传方式"))
 			}
 		}
 		return content.String()
@@ -962,15 +1223,22 @@ func (m *mainModel) renderUploadStepsView() string {
 			content.WriteString("\n\n")
 			pathLabel := "本地文件路径输入："
 			if m.act.introPathInputFocused {
-				pathLabel = m.titleStyle.Render("► " + pathLabel + "（当前焦点，按 Tab 切换）")
+				pathLabel = m.titleStyle.Render("► " + pathLabel + "（当前焦点，按 Ctrl+P 切换）")
 			} else {
 				pathLabel = m.hintStyle.Render(pathLabel)
 			}
-			content.WriteString(pathLabel + "\n" + m.inpPath.View() + "\n\n")
+			content.WriteString(pathLabel + "\n")
+			if m.act.introPathInputFocused {
+				content.WriteString(m.renderPathInputWithCompletion())
+				content.WriteString("\n") // 添加额外换行
+			} else {
+				content.WriteString(m.inpPath.View())
+				content.WriteString("\n\n")
+			}
 
 			pickerLabel := "文件选择器："
 			if !m.act.introPathInputFocused {
-				pickerLabel = m.titleStyle.Render("► 文件选择器：（当前焦点，按 Tab 切换）")
+				pickerLabel = m.titleStyle.Render("► 文件选择器：（当前焦点，按 Ctrl+P 切换）")
 			} else {
 				pickerLabel = m.hintStyle.Render(pickerLabel)
 			}
@@ -981,9 +1249,9 @@ func (m *mainModel) renderUploadStepsView() string {
 			content.WriteString(m.filepicker.View() + "\n")
 
 			if m.act.introPathInputFocused {
-				content.WriteString(m.hintStyle.Render("输入 .txt 或 .md 文件路径，Enter 确认；Tab 切换焦点；Esc 返回选择输入方式"))
+				content.WriteString(m.hintStyle.Render("输入 .txt 或 .md 文件路径，Enter 确认；Ctrl+P 切换焦点；Esc 返回选择输入方式"))
 			} else {
-				content.WriteString(m.hintStyle.Render("方向键导航，Enter 选择介绍文件（.txt 或 .md，自动截断到 5000 字）；Tab 切换焦点；Esc 返回选择输入方式"))
+				content.WriteString(m.hintStyle.Render("方向键导航，Enter 选择介绍文件（.txt 或 .md，自动截断到 5000 字）；Ctrl+P 切换焦点；Esc 返回选择输入方式"))
 			}
 			return content.String()
 		} else {
@@ -997,14 +1265,22 @@ func (m *mainModel) renderUploadStepsView() string {
 		content.WriteString(m.titleStyle.Render("上传 · Step 9/11 · 选择文件") + "\n\n")
 		pathInputLabel := "路径输入："
 		if m.act.pathInputFocused {
-			pathInputLabel = m.titleStyle.Render("► 路径输入：（当前焦点，按Tab切换至文件选择器）")
+			pathInputLabel = m.titleStyle.Render("► 路径输入：（当前焦点，按Ctrl+P切换至文件选择器）")
 		} else {
 			pathInputLabel = m.hintStyle.Render("路径输入：")
 		}
-		content.WriteString(pathInputLabel + "\n" + m.inpPath.View() + "\n\n")
+		content.WriteString(pathInputLabel + "\n")
+		if m.act.pathInputFocused {
+			content.WriteString(m.renderPathInputWithCompletion())
+			content.WriteString("\n") // 添加额外换行
+		} else {
+			content.WriteString(m.inpPath.View())
+			content.WriteString("\n\n")
+		}
+
 		filePickerLabel := "文件选择器："
 		if !m.act.pathInputFocused {
-			filePickerLabel = m.titleStyle.Render("► 文件选择器：（当前焦点，按Tab切换至路径输入框）")
+			filePickerLabel = m.titleStyle.Render("► 文件选择器：（当前焦点，按Ctrl+P切换至路径输入框）")
 		} else {
 			filePickerLabel = m.hintStyle.Render("文件选择器：")
 		}
@@ -1018,9 +1294,9 @@ func (m *mainModel) renderUploadStepsView() string {
 		}
 		content.WriteString("\n" + m.filepicker.View() + "\n")
 		if m.act.pathInputFocused {
-			content.WriteString(m.hintStyle.Render("输入有效目录将自动同步下方文件列表；Enter确认文件或切换目录；Tab切换焦点；Esc返回"))
+			content.WriteString(m.hintStyle.Render("输入有效目录将自动同步下方文件列表；Enter确认文件或切换目录；Ctrl+P切换焦点；Esc返回"))
 		} else {
-			content.WriteString(m.hintStyle.Render("方向键导航，Enter选择文件，Tab切换输入（输入框实时同步），Esc返回"))
+			content.WriteString(m.hintStyle.Render("方向键导航，Enter选择文件，Ctrl+P切换输入（输入框实时同步），Esc返回"))
 		}
 		return content.String()
 	case stepPublic:

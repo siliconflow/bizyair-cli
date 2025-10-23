@@ -146,6 +146,10 @@ type actionInputs struct {
 
 	// 介绍文件选择相关
 	introPathInputFocused bool
+
+	// 路径补全相关
+	pathCompletionSuggestion string // 当前补全建议（完整路径）
+	pathMatchCount           int    // 匹配项数量
 }
 
 // 打开浏览器结果消息

@@ -124,6 +124,155 @@ func truncateToLines(text string, maxLines int) string {
 	return result.String()
 }
 
+// findPathCompletions 查找路径补全匹配项
+// 参数：
+//   - inputPath: 用户输入的路径
+//   - currentDir: filepicker 当前目录
+//   - allowedTypes: 允许的文件扩展名列表
+//   - dirAllowed: 是否允许选择目录
+//   - fileAllowed: 是否允许选择文件
+//
+// 返回：
+//   - matches: 所有匹配的文件/目录名（完整路径）
+//   - dir: 解析出的目录路径
+//   - prefix: 需要匹配的文件名前缀
+func findPathCompletions(inputPath, currentDir string, allowedTypes []string, dirAllowed, fileAllowed bool) (matches []string, dir string, prefix string) {
+	if inputPath == "" {
+		return nil, currentDir, ""
+	}
+
+	// 处理路径
+	var targetDir, filePrefix string
+
+	// 判断输入是否以路径分隔符结尾（表示用户已经进入某个目录）
+	if strings.HasSuffix(inputPath, string(filepath.Separator)) {
+		// 输入以 / 结尾，表示已经是一个目录
+		targetDir = inputPath
+		filePrefix = ""
+	} else {
+		// 分离目录和文件名部分
+		targetDir, filePrefix = filepath.Split(inputPath)
+		if targetDir == "" {
+			targetDir = currentDir
+		}
+	}
+
+	// 如果目录不存在，尝试相对于当前目录解析
+	if !filepath.IsAbs(targetDir) && targetDir != "" {
+		targetDir = filepath.Join(currentDir, targetDir)
+	} else if targetDir == "" {
+		targetDir = currentDir
+	}
+
+	// 清理路径
+	targetDir = filepath.Clean(targetDir)
+
+	// 检查目录是否存在
+	info, err := os.Stat(targetDir)
+	if err != nil || !info.IsDir() {
+		return nil, currentDir, ""
+	}
+
+	// 读取目录内容
+	entries, err := os.ReadDir(targetDir)
+	if err != nil {
+		return nil, targetDir, filePrefix
+	}
+
+	// 过滤和匹配
+	lowerPrefix := strings.ToLower(filePrefix)
+	for _, entry := range entries {
+		name := entry.Name()
+
+		// 跳过隐藏文件（以 . 开头）
+		if strings.HasPrefix(name, ".") {
+			continue
+		}
+
+		// 前缀匹配（大小写不敏感）
+		if !strings.HasPrefix(strings.ToLower(name), lowerPrefix) {
+			continue
+		}
+
+		fullPath := filepath.Join(targetDir, name)
+
+		// 如果是目录，始终添加（用于导航）
+		if entry.IsDir() {
+			if dirAllowed || fileAllowed {
+				matches = append(matches, fullPath)
+			}
+			continue
+		}
+
+		// 如果是文件，检查是否允许文件选择
+		if !fileAllowed {
+			continue
+		}
+
+		// 检查文件扩展名
+		if len(allowedTypes) > 0 {
+			matched := false
+			for _, ext := range allowedTypes {
+				if strings.HasSuffix(strings.ToLower(name), strings.ToLower(ext)) {
+					matched = true
+					break
+				}
+			}
+			if !matched {
+				continue
+			}
+		}
+
+		matches = append(matches, fullPath)
+	}
+
+	return matches, targetDir, filePrefix
+}
+
+// getCommonPrefix 计算多个字符串的公共前缀
+func getCommonPrefix(strs []string) string {
+	if len(strs) == 0 {
+		return ""
+	}
+	if len(strs) == 1 {
+		return strs[0]
+	}
+
+	prefix := strs[0]
+	for _, s := range strs[1:] {
+		for !strings.HasPrefix(s, prefix) {
+			if len(prefix) == 0 {
+				return ""
+			}
+			prefix = prefix[:len(prefix)-1]
+		}
+	}
+	return prefix
+}
+
+// buildCompletionSuggestion 构建补全建议
+// 如果只有一个匹配项，返回完整路径
+// 如果多个匹配项，返回到公共前缀的路径
+func buildCompletionSuggestion(inputPath string, matches []string) string {
+	if len(matches) == 0 {
+		return ""
+	}
+
+	if len(matches) == 1 {
+		// 单一匹配，返回完整路径
+		match := matches[0]
+		// 如果是目录，添加路径分隔符
+		if info, err := os.Stat(match); err == nil && info.IsDir() {
+			return ensureTrailingSep(match)
+		}
+		return match
+	}
+
+	// 多个匹配，计算公共前缀
+	commonPrefix := getCommonPrefix(matches)
+	return commonPrefix
+}
+
 // getContextualHint 根据当前状态返回上下文相关的操作提示
 func (m *mainModel) getContextualHint() string {
 	// 退出确认优先级最高
@@ -169,26 +318,26 @@ func (m *mainModel) getContextualHint() string {
 			}
 			// 本地文件上传模式 - 根据焦点显示不同提示
 			if m.coverPathInputFocused {
-				return "当前焦点：路径输入框\n输入文件路径，Enter 确认\nTab 切换至文件选择器 • Esc 返回"
+				return "当前焦点：路径输入框\nTab 补全 • Enter 确认\nCtrl+P 切换至文件选择器 • Esc 返回"
 			}
-			return "当前焦点：文件选择器\n← → 进入/退出文件夹 • ↑ ↓ 选择\nEnter 确认 • Tab 切换至路径输入框 • Esc 返回"
+			return "当前焦点：文件选择器\n← → 进入/退出文件夹 • ↑ ↓ 选择\nEnter 确认 • Ctrl+P 切换至路径输入框 • Esc 返回"
 		case stepIntroMethod:
 			return "↑/k 上 • ↓/j 下\nEnter 选择 • Esc 返回"
 		case stepIntro:
 			if m.act.introInputMethod == "file" {
 				// 文件导入模式 - 根据焦点显示不同提示
 				if m.act.introPathInputFocused {
-					return "当前焦点：路径输入框\n输入 .txt 或 .md 文件路径\nEnter 确认 • Tab 切换至文件选择器 • Esc 返回"
+					return "当前焦点：路径输入框\nTab 补全 • Enter 确认\nCtrl+P 切换至文件选择器 • Esc 返回"
 				}
-				return "当前焦点：文件选择器\n← → 进入/退出文件夹 • ↑ ↓ 选择\nEnter 确认 • Tab 切换至路径输入框 • Esc 返回"
+				return "当前焦点：文件选择器\n← → 进入/退出文件夹 • ↑ ↓ 选择\nEnter 确认 • Ctrl+P 切换至路径输入框 • Esc 返回"
 			}
 			return "支持 Markdown 格式\nCtrl+S 提交 • Esc 返回"
 		case stepPath:
 			// 文件路径选择 - 根据焦点显示不同提示
 			if m.act.pathInputFocused {
-				return "当前焦点：路径输入框\n输入文件路径，Enter 确认\nTab 切换至文件选择器 • Esc 返回"
+				return "当前焦点：路径输入框\nTab 补全 • Enter 确认\nCtrl+P 切换至文件选择器 • Esc 返回"
 			}
-			return "当前焦点：文件选择器\n← → 进入/退出文件夹 • ↑ ↓ 选择\nEnter 确认 • Tab 切换至路径输入框 • Esc 返回"
+			return "当前焦点：文件选择器\n← → 进入/退出文件夹 • ↑ ↓ 选择\nEnter 确认 • Ctrl+P 切换至路径输入框 • Esc 返回"
 		case stepPublic:
 			return "↑/k 上 • ↓/j 下\nEnter 选择 • Esc 返回"
 		case stepAskMore:
