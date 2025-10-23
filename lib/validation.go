@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"regexp"
 	"strings"
 
 	"github.com/samber/lo"
@@ -15,10 +14,6 @@ import (
 func ValidateModelName(name string) error {
 	if name == "" {
 		return fmt.Errorf("模型名称不能为空")
-	}
-	re := regexp.MustCompile(`^[\w-]+$`)
-	if !re.MatchString(name) {
-		return fmt.Errorf("模型名称只能包含字母、数字、下划线和短横线")
 	}
 	return nil
 }

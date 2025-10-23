@@ -2,7 +2,6 @@ package validate
 
 import (
 	"fmt"
-	"regexp"
 
 	"github.com/siliconflow/bizyair-cli/meta"
 )
@@ -26,14 +25,10 @@ func ValidateUploadType(typ string) error {
 	return nil
 }
 
-// ValidateModelName checks name rules: letters/digits/_/-
+// ValidateModelName checks name rules
 func ValidateModelName(name string) error {
 	if name == "" {
 		return fmt.Errorf("name 不能为空")
-	}
-	re := regexp.MustCompile(`^[\w-]+$`)
-	if !re.MatchString(name) {
-		return fmt.Errorf("name 仅支持字母/数字/下划线/短横线")
 	}
 	return nil
 }
