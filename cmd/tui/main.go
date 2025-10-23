@@ -627,7 +627,7 @@ func (m mainModel) View() string {
 
 	// 创建 header：将 smallLogo 和上下文提示横向排列
 	logoRendered := m.renderGradientLogo(m.smallLogo)
-	hint := m.contextHintStyle.Render(m.getContextualHint())
+	hint := m.renderStyledHint(m.getContextualHint())
 	headerContent := lipgloss.JoinHorizontal(lipgloss.Top, logoRendered, "  ", hint)
 	header := lipgloss.PlaceHorizontal(innerW, lipgloss.Left, headerContent)
 

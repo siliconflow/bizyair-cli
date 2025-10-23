@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/charmbracelet/lipgloss"
 	"github.com/siliconflow/bizyair-cli/lib"
 )
 
@@ -277,7 +278,7 @@ func buildCompletionSuggestion(inputPath string, matches []string) string {
 func (m *mainModel) getContextualHint() string {
 	// 退出确认优先级最高
 	if m.confirmingExit {
-		return "确认：Enter\n取消：Esc"
+		return "<Enter> 确认\n<Esc> 取消"
 	}
 
 	// 正在运行的上传任务
@@ -285,7 +286,7 @@ func (m *mainModel) getContextualHint() string {
 		if m.canceling {
 			return "正在取消..."
 		}
-		return "取消：Ctrl+C"
+		return "<Ctrl+C> 取消上传"
 	}
 
 	// 其他运行状态
@@ -296,58 +297,163 @@ func (m *mainModel) getContextualHint() string {
 	// 根据主步骤返回提示
 	switch m.step {
 	case mainStepLogin:
-		return "确认：Enter\n返回：Esc"
+		return "<Enter> 确认\n<Esc> 返回"
 	case mainStepMenu:
-		return "↑/k 上 • ↓/j 下\n/ 筛选 • Enter 选择"
+		return "<↑/k> 上移\n<↓/j> 下移\n</> 筛选\n<Enter> 选择"
 	case mainStepAction:
 		// 根据上传步骤细分
 		switch m.upStep {
 		case stepType:
-			return "↑/k 上 • ↓/j 下\nEnter 选择 • Esc 返回"
+			return "<↑/k> 上移\n<↓/j> 下移\n<Enter> 选择\n<Esc> 返回"
 		case stepName:
-			return "输入模型名称\nEnter 确认 • Esc 返回"
+			return "<Enter> 确认\n<Esc> 返回"
 		case stepVersion:
-			return "输入版本名称\nEnter 确认 • Esc 返回"
+			return "<Enter> 确认\n<Esc> 返回"
 		case stepBase:
-			return "↑/k 上 • ↓/j 下\nEnter 选择 • Esc 返回"
+			return "<↑/k> 上移\n<↓/j> 下移\n<Enter> 选择\n<Esc> 返回"
 		case stepCoverMethod:
-			return "↑/k 上 • ↓/j 下\nEnter 选择 • Esc 返回"
+			return "<↑/k> 上移\n<↓/j> 下移\n<Enter> 选择\n<Esc> 返回"
 		case stepCover:
 			if m.act.coverUploadMethod == "url" {
-				return "输入封面 URL\nEnter 确认 • Esc 返回"
+				return "<Enter> 确认\n<Esc> 返回"
 			}
 			// 本地文件上传模式 - 根据焦点显示不同提示
 			if m.coverPathInputFocused {
-				return "当前焦点：路径输入框\nTab 补全 • Enter 确认\nCtrl+P 切换至文件选择器 • Esc 返回"
+				return "<Tab> 补全\n<Enter> 确认\n<Ctrl+P> 切换至文件选择器\n<Esc> 返回"
 			}
-			return "当前焦点：文件选择器\n← → 进入/退出文件夹 • ↑ ↓ 选择\nEnter 确认 • Ctrl+P 切换至路径输入框 • Esc 返回"
+			return "<←/→> 导航\n<↑/↓> 选择\n<Enter> 确认\n<Ctrl+P> 切换至路径输入框\n<Esc> 返回"
 		case stepIntroMethod:
-			return "↑/k 上 • ↓/j 下\nEnter 选择 • Esc 返回"
+			return "<↑/k> 上移\n<↓/j> 下移\n<Enter> 选择\n<Esc> 返回"
 		case stepIntro:
 			if m.act.introInputMethod == "file" {
 				// 文件导入模式 - 根据焦点显示不同提示
 				if m.act.introPathInputFocused {
-					return "当前焦点：路径输入框\nTab 补全 • Enter 确认\nCtrl+P 切换至文件选择器 • Esc 返回"
+					return "<Tab> 补全\n<Enter> 确认\n<Ctrl+P> 切换至文件选择器\n<Esc> 返回"
 				}
-				return "当前焦点：文件选择器\n← → 进入/退出文件夹 • ↑ ↓ 选择\nEnter 确认 • Ctrl+P 切换至路径输入框 • Esc 返回"
+				return "<←/→> 导航\n<↑/↓> 选择\n<Enter> 确认\n<Ctrl+P> 切换至路径输入框\n<Esc> 返回"
 			}
-			return "支持 Markdown 格式\nCtrl+S 提交 • Esc 返回"
+			return "<Ctrl+S> 提交\n<Esc> 返回"
 		case stepPath:
 			// 文件路径选择 - 根据焦点显示不同提示
 			if m.act.pathInputFocused {
-				return "当前焦点：路径输入框\nTab 补全 • Enter 确认\nCtrl+P 切换至文件选择器 • Esc 返回"
+				return "<Tab> 补全\n<Enter> 确认\n<Ctrl+P> 切换至文件选择器\n<Esc> 返回"
 			}
-			return "当前焦点：文件选择器\n← → 进入/退出文件夹 • ↑ ↓ 选择\nEnter 确认 • Ctrl+P 切换至路径输入框 • Esc 返回"
+			return "<←/→> 导航\n<↑/↓> 选择\n<Enter> 确认\n<Ctrl+P> 切换至路径输入框\n<Esc> 返回"
 		case stepPublic:
-			return "↑/k 上 • ↓/j 下\nEnter 选择 • Esc 返回"
+			return "<↑/k> 上移\n<↓/j> 下移\n<Enter> 选择\n<Esc> 返回"
 		case stepAskMore:
-			return "↑/k 上 • ↓/j 下\nEnter 选择 • Esc 返回"
+			return "<↑/k> 上移\n<↓/j> 下移\n<Enter> 选择\n<Esc> 返回"
 		case stepConfirm:
-			return "Enter 开始上传\nEsc 返回"
+			return "<Enter> 开始上传\n<Esc> 返回"
 		}
 	case mainStepOutput:
-		return "Enter 返回菜单"
+		return "<Enter> 返回菜单"
 	}
 
 	return ""
+}
+
+// renderStyledHint 渲染带样式的提示文本（K9s风格）
+// 将 <key> 部分用特殊样式渲染
+// 纵向一列最多4行，超过4行则分成多列横向排列
+func (m *mainModel) renderStyledHint(hint string) string {
+	const maxRowsPerColumn = 4
+
+	// 定义按键样式（黄色/金色 + 粗体）
+	keyStyle := lipgloss.NewStyle().
+		Foreground(lipgloss.Color("#FBBF24")).
+		Bold(true)
+
+	// 定义普通文本样式（浅灰色）
+	textStyle := lipgloss.NewStyle().
+		Foreground(lipgloss.Color("#E5E7EB"))
+
+	// 渲染单行文本（处理 <key> 标记）
+	renderLine := func(line string) string {
+		var result strings.Builder
+		i := 0
+		for i < len(line) {
+			if line[i] == '<' {
+				end := strings.Index(line[i:], ">")
+				if end != -1 {
+					key := line[i+1 : i+end]
+					result.WriteString(keyStyle.Render("<" + key + ">"))
+					i += end + 1
+					continue
+				}
+			}
+			start := i
+			for i < len(line) && line[i] != '<' {
+				i++
+			}
+			if i > start {
+				result.WriteString(textStyle.Render(line[start:i]))
+			}
+		}
+		return result.String()
+	}
+
+	// 分割成行
+	lines := strings.Split(hint, "\n")
+
+	// 如果行数 <= 4，直接纵向排列
+	if len(lines) <= maxRowsPerColumn {
+		var result strings.Builder
+		for i, line := range lines {
+			if i > 0 {
+				result.WriteString("\n")
+			}
+			result.WriteString(renderLine(line))
+		}
+		return result.String()
+	}
+
+	// 行数 > 4，需要分成多列
+	// 计算需要多少列
+	numColumns := (len(lines) + maxRowsPerColumn - 1) / maxRowsPerColumn
+
+	// 创建列
+	columns := make([][]string, numColumns)
+	for i, line := range lines {
+		colIdx := i / maxRowsPerColumn
+		columns[colIdx] = append(columns[colIdx], renderLine(line))
+	}
+
+	// 找出最长的行宽度（用于对齐）
+	maxWidth := 0
+	for _, col := range columns {
+		for _, line := range col {
+			// 计算不含ANSI转义序列的实际宽度
+			width := lipgloss.Width(line)
+			if width > maxWidth {
+				maxWidth = width
+			}
+		}
+	}
+
+	// 为每列添加填充，使其对齐
+	for i := range columns {
+		for j := range columns[i] {
+			currentWidth := lipgloss.Width(columns[i][j])
+			if currentWidth < maxWidth {
+				columns[i][j] = columns[i][j] + strings.Repeat(" ", maxWidth-currentWidth)
+			}
+		}
+	}
+
+	// 将列合并成行
+	var rows []string
+	for rowIdx := 0; rowIdx < maxRowsPerColumn; rowIdx++ {
+		var rowParts []string
+		for colIdx := 0; colIdx < numColumns; colIdx++ {
+			if rowIdx < len(columns[colIdx]) {
+				rowParts = append(rowParts, columns[colIdx][rowIdx])
+			}
+		}
+		if len(rowParts) > 0 {
+			rows = append(rows, strings.Join(rowParts, "  "))
+		}
+	}
+
+	return strings.Join(rows, "\n")
 }
