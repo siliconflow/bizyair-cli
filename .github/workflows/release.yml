@@ -4,22 +4,22 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: '版本号（留空则自动递增，如：v0.0.2）'
+        description: "版本号（留空则自动递增，如：v0.0.2）"
         required: false
         type: string
       bump_type:
-        description: '版本递增类型'
+        description: "版本递增类型"
         required: false
-        default: 'patch'
+        default: "patch"
         type: choice
         options:
-          - patch  # v0.0.1 -> v0.0.2
-          - minor  # v0.0.1 -> v0.1.0
-          - major  # v0.0.1 -> v1.0.0
+          - patch # v0.0.1 -> v0.0.2
+          - minor # v0.0.1 -> v0.1.0
+          - major # v0.0.1 -> v1.0.0
 
 env:
-  GO_VERSION: '1.21'
-  MANIFEST_URL: 'https://storage.bizyair.cn/releases/manifest.json'
+  GO_VERSION: "1.21"
+  MANIFEST_URL: "https://storage.bizyair.cn/releases/manifest.json"
 
 jobs:
   prepare:
@@ -75,7 +75,7 @@ jobs:
             
             echo "新版本号: $VERSION"
           fi
-          
+
           echo "version=$VERSION" >> $GITHUB_OUTPUT
 
   build:
@@ -116,26 +116,26 @@ jobs:
           if [ "$GOOS" = "darwin" ]; then
             PLATFORM="macos-${GOARCH}"
           fi
-          
+
           if [ "$GOOS" = "windows" ]; then
             FILENAME="bizyair-${VERSION}-${PLATFORM}.exe"
           else
             FILENAME="bizyair-${VERSION}-${PLATFORM}"
           fi
-          
+
           echo "构建 ${PLATFORM} 版本..."
-          
+
           # 构建
           CGO_ENABLED=0 GOOS=$GOOS GOARCH=$GOARCH go build \
             -ldflags "-w -s -X 'github.com/siliconflow/bizyair-cli/meta.Version=${VERSION}' -X 'github.com/siliconflow/bizyair-cli/meta.Commit=${GITHUB_SHA::7}' -X 'github.com/siliconflow/bizyair-cli/meta.BuildDate=$(date -u +%Y-%m-%dT%H:%M:%SZ)'" \
             -a -tags=netgo \
             -o "dist/${FILENAME}" \
             main.go
-          
+
           # 计算 SHA256
           cd dist
           sha256sum "${FILENAME}" | awk '{print $1}' > "${FILENAME}.sha256"
-          
+
           echo "构建完成: ${FILENAME}"
           ls -lh "${FILENAME}"
 
@@ -162,7 +162,7 @@ jobs:
       - name: 设置 Python 环境
         uses: actions/setup-python@v4
         with:
-          python-version: '3.10'
+          python-version: "3.10"
 
       - name: 安装依赖
         run: |
@@ -175,7 +175,7 @@ jobs:
           BASE_DOMAIN: ${{ secrets.BIZYAIR_BASE_DOMAIN || 'https://api.bizyair.cn' }}
         run: |
           python tools/upload_release.py
-          
+
       - name: 显示上传结果
         run: |
           echo "✅ 版本 ${{ needs.prepare.outputs.version }} 已成功发布"
