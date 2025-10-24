@@ -54,10 +54,15 @@ def upload_to_oss(file_path, token_data):
         security_token=file_info.get("security_token")
     )
     
+    # 处理 region：如果是 oss-cn-shanghai 格式，转换为 cn-shanghai
+    region = storage_info["region"]
+    if region.startswith("oss-"):
+        region = region[4:]  # 移除 "oss-" 前缀
+    
     # 加载默认配置并设置凭证提供者
     cfg = oss.config.load_default()
     cfg.credentials_provider = cred_provider
-    cfg.region = storage_info["region"]
+    cfg.region = region
     
     # 如果有 endpoint，设置 endpoint
     if "endpoint" in storage_info and storage_info["endpoint"]:
@@ -98,10 +103,15 @@ def upload_manifest(manifest_data, api_key, base_domain):
         security_token=file_info.get("security_token")
     )
     
+    # 处理 region：如果是 oss-cn-shanghai 格式，转换为 cn-shanghai
+    region = storage_info["region"]
+    if region.startswith("oss-"):
+        region = region[4:]  # 移除 "oss-" 前缀
+    
     # 加载默认配置并设置凭证提供者
     cfg = oss.config.load_default()
     cfg.credentials_provider = cred_provider
-    cfg.region = storage_info["region"]
+    cfg.region = region
     
     # 如果有 endpoint，设置 endpoint
     if "endpoint" in storage_info and storage_info["endpoint"]:
