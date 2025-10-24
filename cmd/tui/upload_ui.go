@@ -184,7 +184,7 @@ func (m *mainModel) resetUploadState() {
 
 // 路径校验与设置
 func (m *mainModel) validateAndSetPath(path string) error {
-	supportedExts := []string{".safetensors"}
+	supportedExts := []string{".safetensors", ".pth", ".bin", ".pt", ".ckpt", ".gguf", ".sft"}
 	isSupported := false
 	for _, ext := range supportedExts {
 		if strings.HasSuffix(strings.ToLower(path), ext) {
@@ -875,7 +875,7 @@ func (m *mainModel) updateUploadInputs(msg tea.Msg) tea.Cmd {
 					m.act.useFilePicker = true
 					m.act.pathInputFocused = true
 					m.inpPath.SetValue(ensureTrailingSep(m.filepicker.CurrentDirectory))
-					m.filepicker.AllowedTypes = []string{".safetensors", ".bin", ".pt", ".ckpt", ".pth"}
+					m.filepicker.AllowedTypes = []string{".safetensors", ".pth", ".bin", ".pt", ".ckpt", ".gguf", ".sft"}
 					m.filepicker.DirAllowed = true
 					m.filepicker.FileAllowed = true
 					m.filepicker.Path = ""

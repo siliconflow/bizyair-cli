@@ -187,7 +187,7 @@ func newMainModel() mainModel {
 	inCover := textinput.New()
 	inCover.Placeholder = "可选，多地址以 ; 分隔"
 	inExt := textinput.New()
-	inExt.Placeholder = "可选，文件扩展名（如 .safetensors）"
+	inExt.Placeholder = "可选，文件扩展名（如 .safetensors,.pth,.bin,.pt,.ckpt,.gguf,.sft）"
 
 	fp := filepicker.New()
 	homeDir, err := os.UserHomeDir()
