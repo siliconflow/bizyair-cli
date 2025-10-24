@@ -18,8 +18,8 @@ from datetime import datetime
 from pathlib import Path
 from alibabacloud_oss_v2 import models as oss_models
 from alibabacloud_oss_v2.client import Client as OSSClient
-from alibabacloud_credentials.client import Client as CredClient
-from alibabacloud_credentials import models as credential_models
+from alibabacloud_oss_v2.config import Config
+from alibabacloud_oss_v2 import credentials
 
 
 def get_upload_token(api_key, base_domain, filename):
@@ -50,16 +50,20 @@ def upload_to_oss(file_path, token_data):
     file_info = token_data["file"]
     storage_info = token_data["storage"]
     
-    # 创建 OSS 客户端
-    config = oss_models.Config(
-        credentials_provider=credential_models.StaticCredentialProvider(
-            access_key_id=file_info["access_key_id"],
-            access_key_secret=file_info["access_key_secret"],
-            security_token=file_info.get("security_token")
-        ),
+    # 创建凭证提供者
+    cred_provider = credentials.StaticCredentialsProvider(
+        access_key_id=file_info["access_key_id"],
+        access_key_secret=file_info["access_key_secret"],
+        security_token=file_info.get("security_token")
+    )
+    
+    # 创建配置
+    config = Config(
+        credentials_provider=cred_provider,
         region=storage_info["region"]
     )
     
+    # 创建客户端
     client = OSSClient(config)
     
     # 上传文件
@@ -87,16 +91,20 @@ def upload_manifest(manifest_data, api_key, base_domain):
     file_info = token_data["file"]
     storage_info = token_data["storage"]
     
-    # 创建 OSS 客户端
-    config = oss_models.Config(
-        credentials_provider=credential_models.StaticCredentialProvider(
-            access_key_id=file_info["access_key_id"],
-            access_key_secret=file_info["access_key_secret"],
-            security_token=file_info.get("security_token")
-        ),
+    # 创建凭证提供者
+    cred_provider = credentials.StaticCredentialsProvider(
+        access_key_id=file_info["access_key_id"],
+        access_key_secret=file_info["access_key_secret"],
+        security_token=file_info.get("security_token")
+    )
+    
+    # 创建配置
+    config = Config(
+        credentials_provider=cred_provider,
         region=storage_info["region"]
     )
     
+    # 创建客户端
     client = OSSClient(config)
     
     # 上传 manifest
