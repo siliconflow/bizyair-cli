@@ -1,7 +1,10 @@
 name: Build and Release
 
 on:
-  workflow_dispatch:
+  push:
+    tags:
+      - 'v*.*.*'  # 匹配 v0.0.1, v1.2.3 等格式的标签
+  workflow_dispatch:  # 保留手动触发选项
     inputs:
       version:
         description: "版本号（留空则自动递增，如：v0.0.2）"
@@ -39,8 +42,12 @@ jobs:
             VERSION="${{ github.event.inputs.version }}"
             echo "使用手动指定的版本号: $VERSION"
           else
-            # 自动递增版本号
-            echo "自动递增版本号（类型: ${{ github.event.inputs.bump_type }}）"
+            # 自动递增版本号（标签触发或手动触发时都使用此逻辑）
+            BUMP_TYPE="${{ github.event.inputs.bump_type }}"
+            if [ -z "$BUMP_TYPE" ]; then
+              BUMP_TYPE="patch"
+            fi
+            echo "自动递增版本号（类型: $BUMP_TYPE）"
             
             # 下载现有 manifest（如果存在）
             if curl -f -s "${{ env.MANIFEST_URL }}" -o manifest.json; then
@@ -52,7 +59,7 @@ jobs:
               IFS='.' read -r MAJOR MINOR PATCH <<< "$CURRENT_VERSION"
               
               # 根据 bump_type 递增
-              case "${{ github.event.inputs.bump_type }}" in
+              case "$BUMP_TYPE" in
                 major)
                   MAJOR=$((MAJOR + 1))
                   MINOR=0
