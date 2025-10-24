@@ -218,6 +218,24 @@ func (c *Client) GetUploadToken(fileName, fileType string) (*Response[FilesResp]
 	return handleResponse[FilesResp](body)
 }
 
+// GetCLIUploadToken 获取 CLI 专用上传 token
+func (c *Client) GetCLIUploadToken(fileName string) (*Response[FilesResp], error) {
+	serverUrl := fmt.Sprintf("%s/x/%s/upload/token", c.Domain, meta.APIv1)
+	body, statusCode, err := c.doGet(serverUrl, CLIUploadTokenReq{
+		FileName:      fileName,
+		FileType:      "cli",
+		IgnoreDate:    true,
+		FinalFileName: true,
+	}, c.authHeader())
+	if err != nil {
+		return nil, cli.Exit(err, meta.ServerError)
+	}
+	if statusCode != http.StatusOK {
+		return nil, cli.Exit(handleError(body, statusCode), meta.ServerError)
+	}
+	return handleResponse[FilesResp](body)
+}
+
 // CommitInputResource 提交输入资源，返回可用 url
 func (c *Client) CommitInputResource(name, objectKey string) (*Response[InputResourceCommitResp], error) {
 	serverUrl := fmt.Sprintf("%s/x/%s/input_resource/commit", c.Domain, meta.APIv1)

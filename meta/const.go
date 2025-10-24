@@ -16,11 +16,13 @@ const (
 	CmdDetail  = "detail"
 	CmdRm      = "rm"
 	CmdCommit  = "commit"
+	CmdUpgrade = "upgrade"
 )
 
 const (
 	DefaultDomain = "https://api.bizyair.cn"
 	AuthDomain    = "https://api.siliconflow.cn"
+	StorageDomain = "https://storage.bizyair.cn"
 )
 
 const (
@@ -35,6 +37,11 @@ const (
 	MultipartParallel  = 3                 // 并发上传3个分片（与前端一致）
 	MultipartThreshold = 100 * 1024 * 1024 // 超过100MB使用分片上传
 	CheckpointFolder   = "uploads"         // checkpoint文件夹名称
+
+	// 升级相关配置
+	ManifestURL         = StorageDomain + "/releases/manifest.json"
+	UpgradeBackupSuffix = ".backup"
+	UpgradeMaxRetries   = 3
 )
 
 type UploadFileType string

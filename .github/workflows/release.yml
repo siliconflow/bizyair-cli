@@ -1,131 +1,182 @@
+name: Build and Release
+
 on:
-  push:
-    tags:
-      - 'v*'
-name: Create Release
+  workflow_dispatch:
+    inputs:
+      version:
+        description: '版本号（留空则自动递增，如：v0.0.2）'
+        required: false
+        type: string
+      bump_type:
+        description: '版本递增类型'
+        required: false
+        default: 'patch'
+        type: choice
+        options:
+          - patch  # v0.0.1 -> v0.0.2
+          - minor  # v0.0.1 -> v0.1.0
+          - major  # v0.0.1 -> v1.0.0
+
+env:
+  GO_VERSION: '1.21'
+  MANIFEST_URL: 'https://storage.bizyair.cn/releases/manifest.json'
 
 jobs:
-  create_release:
-    name: Create new release
+  prepare:
+    name: 准备版本号
     runs-on: ubuntu-latest
-    env:
-      GITHUB_TOKEN: ${{ secrets.GH_TOKEN }} # This token is provided by Actions, you do not need to create your own token
+    outputs:
+      version: ${{ steps.determine_version.outputs.version }}
     steps:
-      - uses: actions/checkout@v3
-        with:
-          submodules: false
-          ref: ${{ github.ref }}
-      - name: Create Release
+      - name: Checkout 代码
+        uses: actions/checkout@v4
+
+      - name: 确定版本号
+        id: determine_version
         run: |
-          bash tools/create_release.sh ${{ github.ref_name }}
-  build_for_macosx:
-    needs: [ create_release ]
-    name: Build for MacOSX
-    runs-on: macos-12
-    env:
-      GITHUB_TOKEN: ${{ secrets.GH_TOKEN }} # This token is provided by Actions, you do not need to create your own token
+          if [ -n "${{ github.event.inputs.version }}" ]; then
+            # 使用手动输入的版本号
+            VERSION="${{ github.event.inputs.version }}"
+            echo "使用手动指定的版本号: $VERSION"
+          else
+            # 自动递增版本号
+            echo "自动递增版本号（类型: ${{ github.event.inputs.bump_type }}）"
+            
+            # 下载现有 manifest（如果存在）
+            if curl -f -s "${{ env.MANIFEST_URL }}" -o manifest.json; then
+              CURRENT_VERSION=$(jq -r '.latest_version' manifest.json)
+              echo "当前最新版本: $CURRENT_VERSION"
+              
+              # 解析版本号
+              CURRENT_VERSION=${CURRENT_VERSION#v}
+              IFS='.' read -r MAJOR MINOR PATCH <<< "$CURRENT_VERSION"
+              
+              # 根据 bump_type 递增
+              case "${{ github.event.inputs.bump_type }}" in
+                major)
+                  MAJOR=$((MAJOR + 1))
+                  MINOR=0
+                  PATCH=0
+                  ;;
+                minor)
+                  MINOR=$((MINOR + 1))
+                  PATCH=0
+                  ;;
+                patch|*)
+                  PATCH=$((PATCH + 1))
+                  ;;
+              esac
+              
+              VERSION="v${MAJOR}.${MINOR}.${PATCH}"
+            else
+              echo "未找到现有 manifest，使用默认版本号"
+              VERSION="v0.0.1"
+            fi
+            
+            echo "新版本号: $VERSION"
+          fi
+          
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+
+  build:
+    name: 构建 ${{ matrix.goos }}-${{ matrix.goarch }}
+    needs: prepare
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - goos: darwin
+            goarch: amd64
+          - goos: darwin
+            goarch: arm64
+          - goos: linux
+            goarch: amd64
+          - goos: linux
+            goarch: arm64
+          - goos: windows
+            goarch: amd64
     steps:
-      - uses: actions/checkout@v3
-        with:
-          submodules: true
-          ref: ${{github.ref}}
-      - name: Set up Go
+      - name: Checkout 代码
+        uses: actions/checkout@v4
+
+      - name: 设置 Go 环境
         uses: actions/setup-go@v4
         with:
-          go-version: '1.22'
-      - name: Build
+          go-version: ${{ env.GO_VERSION }}
+
+      - name: 构建二进制文件
+        env:
+          VERSION: ${{ needs.prepare.outputs.version }}
+          GOOS: ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}
         run: |
-          TAG=${{ github.ref_name }}
-          VERSION=${TAG#v}
-          GIT_REV=`git rev-parse --short HEAD`
-          SOURCE_DATE_EPOCH=`date +%s`
-          TZ=GMT
-          DATE=`date -j -f "%s" ${SOURCE_DATE_EPOCH} +"%Y-%m-%dT%H:%M:%SZ"`
-          PACKAGE=github.com/siliconflow/bizyair-cli
-          # build for Linux amd64
-          CGO_ENABLED=0 GOOS=darwin GOARCH=amd64 go build -ldflags "-w -s -X '${PACKAGE}/meta.Version=${VERSION}' -X '${PACKAGE}/meta.Commit=${GIT_REV}' -X '${PACKAGE}/meta.BuildDate=${DATE}'" -o out/bizyair main.go
-          tar zcvf out/bizyair-cli-macosx-${VERSION}-amd64.tgz -C out bizyair
-          bash tools/upload_asset.sh ${VERSION} out/bizyair-cli-macosx-${VERSION}-amd64.tgz
-          # build for Linux arm64
-          CGO_ENABLED=0 GOOS=darwin GOARCH=arm64 go build -ldflags "-w -s -X '${PACKAGE}/meta.Version=${VERSION}' -X '${PACKAGE}/meta.Commit=${GIT_REV}' -X '${PACKAGE}/meta.BuildDate=${DATE}'" -o out/bizyair main.go
-          tar zcvf out/bizyair-cli-macosx-${VERSION}-arm64.tgz -C out bizyair
-          bash tools/upload_asset.sh ${VERSION} out/bizyair-cli-macosx-${VERSION}-arm64.tgz
-  build_for_linux:
-    needs: [ create_release ]
-    name: Build for Linux
+          # 确定文件名
+          PLATFORM="${GOOS}-${GOARCH}"
+          # 将 darwin 转换为 macos
+          if [ "$GOOS" = "darwin" ]; then
+            PLATFORM="macos-${GOARCH}"
+          fi
+          
+          if [ "$GOOS" = "windows" ]; then
+            FILENAME="bizyair-${VERSION}-${PLATFORM}.exe"
+          else
+            FILENAME="bizyair-${VERSION}-${PLATFORM}"
+          fi
+          
+          echo "构建 ${PLATFORM} 版本..."
+          
+          # 构建
+          CGO_ENABLED=0 GOOS=$GOOS GOARCH=$GOARCH go build \
+            -ldflags "-w -s -X 'github.com/siliconflow/bizyair-cli/meta.Version=${VERSION}' -X 'github.com/siliconflow/bizyair-cli/meta.Commit=${GITHUB_SHA::7}' -X 'github.com/siliconflow/bizyair-cli/meta.BuildDate=$(date -u +%Y-%m-%dT%H:%M:%SZ)'" \
+            -a -tags=netgo \
+            -o "dist/${FILENAME}" \
+            main.go
+          
+          # 计算 SHA256
+          cd dist
+          sha256sum "${FILENAME}" | awk '{print $1}' > "${FILENAME}.sha256"
+          
+          echo "构建完成: ${FILENAME}"
+          ls -lh "${FILENAME}"
+
+      - name: 上传构建产物
+        uses: actions/upload-artifact@v3
+        with:
+          name: binaries
+          path: dist/*
+
+  upload:
+    name: 上传到 OSS
+    needs: [prepare, build]
     runs-on: ubuntu-latest
-    env:
-      GITHUB_TOKEN: ${{ secrets.GH_TOKEN }} # This token is provided by Actions, you do not need to create your own token
     steps:
-      - uses: actions/checkout@v3
+      - name: Checkout 代码
+        uses: actions/checkout@v4
+
+      - name: 下载所有构建产物
+        uses: actions/download-artifact@v3
         with:
-          submodules: true
-          ref: ${{github.ref}}
-      - name: Set up Go
-        uses: actions/setup-go@v4
+          name: binaries
+          path: dist
+
+      - name: 设置 Python 环境
+        uses: actions/setup-python@v4
         with:
-          go-version: '1.22'
-      - name: Build
+          python-version: '3.10'
+
+      - name: 安装依赖
         run: |
-          TAG=${{ github.ref_name }}
-          VERSION=${TAG#v}
-          GIT_REV=`git rev-parse --short HEAD`
-          SOURCE_DATE_EPOCH=`date +%s`
-          DATE=`date -u -d @${SOURCE_DATE_EPOCH} +"%Y-%m-%dT%H:%M:%SZ"`
-          PACKAGE=github.com/siliconflow/bizyair-cli
-          # build for Linux amd64
-          CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags "-w -s -X '${PACKAGE}/meta.Version=${VERSION}' -X '${PACKAGE}/meta.Commit=${GIT_REV}' -X '${PACKAGE}/meta.BuildDate=${DATE}'" -o out/bizyair main.go
-          tar zcvf out/bizyair-cli-linux-${VERSION}-amd64.tgz -C out bizyair
-          bash tools/upload_asset.sh ${VERSION} out/bizyair-cli-linux-${VERSION}-amd64.tgz
-          # build for Linux arm64
-          CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -ldflags "-w -s -X '${PACKAGE}/meta.Version=${VERSION}' -X '${PACKAGE}/meta.Commit=${GIT_REV}' -X '${PACKAGE}/meta.BuildDate=${DATE}'" -o out/bizyair main.go
-          tar zcvf out/bizyair-cli-linux-${VERSION}-arm64.tgz -C out bizyair
-          bash tools/upload_asset.sh ${VERSION} out/bizyair-cli-linux-${VERSION}-arm64.tgz
-  build_for_windows:
-    needs: [ create_release ]
-    name: Build for Windows
-    runs-on: windows-latest
-    env:
-      GITHUB_TOKEN: ${{ secrets.GH_TOKEN }}
-    steps:
-      - uses: actions/checkout@v3
-        with:
-          submodules: true
-          ref: ${{github.ref}}
-      - name: Set up Go
-        uses: actions/setup-go@v4
-        with:
-          go-version: '1.22'
-      - name: Build
-        shell: powershell
+          pip install requests alibabacloud-oss-python-sdk-v2
+
+      - name: 上传到 OSS 并生成 manifest
+        env:
+          VERSION: ${{ needs.prepare.outputs.version }}
+          API_KEY: ${{ secrets.BIZYAIR_API_KEY }}
+          BASE_DOMAIN: ${{ secrets.BIZYAIR_BASE_DOMAIN || 'https://api.bizyair.cn' }}
         run: |
-          $tag = "${{ github.ref_name }}"
-          $version = $tag -replace 'v', ''
-          $git_rev = git rev-parse --short HEAD
-          $package = "github.com/siliconflow/bizyair-cli"
-          $source_date = (Get-Date).ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ")
-          $env:GOOS = "windows"
-          $env:GOARCH = "amd64"
-          $env:CGO_ENABLED = "0"
-          go build -ldflags "-w -s -X '$package/meta.Version=$version' -X '$package/meta.Commit=$git_rev' -X '$package/meta.BuildDate=$source_date'" -o ./out/bizyair.exe main.go
-          Compress-Archive -Path ./out/bizyair.exe -DestinationPath ./out/bizyair-cli-windows-${version}-amd64.zip
-          bash ./tools/upload_asset.sh ${version} ./out/bizyair-cli-windows-${version}-amd64.zip
-  finish_release:
-    needs: [ build_for_macosx, build_for_linux, build_for_windows ]
-    name: Finish the release
-    runs-on: ubuntu-latest
-    env:
-      GITHUB_TOKEN: ${{ secrets.GH_TOKEN }}
-    steps:
-      - uses: actions/checkout@v3
-        with:
-          submodules: false
-          ref: ${{github.ref}}
-      - uses: dcarbone/install-jq-action@v2.1.0
-      - name: Download assets and compute shasum
+          python tools/upload_release.py
+          
+      - name: 显示上传结果
         run: |
-          TAG=${{ github.ref_name }}
-          VERSION=${TAG#v}
-          bash tools/download_assets.sh ${VERSION}
-          bash tools/upload_asset.sh ${VERSION} checksums.sha256
-          bash tools/finish_release.sh ${VERSION}
+          echo "✅ 版本 ${{ needs.prepare.outputs.version }} 已成功发布"
+          echo "Manifest URL: ${{ env.MANIFEST_URL }}"

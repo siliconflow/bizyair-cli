@@ -187,6 +187,14 @@ type UploadTokenReq struct {
 	FileType string `json:"file_type,omitempty" form:"file_type" query:"file_type"`
 }
 
+// CLI Upload Token (for release files)
+type CLIUploadTokenReq struct {
+	FileName      string `json:"file_name,omitempty" form:"file_name" query:"file_name"`
+	FileType      string `json:"file_type,omitempty" form:"file_type" query:"file_type"`
+	IgnoreDate    bool   `json:"ignore_date,omitempty" form:"ignore_date" query:"ignore_date"`
+	FinalFileName bool   `json:"final_file_name,omitempty" form:"final_file_name" query:"final_file_name"`
+}
+
 // Input Resource Commit
 type InputResourceCommitReq struct {
 	Name      string `json:"name,omitempty" form:"name" query:"name"`

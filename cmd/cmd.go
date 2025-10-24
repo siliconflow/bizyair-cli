@@ -108,6 +108,23 @@ func Init() *cli.App {
 				},
 			},
 		},
+		{
+			Name:  meta.CmdUpgrade,
+			Usage: "检查并升级 CLI 到最新版本",
+			Flags: []cli.Flag{
+				&cli.BoolFlag{
+					Name:    "check",
+					Aliases: []string{"c"},
+					Usage:   "仅检查更新，不执行升级",
+				},
+				&cli.BoolFlag{
+					Name:    "force",
+					Aliases: []string{"f"},
+					Usage:   "强制升级，即使版本相同",
+				},
+			},
+			Action: Upgrade,
+		},
 	}
 
 	return app

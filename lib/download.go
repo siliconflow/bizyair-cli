@@ -1,60 +1,106 @@
 package lib
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"net/http"
-	neturl "net/url"
 	"os"
-	"path"
-	"path/filepath"
-	"strings"
 	"time"
+
+	"github.com/cloudwego/hertz/cmd/hz/util/logs"
 )
 
-func IsHTTPURL(s string) bool {
-	ls := strings.ToLower(strings.TrimSpace(s))
-	return strings.HasPrefix(ls, "http://") || strings.HasPrefix(ls, "https://")
+// DownloadFileOptions 下载文件的选项
+type DownloadFileOptions struct {
+	URL          string
+	DestPath     string
+	ProgressFunc func(downloaded, total int64)
+	Context      context.Context
 }
 
-// DownloadToTemp 下载 URL 到临时文件，返回路径与清理函数
-func DownloadToTemp(raw string) (string, func(), error) {
-	u, err := neturl.Parse(raw)
-	if err != nil {
-		return "", nil, fmt.Errorf("invalid url: %w", err)
+// DownloadFile 下载文件到指定路径
+func DownloadFile(opts DownloadFileOptions) error {
+	ctx := opts.Context
+	if ctx == nil {
+		ctx = context.Background()
 	}
-	// 推断文件名与扩展名
-	base := path.Base(u.Path)
-	if base == "." || base == "/" || base == "" {
-		base = fmt.Sprintf("download-%d", time.Now().UnixNano())
-	}
-	ext := filepath.Ext(base)
-	if ext == "" {
-		ext = ".bin"
-	}
-	tmp := filepath.Join(os.TempDir(), fmt.Sprintf("bizy-cover-%d%s", time.Now().UnixNano(), ext))
 
-	client := &http.Client{Timeout: 60 * time.Second}
-	resp, err := client.Get(u.String())
+	// 创建 HTTP 请求
+	req, err := http.NewRequestWithContext(ctx, "GET", opts.URL, nil)
 	if err != nil {
-		return "", nil, fmt.Errorf("http get failed: %w", err)
+		return fmt.Errorf("failed to create request: %v", err)
+	}
+
+	// 发送请求
+	client := &http.Client{
+		Timeout: 30 * time.Minute, // 大文件下载，设置较长超时
+	}
+	resp, err := client.Do(req)
+	if err != nil {
+		return fmt.Errorf("failed to download: %v", err)
 	}
 	defer resp.Body.Close()
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return "", nil, fmt.Errorf("download failed: %s", resp.Status)
+
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("bad status: %s", resp.Status)
 	}
 
-	f, err := os.Create(tmp)
+	// 创建目标文件
+	out, err := os.Create(opts.DestPath)
 	if err != nil {
-		return "", nil, fmt.Errorf("create temp file failed: %w", err)
+		return fmt.Errorf("failed to create file: %v", err)
 	}
-	defer f.Close()
+	defer out.Close()
 
-	if _, err := io.Copy(f, resp.Body); err != nil {
-		_ = os.Remove(tmp)
-		return "", nil, fmt.Errorf("write temp file failed: %w", err)
+	// 获取文件总大小
+	totalSize := resp.ContentLength
+
+	// 使用带进度的 reader
+	var reader io.Reader = resp.Body
+	if opts.ProgressFunc != nil && totalSize > 0 {
+		reader = &downloadProgressReader{
+			reader:       resp.Body,
+			total:        totalSize,
+			progressFunc: opts.ProgressFunc,
+		}
 	}
-	return tmp, func() { _ = os.Remove(tmp) }, nil
+
+	// 复制数据
+	written, err := io.Copy(out, reader)
+	if err != nil {
+		return fmt.Errorf("failed to write file: %v", err)
+	}
+
+	logs.Debugf("downloaded %d bytes to %s", written, opts.DestPath)
+
+	// 确保进度回调显示 100%
+	if opts.ProgressFunc != nil && totalSize > 0 {
+		opts.ProgressFunc(totalSize, totalSize)
+	}
+
+	return nil
 }
 
+// downloadProgressReader 带进度回调的 reader
+type downloadProgressReader struct {
+	reader       io.Reader
+	total        int64
+	downloaded   int64
+	progressFunc func(downloaded, total int64)
+	lastUpdate   time.Time
+}
 
+func (r *downloadProgressReader) Read(p []byte) (n int, err error) {
+	n, err = r.reader.Read(p)
+	r.downloaded += int64(n)
+
+	// 限制更新频率（每 100ms）
+	now := time.Now()
+	if now.Sub(r.lastUpdate) > 100*time.Millisecond || err == io.EOF {
+		r.progressFunc(r.downloaded, r.total)
+		r.lastUpdate = now
+	}
+
+	return n, err
+}
