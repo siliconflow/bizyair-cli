@@ -16,10 +16,7 @@ import json
 import requests
 from datetime import datetime
 from pathlib import Path
-from alibabacloud_oss_v2 import models as oss_models
-from alibabacloud_oss_v2.client import Client as OSSClient
-from alibabacloud_oss_v2.config import Config
-from alibabacloud_oss_v2 import credentials
+import alibabacloud_oss_v2 as oss
 
 
 def get_upload_token(api_key, base_domain, filename):
@@ -51,29 +48,32 @@ def upload_to_oss(file_path, token_data):
     storage_info = token_data["storage"]
     
     # 创建凭证提供者
-    cred_provider = credentials.StaticCredentialsProvider(
+    cred_provider = oss.credentials.StaticCredentialsProvider(
         access_key_id=file_info["access_key_id"],
         access_key_secret=file_info["access_key_secret"],
         security_token=file_info.get("security_token")
     )
     
-    # 创建配置
-    config = Config(
-        credentials_provider=cred_provider,
-        region=storage_info["region"]
-    )
+    # 加载默认配置并设置凭证提供者
+    cfg = oss.config.load_default()
+    cfg.credentials_provider = cred_provider
+    cfg.region = storage_info["region"]
+    
+    # 如果有 endpoint，设置 endpoint
+    if "endpoint" in storage_info and storage_info["endpoint"]:
+        cfg.endpoint = storage_info["endpoint"]
     
     # 创建客户端
-    client = OSSClient(config)
+    client = oss.Client(cfg)
     
     # 上传文件
-    with open(file_path, 'rb') as f:
-        request = oss_models.PutObjectRequest(
+    result = client.put_object_from_file(
+        oss.PutObjectRequest(
             bucket=storage_info["bucket"],
-            key=file_info["object_key"],
-            body=f
-        )
-        client.put_object(request)
+            key=file_info["object_key"]
+        ),
+        file_path
+    )
     
     # 返回完整 URL
     url = f"https://storage.bizyair.cn/{file_info['object_key']}"
@@ -92,28 +92,32 @@ def upload_manifest(manifest_data, api_key, base_domain):
     storage_info = token_data["storage"]
     
     # 创建凭证提供者
-    cred_provider = credentials.StaticCredentialsProvider(
+    cred_provider = oss.credentials.StaticCredentialsProvider(
         access_key_id=file_info["access_key_id"],
         access_key_secret=file_info["access_key_secret"],
         security_token=file_info.get("security_token")
     )
     
-    # 创建配置
-    config = Config(
-        credentials_provider=cred_provider,
-        region=storage_info["region"]
-    )
+    # 加载默认配置并设置凭证提供者
+    cfg = oss.config.load_default()
+    cfg.credentials_provider = cred_provider
+    cfg.region = storage_info["region"]
+    
+    # 如果有 endpoint，设置 endpoint
+    if "endpoint" in storage_info and storage_info["endpoint"]:
+        cfg.endpoint = storage_info["endpoint"]
     
     # 创建客户端
-    client = OSSClient(config)
+    client = oss.Client(cfg)
     
     # 上传 manifest
-    request = oss_models.PutObjectRequest(
-        bucket=storage_info["bucket"],
-        key=file_info["object_key"],
-        body=manifest_json.encode('utf-8')
+    result = client.put_object(
+        oss.PutObjectRequest(
+            bucket=storage_info["bucket"],
+            key=file_info["object_key"],
+            body=manifest_json.encode('utf-8')
+        )
     )
-    client.put_object(request)
     
     url = f"https://storage.bizyair.cn/{file_info['object_key']}"
     print(f"✅ Manifest 已上传: {url}")
