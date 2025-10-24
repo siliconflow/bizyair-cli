@@ -91,7 +91,7 @@ def upload_manifest(manifest_data, api_key, base_domain):
     manifest_json = json.dumps(manifest_data, indent=2, ensure_ascii=False)
     
     # 获取上传 token
-    token_data = get_upload_token(api_key, base_domain, "manifest.json")
+    token_data = get_upload_token(api_key, base_domain, "releases/manifest.json")
     
     file_info = token_data["file"]
     storage_info = token_data["storage"]
