@@ -3,8 +3,8 @@ package cmd
 import (
 	"context"
 	"fmt"
+	"os"
 
-	"github.com/cloudwego/hertz/cmd/hz/util/logs"
 	"github.com/siliconflow/bizyair-cli/lib"
 	"github.com/siliconflow/bizyair-cli/meta"
 	"github.com/urfave/cli/v2"
@@ -17,9 +17,9 @@ func Upgrade(c *cli.Context) error {
 	checkOnly := c.Bool("check")
 	force := c.Bool("force")
 
-	logs.Infof("BizyAir CLI 升级工具\n")
-	logs.Infof("当前版本: %s\n", meta.Version)
-	logs.Infof("==================\n")
+	fmt.Printf("BizyAir CLI 升级工具\n")
+	fmt.Printf("当前版本: %s\n", meta.Version)
+	fmt.Printf("==================\n")
 
 	// 创建升级选项
 	opts := lib.UpgradeOptions{
@@ -28,7 +28,7 @@ func Upgrade(c *cli.Context) error {
 		CurrentVersion: meta.Version,
 		Context:        context.Background(),
 		StatusFunc: func(status string) {
-			logs.Infof("%s\n", status)
+			fmt.Printf("%s\n", status)
 		},
 		ProgressFunc: func(downloaded, total int64) {
 			percentage := float64(downloaded) / float64(total) * 100
@@ -47,20 +47,20 @@ func Upgrade(c *cli.Context) error {
 		fmt.Println()
 	}
 
-	logs.Infof("==================\n")
+	fmt.Printf("==================\n")
 
 	if !result.Success {
-		logs.Errorf("❌ %s\n", result.Message)
+		fmt.Fprintf(os.Stderr, "❌ %s\n", result.Message)
 		if result.Error != nil {
-			logs.Errorf("错误详情: %v\n", result.Error)
+			fmt.Fprintf(os.Stderr, "错误详情: %v\n", result.Error)
 		}
 		return cli.Exit("升级失败", meta.LoadError)
 	}
 
-	logs.Infof("%s\n", result.Message)
+	fmt.Printf("%s\n", result.Message)
 
 	if result.NeedUpgrade && !checkOnly {
-		logs.Infof("\n提示: 请重新运行命令以使用新版本\n")
+		fmt.Printf("\n提示: 请重新运行命令以使用新版本\n")
 	}
 
 	return nil
