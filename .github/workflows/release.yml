@@ -140,7 +140,8 @@ jobs:
               # Windows 平台
               BINARY_NAME="bizyair.exe"
               # 提取平台信息，如 windows-amd64
-              PLATFORM=$(echo "$file" | sed -E 's/bizyair-.*-(windows-[^.]+)\.exe/\1/')
+              # 从 bizyair-v0.2.3-windows-amd64.exe 提取 windows-amd64
+              PLATFORM=$(echo "$file" | sed -E 's/bizyair-v[0-9.]+-(.*)\.exe/\1/')
               ARCHIVE_NAME="bizyair-${VERSION}-${PLATFORM}.zip"
               
               # 重命名并打包
@@ -151,7 +152,8 @@ jobs:
               # Linux/macOS 平台
               BINARY_NAME="bizyair"
               # 提取平台信息，如 linux-amd64, macos-arm64
-              PLATFORM=$(echo "$file" | sed -E 's/bizyair-.*-(.*)/\1/')
+              # 从 bizyair-v0.2.3-linux-amd64 提取 linux-amd64
+              PLATFORM=$(echo "$file" | sed -E 's/bizyair-v[0-9.]+-//')
               ARCHIVE_NAME="bizyair-${VERSION}-${PLATFORM}.tar.gz"
               
               # 重命名并打包
