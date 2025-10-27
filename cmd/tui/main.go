@@ -121,12 +121,26 @@ func newMainModel() mainModel {
 	menuList.SetShowStatusBar(false)
 	menuList.SetShowPagination(false)
 
+	// 模型类型描述映射
+	modelTypeDescriptions := map[meta.UploadFileType]string{
+		meta.TypeCheckpoint: "完整的扩散模型，包含所有组件",
+		meta.TypeVae:        "变分自编码器，用于图像编解码",
+		meta.TypeUNet:       "扩散模型的核心网络组件",
+		meta.TypeLora:       "低秩适应模型，用于微调和风格迁移",
+		meta.TypeControlNet: "条件控制模型，用于精确控制生成",
+		meta.TypeClip:       "文本编码器，用于理解提示词",
+		meta.TypeUpscale:    "图像放大模型，提升分辨率",
+		meta.TypeDetection:  "目标检测模型，识别图像中的对象",
+		meta.TypeOther:      "其他类型的模型",
+	}
+
 	tItems := make([]list.Item, 0, len(meta.ModelTypes))
 	for _, t := range meta.ModelTypes {
 		s := string(t)
-		tItems = append(tItems, listItem{title: s})
+		desc := modelTypeDescriptions[t]
+		tItems = append(tItems, listItem{title: s, desc: desc})
 	}
-	tp := list.New(tItems, d, 30, len(tItems))
+	tp := list.New(tItems, d, 30, len(tItems)*3)
 	tp.Title = "选择模型类型"
 	tp.SetShowStatusBar(false)
 	tp.SetShowPagination(false)

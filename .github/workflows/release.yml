@@ -4,25 +4,10 @@ on:
   push:
     tags:
       - 'v*.*.*'  # 匹配 v0.0.1, v1.2.3 等格式的标签
-  workflow_dispatch:  # 保留手动触发选项
-    inputs:
-      version:
-        description: "版本号（留空则自动递增，如：v0.0.2）"
-        required: false
-        type: string
-      bump_type:
-        description: "版本递增类型"
-        required: false
-        default: "patch"
-        type: choice
-        options:
-          - patch # v0.0.1 -> v0.0.2
-          - minor # v0.0.1 -> v0.1.0
-          - major # v0.0.1 -> v1.0.0
 
 env:
   GO_VERSION: "1.21"
-  MANIFEST_URL: "https://storage.bizyair.cn/releases/manifest.json"
+  MANIFEST_URL: "https://storage.bizyair.cn/cli/releases/manifest.json"
 
 jobs:
   prepare:
@@ -37,50 +22,13 @@ jobs:
       - name: 确定版本号
         id: determine_version
         run: |
-          if [ -n "${{ github.event.inputs.version }}" ]; then
-            # 使用手动输入的版本号
-            VERSION="${{ github.event.inputs.version }}"
-            echo "使用手动指定的版本号: $VERSION"
+          # 使用 Git Tag 作为版本号
+          if [ "${{ github.ref_type }}" = "tag" ]; then
+            VERSION="${{ github.ref_name }}"
+            echo "使用 Git Tag 版本号: $VERSION"
           else
-            # 自动递增版本号（标签触发或手动触发时都使用此逻辑）
-            BUMP_TYPE="${{ github.event.inputs.bump_type }}"
-            if [ -z "$BUMP_TYPE" ]; then
-              BUMP_TYPE="patch"
-            fi
-            echo "自动递增版本号（类型: $BUMP_TYPE）"
-            
-            # 下载现有 manifest（如果存在）
-            if curl -f -s "${{ env.MANIFEST_URL }}" -o manifest.json; then
-              CURRENT_VERSION=$(jq -r '.latest_version' manifest.json)
-              echo "当前最新版本: $CURRENT_VERSION"
-              
-              # 解析版本号
-              CURRENT_VERSION=${CURRENT_VERSION#v}
-              IFS='.' read -r MAJOR MINOR PATCH <<< "$CURRENT_VERSION"
-              
-              # 根据 bump_type 递增
-              case "$BUMP_TYPE" in
-                major)
-                  MAJOR=$((MAJOR + 1))
-                  MINOR=0
-                  PATCH=0
-                  ;;
-                minor)
-                  MINOR=$((MINOR + 1))
-                  PATCH=0
-                  ;;
-                patch|*)
-                  PATCH=$((PATCH + 1))
-                  ;;
-              esac
-              
-              VERSION="v${MAJOR}.${MINOR}.${PATCH}"
-            else
-              echo "未找到现有 manifest，使用默认版本号"
-              VERSION="v0.0.1"
-            fi
-            
-            echo "新版本号: $VERSION"
+            echo "错误: 此工作流只能通过 tag 触发"
+            exit 1
           fi
 
           echo "version=$VERSION" >> $GITHUB_OUTPUT

@@ -39,7 +39,7 @@ const (
 	CheckpointFolder   = "uploads"         // checkpoint文件夹名称
 
 	// 升级相关配置
-	ManifestURL         = StorageDomain + "/releases/manifest.json"
+	ManifestURL         = StorageDomain + "/cli/releases/manifest.json"
 	UpgradeBackupSuffix = ".backup"
 	UpgradeMaxRetries   = 3
 )
@@ -88,7 +88,7 @@ const (
 	HeaderSiliconCliVersion = "X-Silicon-CLI-Version"
 	JsonContentType         = "application/json"
 	APIv1                   = "v1"
-	SfFolder                = ".siliconflow"
+	SfFolder                = ".bizyair"
 	SfApiKey                = "apikey"
 	OSWindows               = "windows"
 	EnvUserProfile          = "USERPROFILE"
