@@ -23,3 +23,19 @@ go.work.sum
 
 # env file
 .env
+.idea
+.vscode
+temp
+.exe
+execs
+
+# vscode debug
+__debug*
+
+# WebP 工具（首次运行时自动下载，如需预打包可以保留此目录）
+.bin/
+
+# 构建和发布相关
+dist/
+*.backup
+*.sha256
