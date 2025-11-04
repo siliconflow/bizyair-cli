@@ -42,7 +42,29 @@ func ValidatePath(path string) error {
 }
 
 // ValidateBaseModel 校验基础模型
-func ValidateBaseModel(baseModel string) error {
+// allowedModels: 从API获取的允许的基础模型列表，必须提供
+func ValidateBaseModel(baseModel string, allowedModels []string) error {
+	if baseModel == "" {
+		return fmt.Errorf("基础模型不能为空")
+	}
+
+	// 如果没有提供允许的模型列表，返回错误
+	if len(allowedModels) == 0 {
+		return fmt.Errorf("无法验证基础模型：未提供允许的模型列表，请先从API获取")
+	}
+
+	// 使用提供的列表验证
+	if !lo.Contains(allowedModels, baseModel) {
+		return fmt.Errorf("不支持的基础模型: %s (支持的模型: %s)",
+			baseModel, strings.Join(allowedModels, ", "))
+	}
+
+	return nil
+}
+
+// ValidateBaseModelLegacy 使用本地常量列表验证（保留用于向后兼容，但标记为deprecated）
+// Deprecated: 使用 ValidateBaseModel 并传入从API获取的列表
+func ValidateBaseModelLegacy(baseModel string) error {
 	if baseModel == "" {
 		return fmt.Errorf("基础模型不能为空")
 	}

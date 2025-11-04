@@ -113,8 +113,13 @@ var SupportedBaseModels = map[string]bool{
 	"Pony":           true,
 	"Kolors":         true,
 	"Hunyuan 1":      true,
-	"WAN Video":      true,
+	"Wan Video":      true,
 	"Qwen-Image":     true,
+	"Qwen-Edit":      true,
+	"Sora":           true,
+	"NoobAI":         true,
+	"Illustrious":    true,
+	"Flux.1 S":       true,
 	"Other":          true,
 }
 

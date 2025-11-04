@@ -105,9 +105,9 @@ func validateUploadInput(input UploadInput) error {
 			return lib.WithStep("参数验证", lib.NewValidationError(fmt.Sprintf("版本 %d: 封面是必填项", i+1)))
 		}
 
-		// 验证基础模型
+		// 验证基础模型 - 使用从API获取的列表
 		if ver.BaseModel != "" {
-			if err := lib.ValidateBaseModel(ver.BaseModel); err != nil {
+			if err := lib.ValidateBaseModel(ver.BaseModel, input.AllowedBaseModels); err != nil {
 				return lib.WithStep("参数验证", fmt.Errorf("版本 %d: 基础模型无效: %w", i+1, err))
 			}
 		}
