@@ -146,14 +146,35 @@ func uploadSingleModelFromYaml(
 	versions []actions.VersionInput,
 	overwrite bool,
 ) modelUploadResult {
+	// 创建客户端
+	client := lib.NewClient(baseDomain, apiKey)
+
+	// 从API获取基础模型列表
+	allowedModels := []string{}
+	resp, err := client.GetBaseModelTypes()
+	if err != nil {
+		return modelUploadResult{
+			ModelName: modelName,
+			ModelType: modelType,
+			Success:   false,
+			Error:     fmt.Errorf("获取基础模型列表失败: %w", err),
+		}
+	}
+	if resp.Data != nil {
+		for _, item := range resp.Data {
+			allowedModels = append(allowedModels, item.Value)
+		}
+	}
+
 	// 准备上传输入
 	input := actions.UploadInput{
-		ApiKey:     apiKey,
-		BaseDomain: baseDomain,
-		ModelType:  modelType,
-		ModelName:  modelName,
-		Versions:   versions,
-		Overwrite:  overwrite,
+		ApiKey:            apiKey,
+		BaseDomain:        baseDomain,
+		ModelType:         modelType,
+		ModelName:         modelName,
+		Versions:          versions,
+		Overwrite:         overwrite,
+		AllowedBaseModels: allowedModels, // 传入从API获取的列表
 	}
 
 	// 创建回调

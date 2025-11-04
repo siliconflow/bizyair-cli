@@ -57,13 +57,14 @@ type VersionInput struct {
 
 // UploadInput 上传操作的输入参数
 type UploadInput struct {
-	ApiKey     string
-	BaseDomain string
-	ModelType  string
-	ModelName  string
-	Versions   []VersionInput
-	Overwrite  bool
-	Context    context.Context // 用于取消操作
+	ApiKey            string
+	BaseDomain        string
+	ModelType         string
+	ModelName         string
+	Versions          []VersionInput
+	Overwrite         bool
+	Context           context.Context // 用于取消操作
+	AllowedBaseModels []string        // 从API获取的允许的基础模型列表（必须提供）
 }
 
 // UploadProgress 上传进度信息

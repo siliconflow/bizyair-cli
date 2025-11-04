@@ -52,6 +52,32 @@ func runUploadActionMulti(u uploadInputs, versions []versionItem) tea.Cmd {
 				return
 			}
 
+			// 创建客户端
+			client := lib.NewClient(meta.DefaultDomain, apiKey)
+
+			// 从API获取基础模型列表
+			allowedModels := []string{}
+			resp, err := client.GetBaseModelTypes()
+			if err != nil {
+				ch <- actionDoneMsg{
+					out: "",
+					err: lib.WithStep("获取基础模型列表", fmt.Errorf("无法从API获取基础模型列表: %w", err)),
+				}
+				return
+			}
+			if resp.Data != nil {
+				for _, item := range resp.Data {
+					allowedModels = append(allowedModels, item.Value)
+				}
+			}
+			if len(allowedModels) == 0 {
+				ch <- actionDoneMsg{
+					out: "",
+					err: lib.WithStep("获取基础模型列表", fmt.Errorf("API返回的基础模型列表为空")),
+				}
+				return
+			}
+
 			// 准备版本输入参数
 			actionVersions := make([]actions.VersionInput, len(versions))
 			for i, v := range versions {
@@ -67,13 +93,14 @@ func runUploadActionMulti(u uploadInputs, versions []versionItem) tea.Cmd {
 
 			// 准备上传输入参数
 			input := actions.UploadInput{
-				ApiKey:     apiKey,
-				BaseDomain: meta.DefaultDomain,
-				ModelType:  u.typ,
-				ModelName:  u.name,
-				Versions:   actionVersions,
-				Overwrite:  false,
-				Context:    ctx, // 传递可取消的context
+				ApiKey:            apiKey,
+				BaseDomain:        meta.DefaultDomain,
+				ModelType:         u.typ,
+				ModelName:         u.name,
+				Versions:          actionVersions,
+				Overwrite:         false,
+				Context:           ctx,           // 传递可取消的context
+				AllowedBaseModels: allowedModels, // 传入从API获取的列表
 			}
 
 			// 创建TUI回调
