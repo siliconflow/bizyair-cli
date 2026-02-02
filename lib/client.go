@@ -43,7 +43,7 @@ func NewClient(domain string, apiKey string) *Client {
 }
 
 func (c *Client) UserInfo() (*Response[UserInfo], error) {
-	serverUrl := fmt.Sprintf("%s/%s/user/info", c.Domain, meta.APIv1)
+	serverUrl := fmt.Sprintf("%s/x/%s/user/metadata", c.Domain, meta.APIv1)
 	body, statusCode, err := c.doGet(serverUrl, nil, c.authHeader())
 	if err != nil {
 		return nil, cli.Exit(err, meta.ServerError)

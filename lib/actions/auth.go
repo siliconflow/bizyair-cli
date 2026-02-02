@@ -16,7 +16,7 @@ func ExecuteLogin(apiKey string) LoginResult {
 	}
 
 	// 1. 验证API Key
-	client := lib.NewClient(meta.AuthDomain, apiKey)
+	client := lib.NewClient(meta.DefaultDomain, apiKey)
 	_, err := client.UserInfo()
 	if err != nil {
 		return LoginResult{
