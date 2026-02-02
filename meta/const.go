@@ -21,7 +21,6 @@ const (
 
 const (
 	DefaultDomain = "https://api.bizyair.cn"
-	AuthDomain    = "https://api.siliconflow.cn"
 	StorageDomain = "https://storage.bizyair.cn"
 )
 

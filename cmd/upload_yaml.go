@@ -182,7 +182,7 @@ func uploadSingleModelFromYaml(
 
 	// 执行上传
 	fmt.Fprintf(os.Stdout, "开始上传 %d 个文件（并发数：3）\n", len(versions))
-	client := lib.NewClient(baseDomain, apiKey)
+
 	uploadResult := actions.ExecuteUpload(client, input, callback)
 
 	// 返回结果
