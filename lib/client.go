@@ -10,18 +10,39 @@ import (
 	"net/url"
 	"reflect"
 	"strings"
+	"time"
 	"unicode"
 
 	"github.com/cloudwego/hertz/cmd/hz/util/logs"
 	"github.com/samber/lo"
 	"github.com/siliconflow/bizyair-cli/meta"
-	"github.com/urfave/cli/v2"
 )
+
+// BizyAPI defines the interface for BizyAir API operations.
+// Use this interface in business logic (e.g., actions) to allow mocking in tests.
+type BizyAPI interface {
+	UserInfo() (*Response[UserInfo], error)
+	OssSign(signature, modelType string) (*Response[FilesResp], error)
+	CommitFileV2(signature, objectKey, md5Hash, modelType string) (*Response[FilesResp], error)
+	CommitModelV2(modelName, modelType string, versions []*ModelVersion) (*Response[ModelCommitResp], error)
+	ListModel(current, pageSize int, keyword, sort string, modelTypes, baseModels []string) (*Response[BizyModelListResp], error)
+	ListModelFiles(modelType, modelName, extName string, public bool) (*Response[ModelListFilesResp], error)
+	GetBizyModelDetail(bizyModelId int64) (*Response[BizyModelDetail], error)
+	RemoveModel(modelType, modelName string) (*Response[ModelDeleteResp], error)
+	DeleteBizyModelById(bizyModelId int64) (*Response[interface{}], error)
+	CheckModel(modelType, modelName string) (*Response[CheckModelResp], error)
+	CheckModelExists(modelName, modelType string) (bool, error)
+	GetUploadToken(fileName, fileType string) (*Response[FilesResp], error)
+	GetCLIUploadToken(fileName string) (*Response[FilesResp], error)
+	CommitInputResource(name, objectKey string) (*Response[InputResourceCommitResp], error)
+	GetBaseModelTypes() (*Response[[]*BaseModelTypeItem], error)
+}
 
 // Client bizyair client
 type Client struct {
-	Domain string
-	ApiKey string
+	Domain     string
+	ApiKey     string
+	httpClient *http.Client
 }
 
 // Response the response of bizyair
@@ -39,6 +60,14 @@ func NewClient(domain string, apiKey string) *Client {
 	return &Client{
 		Domain: domain,
 		ApiKey: apiKey,
+		httpClient: &http.Client{
+			Transport: &http.Transport{
+				TLSClientConfig:     &tls.Config{},
+				MaxIdleConns:        10,
+				MaxIdleConnsPerHost: 10,
+				IdleConnTimeout:     90 * time.Second,
+			},
+		},
 	}
 }
 
@@ -46,7 +75,7 @@ func (c *Client) UserInfo() (*Response[UserInfo], error) {
 	serverUrl := fmt.Sprintf("%s/%s/user/info", c.Domain, meta.APIv1)
 	body, statusCode, err := c.doGet(serverUrl, nil, c.authHeader())
 	if err != nil {
-		return nil, cli.Exit(err, meta.ServerError)
+		return nil, err
 	}
 
 	if statusCode != http.StatusOK {
@@ -56,19 +85,15 @@ func (c *Client) UserInfo() (*Response[UserInfo], error) {
 }
 
 func (c *Client) OssSign(signature string, modelType string) (*Response[FilesResp], error) {
-
-	// if file exists, return file.id, else return oss certificate
-	// serverUrl := fmt.Sprintf("%s:%s/%s/sign?%s=%s&type=%s", c.Host, c.Port, meta.BizyUrl, meta.SignMethod, signature, modelType)
 	serverUrl := fmt.Sprintf("%s/x/%s/files/%s", c.Domain, meta.APIv1, signature)
 	body, statusCode, err := c.doGet(serverUrl, OssSignReq{Type: modelType}, c.authHeader())
 	if err != nil {
-		return nil, cli.Exit(err, meta.ServerError)
+		return nil, err
 	}
 	if statusCode != http.StatusOK {
-		return nil, cli.Exit(handleError(body, statusCode), meta.ServerError)
+		return nil, handleError(body, statusCode)
 	}
 	return handleResponse[FilesResp](body)
-
 }
 
 func (c *Client) CommitFileV2(signature string, objectKey string, md5_hash string, modelType string) (*Response[FilesResp], error) {
@@ -80,11 +105,11 @@ func (c *Client) CommitFileV2(signature string, objectKey string, md5_hash strin
 		ModelType: modelType,
 	}, c.authHeader())
 	if err != nil {
-		return nil, cli.Exit(err, meta.ServerError)
+		return nil, err
 	}
 
 	if statusCode != http.StatusOK {
-		return nil, cli.Exit(handleError(body, statusCode), meta.ServerError)
+		return nil, handleError(body, statusCode)
 	}
 	return handleResponse[FilesResp](body)
 }
@@ -97,17 +122,16 @@ func (c *Client) CommitModelV2(modelName string, modelType string, modelVersion 
 		Versions: modelVersion,
 	}, c.authHeader())
 	if err != nil {
-		return nil, cli.Exit(err, meta.ServerError)
+		return nil, err
 	}
 
 	if statusCode != http.StatusOK {
-		return nil, cli.Exit(handleError(body, statusCode), meta.ServerError)
+		return nil, handleError(body, statusCode)
 	}
 	return handleResponse[ModelCommitResp](body)
 }
 
 func (c *Client) ListModel(current int, pageSize int, keyword string, sort string, modelTypes []string, baseModels []string) (*Response[BizyModelListResp], error) {
-	// mode 固定为 "my"（我发布的模型）
 	serverUrl := fmt.Sprintf("%s/x/%s/bizy_models/my", c.Domain, meta.APIv1)
 	param := BizyModelListReq{
 		Current:    current,
@@ -119,11 +143,11 @@ func (c *Client) ListModel(current int, pageSize int, keyword string, sort strin
 	}
 	body, statusCode, err := c.doGet(serverUrl, param, c.authHeader())
 	if err != nil {
-		return nil, cli.Exit(err, meta.ServerError)
+		return nil, err
 	}
 
 	if statusCode != http.StatusOK {
-		return nil, cli.Exit(handleError(body, statusCode), meta.ServerError)
+		return nil, handleError(body, statusCode)
 	}
 	return handleResponse[BizyModelListResp](body)
 }
@@ -138,11 +162,11 @@ func (c *Client) ListModelFiles(modelType string, modelName string, extName stri
 	}
 	body, statusCode, err := c.doGet(serverUrl, param, c.authHeader())
 	if err != nil {
-		return nil, cli.Exit(err, meta.ServerError)
+		return nil, err
 	}
 
 	if statusCode != http.StatusOK {
-		return nil, cli.Exit(handleError(body, statusCode), meta.ServerError)
+		return nil, handleError(body, statusCode)
 	}
 	return handleResponse[ModelListFilesResp](body)
 }
@@ -152,10 +176,10 @@ func (c *Client) GetBizyModelDetail(bizyModelId int64) (*Response[BizyModelDetai
 	serverUrl := fmt.Sprintf("%s/x/%s/bizy_models/%d/detail", c.Domain, meta.APIv1, bizyModelId)
 	body, statusCode, err := c.doGet(serverUrl, nil, c.authHeader())
 	if err != nil {
-		return nil, cli.Exit(err, meta.ServerError)
+		return nil, err
 	}
 	if statusCode != http.StatusOK {
-		return nil, cli.Exit(handleError(body, statusCode), meta.ServerError)
+		return nil, handleError(body, statusCode)
 	}
 	return handleResponse[BizyModelDetail](body)
 }
@@ -167,11 +191,11 @@ func (c *Client) RemoveModel(modelType string, modelName string) (*Response[Mode
 		Type: modelType,
 	}, c.authHeader())
 	if err != nil {
-		return nil, cli.Exit(err, meta.ServerError)
+		return nil, err
 	}
 
 	if statusCode != http.StatusOK {
-		return nil, cli.Exit(handleError(body, statusCode), meta.ServerError)
+		return nil, handleError(body, statusCode)
 	}
 	return handleResponse[ModelDeleteResp](body)
 }
@@ -181,10 +205,10 @@ func (c *Client) DeleteBizyModelById(bizyModelId int64) (*Response[interface{}],
 	serverUrl := fmt.Sprintf("%s/x/%s/bizy_models/%d", c.Domain, meta.APIv1, bizyModelId)
 	body, statusCode, err := c.doDelete(serverUrl, nil, c.authHeader())
 	if err != nil {
-		return nil, cli.Exit(err, meta.ServerError)
+		return nil, err
 	}
 	if statusCode != http.StatusOK {
-		return nil, cli.Exit(handleError(body, statusCode), meta.ServerError)
+		return nil, handleError(body, statusCode)
 	}
 	return handleResponse[interface{}](body)
 }
@@ -196,11 +220,11 @@ func (c *Client) CheckModel(modelType string, modelName string) (*Response[Check
 		Type: modelType,
 	}, c.authHeader())
 	if err != nil {
-		return nil, cli.Exit(err, meta.ServerError)
+		return nil, err
 	}
 
 	if statusCode != http.StatusOK {
-		return nil, cli.Exit(handleError(body, statusCode), meta.ServerError)
+		return nil, handleError(body, statusCode)
 	}
 	return handleResponse[CheckModelResp](body)
 }
@@ -210,10 +234,10 @@ func (c *Client) GetUploadToken(fileName, fileType string) (*Response[FilesResp]
 	serverUrl := fmt.Sprintf("%s/x/%s/upload/token", c.Domain, meta.APIv1)
 	body, statusCode, err := c.doGet(serverUrl, UploadTokenReq{FileName: fileName, FileType: fileType}, c.authHeader())
 	if err != nil {
-		return nil, cli.Exit(err, meta.ServerError)
+		return nil, err
 	}
 	if statusCode != http.StatusOK {
-		return nil, cli.Exit(handleError(body, statusCode), meta.ServerError)
+		return nil, handleError(body, statusCode)
 	}
 	return handleResponse[FilesResp](body)
 }
@@ -228,10 +252,10 @@ func (c *Client) GetCLIUploadToken(fileName string) (*Response[FilesResp], error
 		FinalFileName: true,
 	}, c.authHeader())
 	if err != nil {
-		return nil, cli.Exit(err, meta.ServerError)
+		return nil, err
 	}
 	if statusCode != http.StatusOK {
-		return nil, cli.Exit(handleError(body, statusCode), meta.ServerError)
+		return nil, handleError(body, statusCode)
 	}
 	return handleResponse[FilesResp](body)
 }
@@ -241,10 +265,10 @@ func (c *Client) CommitInputResource(name, objectKey string) (*Response[InputRes
 	serverUrl := fmt.Sprintf("%s/x/%s/input_resource/commit", c.Domain, meta.APIv1)
 	body, statusCode, err := c.doPost(serverUrl, InputResourceCommitReq{Name: name, ObjectKey: objectKey}, c.authHeader())
 	if err != nil {
-		return nil, cli.Exit(err, meta.ServerError)
+		return nil, err
 	}
 	if statusCode != http.StatusOK {
-		return nil, cli.Exit(handleError(body, statusCode), meta.ServerError)
+		return nil, handleError(body, statusCode)
 	}
 	return handleResponse[InputResourceCommitResp](body)
 }
@@ -277,7 +301,6 @@ func (c *Client) CheckModelExists(modelName string, modelType string) (bool, err
 
 // GetBaseModelTypes 获取基础模型类型列表
 func (c *Client) GetBaseModelTypes() (*Response[[]*BaseModelTypeItem], error) {
-	// 使用固定的社区API地址
 	serverUrl := "https://bizyair.cn/api/special/community/base_model_types"
 	body, statusCode, err := c.doGet(serverUrl, nil, nil)
 	if err != nil {
@@ -299,11 +322,6 @@ func (c *Client) authHeader() map[string]string {
 
 // doGet do get request
 func (c *Client) doGet(urlStr string, queryParams interface{}, header map[string]string) ([]byte, int, error) {
-	tr := &http.Transport{
-		TLSClientConfig: &tls.Config{},
-	}
-	client := &http.Client{Transport: tr}
-
 	parsedURL, err := url.Parse(urlStr)
 	if err != nil {
 		return nil, -1, err
@@ -352,7 +370,7 @@ func (c *Client) doGet(urlStr string, queryParams interface{}, header map[string
 	}
 	req.Header.Set(meta.HeaderSiliconCliVersion, meta.Version)
 
-	resp, err := client.Do(req)
+	resp, err := c.httpClient.Do(req)
 	if err != nil {
 		return nil, -1, err
 	}
@@ -362,14 +380,7 @@ func (c *Client) doGet(urlStr string, queryParams interface{}, header map[string
 	return body, resp.StatusCode, err
 }
 
-// doPost do post request
 func (c *Client) doPost(url string, data interface{}, header map[string]string) ([]byte, int, error) {
-	tr := &http.Transport{
-		TLSClientConfig: &tls.Config{},
-	}
-	client := &http.Client{Transport: tr}
-
-	// 将数据编码为JSON
 	jsonData, err := json.Marshal(data)
 	if err != nil {
 		return nil, -1, err
@@ -388,24 +399,17 @@ func (c *Client) doPost(url string, data interface{}, header map[string]string) 
 	req.Header.Set(meta.HeaderSiliconCliVersion, meta.Version)
 	req.Header.Set(meta.HeaderContentType, meta.JsonContentType)
 
-	resp, err := client.Do(req)
+	resp, err := c.httpClient.Do(req)
 	if err != nil {
 		return nil, -1, err
 	}
 	defer resp.Body.Close()
 
-	// 读取响应体
 	body, err := ioutil.ReadAll(resp.Body)
 	return body, resp.StatusCode, err
 }
 
-// doDelete do delete request
 func (c *Client) doDelete(url string, data interface{}, header map[string]string) ([]byte, int, error) {
-	tr := &http.Transport{
-		TLSClientConfig: &tls.Config{},
-	}
-	client := &http.Client{Transport: tr}
-
 	jsonData, err := json.Marshal(data)
 	if err != nil {
 		return nil, -1, err
@@ -423,7 +427,7 @@ func (c *Client) doDelete(url string, data interface{}, header map[string]string
 	}
 	req.Header.Set(meta.HeaderContentType, meta.JsonContentType)
 
-	resp, err := client.Do(req)
+	resp, err := c.httpClient.Do(req)
 	if err != nil {
 		return nil, -1, err
 	}
@@ -437,7 +441,7 @@ func (c *Client) doDelete(url string, data interface{}, header map[string]string
 func handleError(responseBody []byte, statusCode int) error {
 	rawMessage := string(responseBody)
 	if statusCode == http.StatusNotFound {
-		return cli.Exit(fmt.Errorf("server not found, you can use \"--base_domain\" to specify the target domain"), meta.LoadError)
+		return fmt.Errorf("server not found, you can use \"--base_domain\" to specify the target domain")
 	}
 	var parsedResponse Response[interface{}]
 	err := json.Unmarshal(responseBody, &parsedResponse)
@@ -446,16 +450,16 @@ func handleError(responseBody []byte, statusCode int) error {
 			return unicode.Is(unicode.Quotation_Mark, r)
 		})
 		if rawMessage == "" {
-			return cli.Exit(meta.NewErrNo("Unknown server error"), meta.ServerError)
+			return fmt.Errorf("unknown server error")
 		}
-		return cli.Exit(meta.NewErrNo(rawMessage), meta.ServerError)
+		return fmt.Errorf("%s", rawMessage)
 	}
 
 	if errno, exists := meta.ServerErrors[parsedResponse.Code]; exists {
-		return cli.Exit(errno, meta.ServerError)
+		return errno
 	}
 
-	return fmt.Errorf("unexcepted http status code: %d, message: %s", statusCode, rawMessage)
+	return fmt.Errorf("unexpected http status code: %d, message: %s", statusCode, rawMessage)
 }
 
 func handleResponse[T any](responseBody []byte) (*Response[T], error) {
@@ -463,14 +467,14 @@ func handleResponse[T any](responseBody []byte) (*Response[T], error) {
 	err := json.Unmarshal(responseBody, &parsedResponse)
 	if err != nil {
 		logs.Debugf("error: %s\n", err)
-		return nil, cli.Exit(err, meta.ServerError)
+		return nil, err
 	}
 
 	if parsedResponse.Code != meta.OKCode {
 		if errno, exists := meta.ServerErrors[parsedResponse.Code]; exists {
-			return nil, cli.Exit(errno, meta.ServerError)
+			return nil, errno
 		}
-		return nil, cli.Exit(fmt.Errorf("server error: %s", parsedResponse.Message), meta.ServerError)
+		return nil, fmt.Errorf("server error: %s", parsedResponse.Message)
 	}
 	return &parsedResponse, nil
 }

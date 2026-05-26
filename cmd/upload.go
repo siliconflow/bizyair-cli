@@ -15,10 +15,7 @@ import (
 )
 
 func Upload(c *cli.Context) error {
-	args, err := globalArgs.Parse(c, meta.CmdUpload)
-	if err != nil {
-		return cli.Exit(err, meta.LoadError)
-	}
+	args := parseArgument(c, meta.CmdUpload)
 	setLogVerbose(args.Verbose)
 	logs.Debugf("args: %#v\n", args)
 
@@ -34,6 +31,7 @@ func Upload(c *cli.Context) error {
 	// 获取 API Key
 	apiKey := args.ApiKey
 	if apiKey == "" {
+		var err error
 		apiKey, err = lib.NewSfFolder().GetKey()
 		if err != nil {
 			return cli.Exit(err, meta.LoadError)
@@ -92,7 +90,8 @@ func Upload(c *cli.Context) error {
 
 	// 执行上传
 	fmt.Fprintf(os.Stdout, "开始上传 %d 个文件（并发数：3）\n", len(versions))
-	result := actions.ExecuteUpload(input, callback)
+	client := lib.NewClient(args.BaseDomain, apiKey)
+	result := actions.ExecuteUpload(client, input, callback)
 
 	// 处理结果
 	if !result.Success {
@@ -143,6 +142,8 @@ func displayUploadedModelDetail(apiKey, baseDomain, modelName, modelType string)
 		Sort:       "Recently",
 	}
 
+	client := lib.NewClient(baseDomain, apiKey)
+
 	var targetModel *lib.BizyModelInfo
 	maxRetries := 3
 	retryDelay := time.Second
@@ -154,7 +155,7 @@ func displayUploadedModelDetail(apiKey, baseDomain, modelName, modelType string)
 			time.Sleep(retryDelay)
 		}
 
-		listResult := actions.ListModels(listInput)
+		listResult := actions.ListModels(client, listInput)
 		if listResult.Error != nil {
 			fmt.Fprintf(os.Stderr, "\n获取模型ID失败: %v\n", listResult.Error)
 			return

@@ -2,14 +2,15 @@ package tui
 
 import (
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/siliconflow/bizyair-cli/lib"
 	"github.com/siliconflow/bizyair-cli/lib/actions"
+	"github.com/siliconflow/bizyair-cli/meta"
 )
 
-// 登录校验 + 保存
 func loginCmd(apiKey string) tea.Cmd {
 	return func() tea.Msg {
-		// 调用统一的登录业务逻辑
-		result := actions.ExecuteLogin(apiKey)
+		api := lib.NewClient(meta.AuthDomain, apiKey)
+		result := actions.ExecuteLogin(api, apiKey)
 		if !result.Success {
 			return loginDoneMsg{ok: false, err: result.Error}
 		}

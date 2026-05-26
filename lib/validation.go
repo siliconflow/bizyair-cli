@@ -10,6 +10,14 @@ import (
 	"github.com/siliconflow/bizyair-cli/meta"
 )
 
+func EnsureAbsPath(p string) string {
+	if filepath.IsAbs(p) {
+		return p
+	}
+	wd, _ := os.Getwd()
+	return filepath.Join(wd, p)
+}
+
 // ValidateModelName 校验模型名称格式
 func ValidateModelName(name string) error {
 	if name == "" {

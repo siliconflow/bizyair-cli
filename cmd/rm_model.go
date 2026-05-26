@@ -12,10 +12,7 @@ import (
 )
 
 func RemoveModel(c *cli.Context) error {
-	args, err := globalArgs.Parse(c, meta.CmdRm)
-	if err != nil {
-		return cli.Exit(err, meta.LoadError)
-	}
+	args := parseArgument(c, meta.CmdRm)
 	setLogVerbose(args.Verbose)
 	logs.Debugf("args: %#v\n", args)
 
@@ -24,10 +21,9 @@ func RemoveModel(c *cli.Context) error {
 	}
 
 	// 获取API Key
-	var apiKey string
-	if args.ApiKey != "" {
-		apiKey = args.ApiKey
-	} else {
+	apiKey := args.ApiKey
+	if apiKey == "" {
+		var err error
 		apiKey, err = lib.NewSfFolder().GetKey()
 		if err != nil {
 			return cli.Exit(err, meta.LoadError)
@@ -35,13 +31,14 @@ func RemoveModel(c *cli.Context) error {
 	}
 
 	// 先查找模型以获取ID
+	client := lib.NewClient(args.BaseDomain, apiKey)
 	listInput := actions.ListModelsInput{
 		ApiKey:     apiKey,
 		BaseDomain: args.BaseDomain,
 		ModelType:  args.Type,
 		Keyword:    args.Name,
 	}
-	listResult := actions.ListModels(listInput)
+	listResult := actions.ListModels(client, listInput)
 	if listResult.Error != nil {
 		return cli.Exit(listResult.Error, meta.ServerError)
 	}
@@ -60,7 +57,7 @@ func RemoveModel(c *cli.Context) error {
 	}
 
 	// 调用统一的删除逻辑
-	result := actions.DeleteModel(apiKey, args.BaseDomain, modelId)
+	result := actions.DeleteModel(client, modelId)
 	if !result.Success {
 		return cli.Exit(result.Error, meta.ServerError)
 	}

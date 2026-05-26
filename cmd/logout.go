@@ -11,16 +11,12 @@ import (
 )
 
 func Logout(c *cli.Context) error {
-	args, err := globalArgs.Parse(c, meta.CmdLogout)
-	if err != nil {
-		return cli.Exit(err, meta.LoadError)
-	}
+	args := parseArgument(c, meta.CmdLogout)
 	setLogVerbose(args.Verbose)
 	logs.Debugf("args: %#v\n", args)
 
 	// 调用统一的登出业务逻辑
-	err = actions.ExecuteLogout()
-	if err != nil {
+	if err := actions.ExecuteLogout(); err != nil {
 		return cli.Exit(err, meta.LoadError)
 	}
 
