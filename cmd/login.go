@@ -20,7 +20,7 @@ func Login(c *cli.Context) error {
 		return cli.Exit(fmt.Errorf("api key is required, you can specify \"--api_key\" or environment variable \"%s\" to set", meta.EnvAPIKey), meta.LoadError)
 	}
 
-	client := lib.NewClient(meta.AuthDomain, args.ApiKey)
+	client := lib.NewClient(meta.DefaultDomain, args.ApiKey)
 	result := actions.ExecuteLogin(client, args.ApiKey)
 	if !result.Success {
 		return cli.Exit(result.Error, meta.LoadError)
