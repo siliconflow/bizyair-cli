@@ -54,8 +54,8 @@ func TestVersion_Compare(t *testing.T) {
 	v2_0_0 := &Version{Major: 2, Minor: 0, Patch: 0}
 
 	tests := []struct {
-		name string
-		v    *Version
+		name  string
+		v     *Version
 		other *Version
 		want  int
 	}{

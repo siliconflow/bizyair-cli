@@ -82,7 +82,6 @@ type checkModelExistsDoneMsg struct {
 }
 
 
-
 // errStep 从错误中提取步骤信息
 func errStep(err error) string {
 	return lib.GetStep(err)

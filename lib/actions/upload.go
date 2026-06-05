@@ -256,11 +256,11 @@ func uploadSingleVersion(
 	}
 
 	_, err = lib.UnifiedUpload(lib.UploadOptions{
-		File:         file,
-		Client:       api,
-		ModelType:    modelType,
-		Context:      ctx,
-		FileIndex:    fmt.Sprintf("%d/%d", index+1, total),
+		File:      file,
+		Client:    api,
+		ModelType: modelType,
+		Context:   ctx,
+		FileIndex: fmt.Sprintf("%d/%d", index+1, total),
 		ProgressFunc: func(consumed, fileTotal int64) {
 			if callback != nil {
 				callback.OnProgress(UploadProgress{
