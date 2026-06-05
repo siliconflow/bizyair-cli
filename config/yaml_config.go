@@ -136,14 +136,7 @@ func validateYamlVersion(version YamlVersion, modelName string, versionIndex int
 		}
 	}
 
-	// 验证 base_model（如果指定）
-	// 注意：这里使用本地列表进行初步验证，真正的验证会在上传时使用API列表
-	if version.BaseModel != "" {
-		if err := lib.ValidateBaseModelLegacy(version.BaseModel); err != nil {
-			return fmt.Errorf("%s: base_model 无效: %w (注意：最终验证将在上传时使用API列表)", prefix, err)
-		}
-	}
-
+	// 验证 base_model 将在上传时使用API列表，这里不再使用本地列表进行初步验证
 	return nil
 }
 
