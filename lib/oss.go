@@ -569,5 +569,3 @@ func (a *AliOssStorageClient) completeMultipartUpload(
 
 	return a.ossClient.CompleteMultipartUpload(ctx, request)
 }
-
-

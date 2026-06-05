@@ -67,7 +67,6 @@ type uploadProgMsg struct {
 	verIdx    int
 }
 
-
 type clearFilePickerErrorMsg struct{}
 
 type coverStatusMsg struct {
@@ -80,7 +79,6 @@ type checkModelExistsDoneMsg struct {
 	exists bool
 	err    error
 }
-
 
 // errStep 从错误中提取步骤信息
 func errStep(err error) string {
