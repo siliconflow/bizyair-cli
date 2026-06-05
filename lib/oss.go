@@ -569,15 +569,3 @@ func (a *AliOssStorageClient) completeMultipartUpload(
 
 	return a.ossClient.CompleteMultipartUpload(ctx, request)
 }
-
-// abortMultipartUpload 中止分片上传
-func (a *AliOssStorageClient) abortMultipartUpload(ctx context.Context, objectKey string, uploadID string) error {
-	request := &oss.AbortMultipartUploadRequest{
-		Bucket:   oss.Ptr(a.ossBucketName),
-		Key:      oss.Ptr(objectKey),
-		UploadId: oss.Ptr(uploadID),
-	}
-
-	_, err := a.ossClient.AbortMultipartUpload(ctx, request)
-	return err
-}

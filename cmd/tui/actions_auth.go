@@ -9,7 +9,7 @@ import (
 
 func loginCmd(apiKey string) tea.Cmd {
 	return func() tea.Msg {
-		api := lib.NewClient(meta.AuthDomain, apiKey)
+		api := lib.NewClient(meta.DefaultDomain, apiKey)
 		result := actions.ExecuteLogin(api, apiKey)
 		if !result.Success {
 			return loginDoneMsg{ok: false, err: result.Error}

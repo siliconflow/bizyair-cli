@@ -103,7 +103,7 @@ BizyAir CLI 支持 Linux、macOS 和 Windows 平台。所有平台的二进制�
 
    ```bash
    # 移除隔离属性
-   xattr -d com.apple.quarantine /usr/local/bin/bizyair
+   sudo xattr -d com.apple.quarantine /usr/local/bin/bizyair
    ```
 
    或者在系统设置中允许运行：
@@ -215,7 +215,7 @@ BizyAir CLI 支持一键升级到最新版本：
 bizyair upgrade --check
 
 # 执行升级
-bizyair upgrade
+sudo bizyair upgrade
 ```
 
 ---

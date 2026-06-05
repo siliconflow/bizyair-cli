@@ -28,7 +28,7 @@ func Init() *cli.App {
 	introFlag := cli.StringSliceFlag{Name: "intro", Aliases: []string{"i"}, Usage: "An introduction to the model version.", Destination: &cli.StringSlice{}}
 	introPathFlag := cli.StringSliceFlag{Name: "intro-path", Usage: "Path to .txt or .md file containing the introduction (auto-truncated to 5000 chars). Can be specified multiple times for multiple versions.", Destination: &cli.StringSlice{}}
 	coverUrlsFlag := cli.StringSliceFlag{Name: "cover", Usage: "Urls of model covers, use ';' as separator.", Destination: &cli.StringSlice{}}
-	baseModelFlag := cli.StringSliceFlag{Name: "base", Aliases: []string{"b"}, Usage: fmt.Sprintf("Specify the base model of uploaded model. (Only works for %s)", meta.BaseModelStr), Required: false, Destination: &cli.StringSlice{}}
+	baseModelFlag := cli.StringSliceFlag{Name: "base", Aliases: []string{"b"}, Usage: fmt.Sprintf("Specify the base model of uploaded model. (works for %s etc)", meta.BaseModelStr), Required: false, Destination: &cli.StringSlice{}}
 	fileFlag := cli.StringFlag{Name: "file", Aliases: []string{"f"}, Usage: "从 YAML 配置文件批量上传", Destination: &globalArgs.FilePath}
 
 	app := cli.NewApp()

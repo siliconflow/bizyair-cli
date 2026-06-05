@@ -85,12 +85,24 @@ func Upload(c *cli.Context) error {
 		Overwrite:  args.Overwrite,
 	}
 
+	client := lib.NewClient(args.BaseDomain, apiKey)
+	resp, err := client.GetBaseModelTypes()
+	if err != nil {
+		return cli.Exit(fmt.Errorf("获取基础模型列表失败: %w", err), meta.ServerError)
+	}
+
+	if resp.Data != nil {
+		for _, item := range resp.Data {
+			input.AllowedBaseModels = append(input.AllowedBaseModels, item.Value)
+		}
+	}
+
 	// 创建CLI回调
 	callback := &cliUploadCallback{}
 
 	// 执行上传
 	fmt.Fprintf(os.Stdout, "开始上传 %d 个文件（并发数：3）\n", len(versions))
-	client := lib.NewClient(args.BaseDomain, apiKey)
+
 	result := actions.ExecuteUpload(client, input, callback)
 
 	// 处理结果

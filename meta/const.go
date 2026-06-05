@@ -21,7 +21,6 @@ const (
 
 const (
 	DefaultDomain = "https://api.bizyair.cn"
-	AuthDomain    = "https://api.siliconflow.cn"
 	StorageDomain = "https://storage.bizyair.cn"
 )
 
@@ -71,7 +70,7 @@ var ModelTypes = []UploadFileType{
 }
 
 var ModelTypesStr = func(arr []UploadFileType) string {
-	strs := lo.Map[UploadFileType, string](arr, func(v UploadFileType, _ int) string {
+	strs := lo.Map(arr, func(v UploadFileType, _ int) string {
 		return string(v)
 	})
 	return "'" + strings.Join(strs, "','") + "'"
@@ -106,15 +105,32 @@ var IgnoreUploadDirs = []string{
 
 var SupportedBaseModels = map[string]bool{
 	"Flux.1 D":       true,
+	"Flux.2 D":       true,
 	"Flux.1 Kontext": true,
+	"Flux.1 S":       true,
 	"SDXL":           true,
 	"SD 1.5":         true,
 	"SD 3.5":         true,
 	"Pony":           true,
+	"Illustrious":    true,
+	"NoobAI":         true,
 	"Kolors":         true,
 	"Hunyuan 1":      true,
-	"WAN Video":      true,
+	"Hunyuan Video":  true,
+	"Wan Video":      true,
 	"Qwen-Image":     true,
+	"Qwen-Edit":      true,
+	"Z-image":        true,
+	"Ovis":           true,
+	"Nano Banana":    true,
+	"Seedream 4.0":   true,
+	"Seedream 4.5":   true,
+	"Seedance":       true,
+	"Sora":           true,
+	"Veo":            true,
+	"Kling":          true,
+	"Hailuo":         true,
+	"GPT-Image":      true,
 	"Other":          true,
 }
 
