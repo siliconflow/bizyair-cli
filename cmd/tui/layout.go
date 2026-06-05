@@ -98,7 +98,9 @@ func (m *mainModel) renderFrame(inner string) string {
 		}
 
 		if w >= 2 {
-			b.WriteString(s.Render("│") + middle + s.Render("│"))
+			b.WriteString(s.Render("│"))
+			b.WriteString(middle)
+			b.WriteString(s.Render("│"))
 		} else {
 			b.WriteString(s.Render("│"))
 		}

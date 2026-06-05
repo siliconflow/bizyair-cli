@@ -254,7 +254,7 @@ func getCommonPrefix(strs []string) string {
 // buildCompletionSuggestion 构建补全建议
 // 如果只有一个匹配项，返回完整路径
 // 如果多个匹配项，返回到公共前缀的路径
-func buildCompletionSuggestion(inputPath string, matches []string) string {
+func buildCompletionSuggestion(matches []string) string {
 	if len(matches) == 0 {
 		return ""
 	}

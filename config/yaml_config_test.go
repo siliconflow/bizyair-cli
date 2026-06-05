@@ -232,9 +232,9 @@ func TestNormalizeModelPaths(t *testing.T) {
 
 func TestYamlVersion_GetCoverInput(t *testing.T) {
 	tests := []struct {
-		name  string
-		v     YamlVersion
-		want  string
+		name string
+		v    YamlVersion
+		want string
 	}{
 		{"cover_path takes priority", YamlVersion{CoverPath: "/local.jpg", CoverUrl: "http://x.jpg"}, "/local.jpg"},
 		{"cover_url fallback", YamlVersion{CoverUrl: "http://x.jpg"}, "http://x.jpg"},

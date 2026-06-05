@@ -458,9 +458,11 @@ func (m Model) View() string {
 				selected += " → " + symlinkPath
 			}
 			if disabled {
-				s.WriteString(m.Styles.DisabledSelected.Render(m.Cursor) + m.Styles.DisabledSelected.Render(selected))
+				s.WriteString(m.Styles.DisabledSelected.Render(m.Cursor))
+				s.WriteString(m.Styles.DisabledSelected.Render(selected))
 			} else {
-				s.WriteString(m.Styles.Cursor.Render(m.Cursor) + m.Styles.Selected.Render(selected))
+				s.WriteString(m.Styles.Cursor.Render(m.Cursor))
+				s.WriteString(m.Styles.Selected.Render(selected))
 			}
 			s.WriteRune('\n')
 			continue
@@ -481,12 +483,14 @@ func (m Model) View() string {
 			fileName += " → " + symlinkPath
 		}
 		if m.ShowPermissions {
-			s.WriteString(" " + m.Styles.Permission.Render(info.Mode().String()))
+			s.WriteString(" ")
+			s.WriteString(m.Styles.Permission.Render(info.Mode().String()))
 		}
 		if m.ShowSize {
 			s.WriteString(m.Styles.FileSize.Render(size))
 		}
-		s.WriteString(" " + fileName)
+		s.WriteString(" ")
+		s.WriteString(fileName)
 		s.WriteRune('\n')
 	}
 
