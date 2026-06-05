@@ -32,7 +32,7 @@ func ValidateModelType(modelType string) error {
 		return fmt.Errorf("模型类型不能为空")
 	}
 	mt := meta.UploadFileType(modelType)
-	if !lo.Contains[meta.UploadFileType](meta.ModelTypes, mt) {
+	if !lo.Contains(meta.ModelTypes, mt) {
 		return fmt.Errorf("不支持的模型类型 [%s]，仅支持 %s", modelType, meta.ModelTypesStr)
 	}
 	return nil
