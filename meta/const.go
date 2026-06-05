@@ -70,7 +70,7 @@ var ModelTypes = []UploadFileType{
 }
 
 var ModelTypesStr = func(arr []UploadFileType) string {
-	strs := lo.Map[UploadFileType, string](arr, func(v UploadFileType, _ int) string {
+	strs := lo.Map(arr, func(v UploadFileType, _ int) string {
 		return string(v)
 	})
 	return "'" + strings.Join(strs, "','") + "'"
