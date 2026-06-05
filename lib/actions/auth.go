@@ -2,12 +2,11 @@ package actions
 
 import (
 	"github.com/siliconflow/bizyair-cli/lib"
-	"github.com/siliconflow/bizyair-cli/meta"
 )
 
 // ExecuteLogin 执行登录操作
 // 验证API Key并保存到本地
-func ExecuteLogin(apiKey string) LoginResult {
+func ExecuteLogin(api lib.BizyAPI, apiKey string) LoginResult {
 	if apiKey == "" {
 		return LoginResult{
 			Success: false,
@@ -15,9 +14,7 @@ func ExecuteLogin(apiKey string) LoginResult {
 		}
 	}
 
-	// 1. 验证API Key
-	client := lib.NewClient(meta.AuthDomain, apiKey)
-	_, err := client.UserInfo()
+	_, err := api.UserInfo()
 	if err != nil {
 		return LoginResult{
 			Success: false,
@@ -25,7 +22,6 @@ func ExecuteLogin(apiKey string) LoginResult {
 		}
 	}
 
-	// 2. 保存API Key到本地
 	err = lib.NewSfFolder().SaveKey(apiKey)
 	if err != nil {
 		return LoginResult{

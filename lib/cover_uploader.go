@@ -10,7 +10,7 @@ import (
 // UploadCover 统一封面上传逻辑（支持 URL 和本地文件）
 // 返回上传后的 OSS URL
 // statusCallback: 可选的状态回调函数，用于通知封面处理状态
-func UploadCover(client *Client, coverInput string, ctx context.Context, statusCallback func(status, message string)) (string, error) {
+func UploadCover(client BizyAPI, coverInput string, ctx context.Context, statusCallback func(status, message string)) (string, error) {
 	if coverInput == "" {
 		return "", nil
 	}

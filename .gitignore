@@ -39,3 +39,4 @@ __debug*
 dist/
 *.backup
 *.sha256
+.omo/

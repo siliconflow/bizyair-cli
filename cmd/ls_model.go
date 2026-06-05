@@ -11,10 +11,7 @@ import (
 )
 
 func ListModel(c *cli.Context) error {
-	args, err := globalArgs.Parse(c, meta.CmdLs)
-	if err != nil {
-		return cli.Exit(err, meta.LoadError)
-	}
+	args := parseArgument(c, meta.CmdLs)
 	setLogVerbose(args.Verbose)
 	logs.Debugf("args: %#v\n", args)
 

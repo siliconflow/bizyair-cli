@@ -127,4 +127,7 @@ generate_manifest:
 	@echo "生成 manifest.json..."
 	@python3 tools/generate_manifest.py
 
-.PHONY: deps clean build install build_windows build_linux build_mac build_mac_arm64 build_linux_arm64 build_all build_release generate_manifest package_windows package_linux package_mac
+test:
+	go test ./... -v -count=1
+
+.PHONY: deps clean build install test build_windows build_linux build_mac build_mac_arm64 build_linux_arm64 build_all build_release generate_manifest package_windows package_linux package_mac

@@ -13,7 +13,7 @@ import (
 // UploadOptions 上传选项
 type UploadOptions struct {
 	File         *FileToUpload    // 要上传的文件
-	Client       *Client          // API 客户端
+	Client       BizyAPI          // API 客户端
 	ModelType    string           // 模型类型
 	Context      context.Context  // 上下文（用于取消）
 	ProgressFunc ProgressCallback // 进度回调函数

@@ -9,13 +9,9 @@ import (
 	"sync"
 
 	"github.com/siliconflow/bizyair-cli/lib"
-	"github.com/siliconflow/bizyair-cli/meta"
 )
 
-// ExecuteUpload 执行上传操作
-// 这是统一的业务编排逻辑，CLI和TUI都调用这个函数
-func ExecuteUpload(input UploadInput, callback UploadCallback) UploadResult {
-	// 使用传入的context，如果没有则使用Background
+func ExecuteUpload(api lib.BizyAPI, input UploadInput, callback UploadCallback) UploadResult {
 	ctx := input.Context
 	if ctx == nil {
 		ctx = context.Background()
@@ -28,7 +24,6 @@ func ExecuteUpload(input UploadInput, callback UploadCallback) UploadResult {
 		}
 	}
 
-	// 1. 参数验证
 	if err := validateUploadInput(input); err != nil {
 		return UploadResult{
 			Success: false,
@@ -36,17 +31,8 @@ func ExecuteUpload(input UploadInput, callback UploadCallback) UploadResult {
 		}
 	}
 
-	// 2. 设置默认值
-	if input.BaseDomain == "" {
-		input.BaseDomain = meta.DefaultDomain
-	}
-
-	// 3. 创建客户端
-	client := lib.NewClient(input.BaseDomain, input.ApiKey)
-
-	// 4. 检查模型是否存在
 	if !input.Overwrite {
-		exists, err := client.CheckModelExists(input.ModelName, input.ModelType)
+		exists, err := api.CheckModelExists(input.ModelName, input.ModelType)
 		if err != nil {
 			return UploadResult{
 				Success: false,
@@ -64,29 +50,23 @@ func ExecuteUpload(input UploadInput, callback UploadCallback) UploadResult {
 		}
 	}
 
-	// 5. 并发上传所有版本
-	return uploadVersionsConcurrently(ctx, client, input, callback)
+	return uploadVersionsConcurrently(ctx, api, input, callback)
 }
 
-// validateUploadInput 验证上传参数
 func validateUploadInput(input UploadInput) error {
-	// 验证模型类型
 	if err := lib.ValidateModelType(input.ModelType); err != nil {
 		return lib.WithStep("参数验证", fmt.Errorf("模型类型无效: %w", err))
 	}
 
-	// 验证模型名称
 	if err := lib.ValidateModelName(input.ModelName); err != nil {
 		return lib.WithStep("参数验证", fmt.Errorf("模型名称无效: %w", err))
 	}
 
-	// 验证版本信息
 	if len(input.Versions) == 0 {
 		return lib.WithStep("参数验证", lib.NewValidationError("至少需要一个版本"))
 	}
 
 	for i, ver := range input.Versions {
-		// 验证路径
 		if ver.Path == "" {
 			return lib.WithStep("参数验证", lib.NewValidationError(fmt.Sprintf("版本 %d: 路径不能为空", i+1)))
 		}
@@ -100,19 +80,16 @@ func validateUploadInput(input UploadInput) error {
 			return lib.WithStep("参数验证", lib.NewValidationError(fmt.Sprintf("版本 %d: 不支持目录上传，仅支持文件", i+1)))
 		}
 
-		// 验证封面
 		if ver.CoverUrl == "" {
 			return lib.WithStep("参数验证", lib.NewValidationError(fmt.Sprintf("版本 %d: 封面是必填项", i+1)))
 		}
 
-		// 验证基础模型
 		if ver.BaseModel != "" {
 			if err := lib.ValidateBaseModel(ver.BaseModel); err != nil {
 				return lib.WithStep("参数验证", fmt.Errorf("版本 %d: 基础模型无效: %w", i+1, err))
 			}
 		}
 
-		// 验证版本号
 		if ver.Version == "" {
 			return lib.WithStep("参数验证", lib.NewValidationError(fmt.Sprintf("版本 %d: 版本号不能为空", i+1)))
 		}
@@ -121,10 +98,9 @@ func validateUploadInput(input UploadInput) error {
 	return nil
 }
 
-// uploadVersionsConcurrently 并发上传多个版本
 func uploadVersionsConcurrently(
 	ctx context.Context,
-	client *lib.Client,
+	api lib.BizyAPI,
 	input UploadInput,
 	callback UploadCallback,
 ) UploadResult {
@@ -132,7 +108,7 @@ func uploadVersionsConcurrently(
 	versionList := make([]*lib.ModelVersion, total)
 
 	var wg sync.WaitGroup
-	sem := make(chan struct{}, 3) // 最多3个并发
+	semaphore := make(chan struct{}, 3)
 	var mu sync.Mutex
 	var uploadErrors []error
 	var canceled bool
@@ -145,18 +121,15 @@ func uploadVersionsConcurrently(
 		go func() {
 			defer wg.Done()
 
-			// 获取信号量
-			sem <- struct{}{}
-			defer func() { <-sem }()
+			semaphore <- struct{}{}
+			defer func() { <-semaphore }()
 
-			// 通知开始上传
 			if callback != nil {
 				callback.OnVersionStart(idx, total, filepath.Base(version.Path))
 			}
 
-			// 上传单个版本
 			result := uploadSingleVersion(
-				ctx, client, input.ModelType, version, idx, total, callback,
+				ctx, api, input.ModelType, version, idx, total, callback,
 			)
 
 			if result.Canceled {
@@ -177,7 +150,6 @@ func uploadVersionsConcurrently(
 				return
 			}
 
-			// 保存结果
 			mu.Lock()
 			versionList[idx] = result.ModelVersion
 			mu.Unlock()
@@ -190,7 +162,6 @@ func uploadVersionsConcurrently(
 
 	wg.Wait()
 
-	// 处理取消
 	if canceled {
 		return UploadResult{
 			Success:        false,
@@ -199,7 +170,6 @@ func uploadVersionsConcurrently(
 		}
 	}
 
-	// 过滤成功的版本
 	successVersions := make([]*lib.ModelVersion, 0, total)
 	for _, mv := range versionList {
 		if mv != nil {
@@ -207,7 +177,6 @@ func uploadVersionsConcurrently(
 		}
 	}
 
-	// 如果全部失败
 	if len(successVersions) == 0 {
 		return UploadResult{
 			Success:      false,
@@ -217,8 +186,7 @@ func uploadVersionsConcurrently(
 		}
 	}
 
-	// 提交模型
-	_, err := client.CommitModelV2(input.ModelName, input.ModelType, successVersions)
+	_, err := api.CommitModelV2(input.ModelName, input.ModelType, successVersions)
 	if err != nil {
 		return UploadResult{
 			Success: false,
@@ -236,24 +204,21 @@ func uploadVersionsConcurrently(
 	}
 }
 
-// singleVersionResult 单个版本上传的结果
 type singleVersionResult struct {
 	ModelVersion *lib.ModelVersion
 	Error        error
 	Canceled     bool
 }
 
-// uploadSingleVersion 上传单个版本
 func uploadSingleVersion(
 	ctx context.Context,
-	client *lib.Client,
+	api lib.BizyAPI,
 	modelType string,
 	version VersionInput,
 	index int,
 	total int,
 	callback UploadCallback,
 ) singleVersionResult {
-	// 1. 上传封面
 	var coverStatusCallback func(status, message string)
 	if callback != nil {
 		coverStatusCallback = func(status, message string) {
@@ -261,7 +226,7 @@ func uploadSingleVersion(
 		}
 	}
 
-	coverUrl, err := lib.UploadCover(client, version.CoverUrl, ctx, coverStatusCallback)
+	coverUrl, err := lib.UploadCover(api, version.CoverUrl, ctx, coverStatusCallback)
 	if err != nil {
 		if errors.Is(err, context.Canceled) {
 			return singleVersionResult{Canceled: true}
@@ -271,7 +236,6 @@ func uploadSingleVersion(
 		}
 	}
 
-	// 2. 准备文件信息
 	stat, err := os.Stat(version.Path)
 	if err != nil {
 		return singleVersionResult{
@@ -290,13 +254,12 @@ func uploadSingleVersion(
 		Size:    stat.Size(),
 	}
 
-	// 3. 上传文件（带进度回调）
 	_, err = lib.UnifiedUpload(lib.UploadOptions{
-		File:      file,
-		Client:    client,
-		ModelType: modelType,
-		Context:   ctx,
-		FileIndex: fmt.Sprintf("%d/%d", index+1, total),
+		File:         file,
+		Client:       api,
+		ModelType:    modelType,
+		Context:      ctx,
+		FileIndex:    fmt.Sprintf("%d/%d", index+1, total),
 		ProgressFunc: func(consumed, fileTotal int64) {
 			if callback != nil {
 				callback.OnProgress(UploadProgress{
@@ -319,7 +282,6 @@ func uploadSingleVersion(
 		}
 	}
 
-	// 4. 构建版本信息
 	var coverUrls []string
 	if coverUrl != "" {
 		coverUrls = []string{coverUrl}

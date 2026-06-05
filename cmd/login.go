@@ -5,16 +5,14 @@ import (
 	"os"
 
 	"github.com/cloudwego/hertz/cmd/hz/util/logs"
+	"github.com/siliconflow/bizyair-cli/lib"
 	"github.com/siliconflow/bizyair-cli/lib/actions"
 	"github.com/siliconflow/bizyair-cli/meta"
 	"github.com/urfave/cli/v2"
 )
 
 func Login(c *cli.Context) error {
-	args, err := globalArgs.Parse(c, meta.CmdLogin)
-	if err != nil {
-		return cli.Exit(err, meta.LoadError)
-	}
+	args := parseArgument(c, meta.CmdLogin)
 	setLogVerbose(args.Verbose)
 	logs.Debugf("args: %#v\n", args)
 
@@ -22,8 +20,8 @@ func Login(c *cli.Context) error {
 		return cli.Exit(fmt.Errorf("api key is required, you can specify \"--api_key\" or environment variable \"%s\" to set", meta.EnvAPIKey), meta.LoadError)
 	}
 
-	// 调用统一的登录业务逻辑
-	result := actions.ExecuteLogin(args.ApiKey)
+	client := lib.NewClient(meta.AuthDomain, args.ApiKey)
+	result := actions.ExecuteLogin(client, args.ApiKey)
 	if !result.Success {
 		return cli.Exit(result.Error, meta.LoadError)
 	}

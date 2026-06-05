@@ -83,7 +83,8 @@ func runUploadActionMulti(u uploadInputs, versions []versionItem) tea.Cmd {
 			ch <- uploadStartMsg{ch: ch, cancel: cancel}
 
 			// 执行上传
-			result := actions.ExecuteUpload(input, callback)
+			api := lib.NewClient(meta.DefaultDomain, apiKey)
+			result := actions.ExecuteUpload(api, input, callback)
 
 			// 处理结果
 			if !result.Success {
