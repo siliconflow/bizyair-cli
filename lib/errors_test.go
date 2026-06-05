@@ -7,10 +7,10 @@ import (
 
 func TestStepError_Error(t *testing.T) {
 	tests := []struct {
-		name  string
-		step  string
-		err   error
-		want  string
+		name string
+		step string
+		err  error
+		want string
 	}{
 		{"with step", "上传", errors.New("network error"), "[上传] network error"},
 		{"empty step", "", errors.New("network error"), "network error"},

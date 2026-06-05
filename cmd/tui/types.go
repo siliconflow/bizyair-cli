@@ -67,7 +67,6 @@ type uploadProgMsg struct {
 	verIdx    int
 }
 
-type uploadCancelMsg struct{}
 type clearFilePickerErrorMsg struct{}
 
 type coverStatusMsg struct {
@@ -79,11 +78,6 @@ type coverStatusMsg struct {
 type checkModelExistsDoneMsg struct {
 	exists bool
 	err    error
-}
-
-// withStep 使用 lib 层的错误处理
-func withStep(step string, err error) error {
-	return lib.WithStep(step, err)
 }
 
 // errStep 从错误中提取步骤信息

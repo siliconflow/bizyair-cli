@@ -40,7 +40,7 @@ func (m *mainModel) updatePathCompletion(typedPath string) tea.Cmd {
 
 	// 更新补全建议
 	if len(matches) > 0 {
-		m.act.pathCompletionSuggestion = buildCompletionSuggestion(typedPath, matches)
+		m.act.pathCompletionSuggestion = buildCompletionSuggestion(matches)
 		m.act.pathMatchCount = len(matches)
 
 		// 更新 filepicker 过滤（提取最后的文件名部分）
@@ -228,9 +228,11 @@ func (m *mainModel) renderUploadRunningView() string {
 				if m.coverStatusWarning {
 					// 警告样式（黄色）
 					warningStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("226"))
-					progressSection.WriteString(warningStyle.Render(m.coverStatus) + "\n")
+					progressSection.WriteString(warningStyle.Render(m.coverStatus))
+					progressSection.WriteString("\n")
 				} else {
-					progressSection.WriteString(m.coverStatus + "\n")
+					progressSection.WriteString(m.coverStatus)
+					progressSection.WriteString("\n")
 				}
 			} else {
 				progressSection.WriteString("准备上传…\n")
@@ -295,9 +297,12 @@ func (m *mainModel) renderUploadRunningView() string {
 			progLine = m.progress.View()
 			speedLine = ""
 		}
-		progressSection.WriteString(fileLine + "\n" + progLine)
+		progressSection.WriteString(fileLine)
+		progressSection.WriteString("\n")
+		progressSection.WriteString(progLine)
 		if speedLine != "" {
-			progressSection.WriteString("\n" + speedLine)
+			progressSection.WriteString("\n")
+			progressSection.WriteString(speedLine)
 		}
 	}
 
@@ -485,7 +490,8 @@ func (m *mainModel) updateUploadInputs(msg tea.Msg) tea.Cmd {
 		}
 
 		// 根据上传方式分别处理
-		if m.act.coverUploadMethod == "url" {
+		switch m.act.coverUploadMethod {
+		case "url":
 			// URL 上传模式
 			var urlCmd tea.Cmd
 			if km, ok := msg.(tea.KeyMsg); ok {
@@ -526,7 +532,7 @@ func (m *mainModel) updateUploadInputs(msg tea.Msg) tea.Cmd {
 			}
 			m.inpCover, urlCmd = m.inpCover.Update(msg)
 			return urlCmd
-		} else if m.act.coverUploadMethod == "local" {
+		case "local":
 			// 本地文件上传模式
 			var pathCmd, fpCmd tea.Cmd
 			if km, ok := msg.(tea.KeyMsg); ok {
@@ -689,9 +695,10 @@ func (m *mainModel) updateUploadInputs(msg tea.Msg) tea.Cmd {
 				}
 			case "esc":
 				m.upStep = stepCover
-				if m.act.coverUploadMethod == "url" {
+				switch m.act.coverUploadMethod {
+				case "url":
 					return m.inpCover.Focus()
-				} else if m.act.coverUploadMethod == "local" {
+				case "local":
 					// 恢复封面文件选择的配置
 					m.coverPathInputFocused = true
 					m.act.useFilePicker = true
@@ -1160,16 +1167,19 @@ func (m *mainModel) renderUploadStepsView() string {
 	case stepCover:
 		var content strings.Builder
 
-		if m.act.coverUploadMethod == "url" {
+		switch m.act.coverUploadMethod {
+		case "url":
 			content.WriteString(m.titleStyle.Render("上传 · Step 6/9 · 输入封面URL"))
 			content.WriteString("\n\n")
 			content.WriteString("封面 URL（必填，仅 1 个图片或视频链接）：\n")
-			content.WriteString(m.inpCover.View() + "\n\n")
+			content.WriteString(m.inpCover.View())
+			content.WriteString("\n\n")
 			if m.act.filePickerErr != nil {
-				content.WriteString(m.filepicker.Styles.DisabledFile.Render(m.act.filePickerErr.Error()) + "\n\n")
+				content.WriteString(m.filepicker.Styles.DisabledFile.Render(m.act.filePickerErr.Error()))
+				content.WriteString("\n\n")
 			}
 			content.WriteString(m.hintStyle.Render("输入封面 URL（图片或视频，视频限 100MB），回车确认并进入下一步；Esc 返回选择上传方式"))
-		} else if m.act.coverUploadMethod == "local" {
+		case "local":
 			content.WriteString(m.titleStyle.Render("上传 · Step 6/9 · 选择本地封面文件"))
 			content.WriteString("\n\n")
 			pathLabel := "本地文件路径输入："
@@ -1178,7 +1188,8 @@ func (m *mainModel) renderUploadStepsView() string {
 			} else {
 				pathLabel = m.hintStyle.Render(pathLabel)
 			}
-			content.WriteString(pathLabel + "\n")
+			content.WriteString(pathLabel)
+			content.WriteString("\n")
 			if m.coverPathInputFocused {
 				content.WriteString(m.renderPathInputWithCompletion())
 				content.WriteString("\n") // 添加额外换行
@@ -1193,11 +1204,14 @@ func (m *mainModel) renderUploadStepsView() string {
 			} else {
 				pickerLabel = m.hintStyle.Render(pickerLabel)
 			}
-			content.WriteString(pickerLabel + "\n")
+			content.WriteString(pickerLabel)
+			content.WriteString("\n")
 			if m.act.filePickerErr != nil {
-				content.WriteString(m.filepicker.Styles.DisabledFile.Render(m.act.filePickerErr.Error()) + "\n")
+				content.WriteString(m.filepicker.Styles.DisabledFile.Render(m.act.filePickerErr.Error()))
+				content.WriteString("\n")
 			}
-			content.WriteString(m.filepicker.View() + "\n")
+			content.WriteString(m.filepicker.View())
+			content.WriteString("\n")
 
 			if m.coverPathInputFocused {
 				content.WriteString(m.hintStyle.Render("输入本地文件路径（视频限 100MB），Enter 确认；Ctrl+P 切换焦点；Esc 返回选择上传方式"))
@@ -1227,7 +1241,8 @@ func (m *mainModel) renderUploadStepsView() string {
 			} else {
 				pathLabel = m.hintStyle.Render(pathLabel)
 			}
-			content.WriteString(pathLabel + "\n")
+			content.WriteString(pathLabel)
+			content.WriteString("\n")
 			if m.act.introPathInputFocused {
 				content.WriteString(m.renderPathInputWithCompletion())
 				content.WriteString("\n") // 添加额外换行
@@ -1242,11 +1257,14 @@ func (m *mainModel) renderUploadStepsView() string {
 			} else {
 				pickerLabel = m.hintStyle.Render(pickerLabel)
 			}
-			content.WriteString(pickerLabel + "\n")
+			content.WriteString(pickerLabel)
+			content.WriteString("\n")
 			if m.act.filePickerErr != nil {
-				content.WriteString(m.filepicker.Styles.DisabledFile.Render(m.act.filePickerErr.Error()) + "\n")
+				content.WriteString(m.filepicker.Styles.DisabledFile.Render(m.act.filePickerErr.Error()))
+				content.WriteString("\n")
 			}
-			content.WriteString(m.filepicker.View() + "\n")
+			content.WriteString(m.filepicker.View())
+			content.WriteString("\n")
 
 			if m.act.introPathInputFocused {
 				content.WriteString(m.hintStyle.Render("输入 .txt 或 .md 文件路径，Enter 确认；Ctrl+P 切换焦点；Esc 返回选择输入方式"))
@@ -1262,14 +1280,16 @@ func (m *mainModel) renderUploadStepsView() string {
 		}
 	case stepPath:
 		var content strings.Builder
-		content.WriteString(m.titleStyle.Render("上传 · Step 9/11 · 选择文件") + "\n\n")
+		content.WriteString(m.titleStyle.Render("上传 · Step 9/11 · 选择文件"))
+		content.WriteString("\n\n")
 		pathInputLabel := "路径输入："
 		if m.act.pathInputFocused {
 			pathInputLabel = m.titleStyle.Render("► 路径输入：（当前焦点，按Ctrl+P切换至文件选择器）")
 		} else {
 			pathInputLabel = m.hintStyle.Render("路径输入：")
 		}
-		content.WriteString(pathInputLabel + "\n")
+		content.WriteString(pathInputLabel)
+		content.WriteString("\n")
 		if m.act.pathInputFocused {
 			content.WriteString(m.renderPathInputWithCompletion())
 			content.WriteString("\n") // 添加额外换行
@@ -1284,15 +1304,19 @@ func (m *mainModel) renderUploadStepsView() string {
 		} else {
 			filePickerLabel = m.hintStyle.Render("文件选择器：")
 		}
-		content.WriteString(filePickerLabel + "\n")
+		content.WriteString(filePickerLabel)
+		content.WriteString("\n")
 		if m.act.filePickerErr != nil {
 			content.WriteString(m.filepicker.Styles.DisabledFile.Render(m.act.filePickerErr.Error()))
 		} else if m.selectedFile == "" {
 			content.WriteString("选择一个文件:")
 		} else {
-			content.WriteString("已选择文件: " + m.filepicker.Styles.Selected.Render(m.selectedFile))
+			content.WriteString("已选择文件: ")
+			content.WriteString(m.filepicker.Styles.Selected.Render(m.selectedFile))
 		}
-		content.WriteString("\n" + m.filepicker.View() + "\n")
+		content.WriteString("\n")
+		content.WriteString(m.filepicker.View())
+		content.WriteString("\n")
 		if m.act.pathInputFocused {
 			content.WriteString(m.hintStyle.Render("输入有效目录将自动同步下方文件列表；Enter确认文件或切换目录；Ctrl+P切换焦点；Esc返回"))
 		} else {
@@ -1310,7 +1334,8 @@ func (m *mainModel) renderUploadStepsView() string {
 		return m.titleStyle.Render("上传 · Step 10/11 · 是否公开此版本？") + "\n\n" + m.publicList.View() + "\n" + m.hintStyle.Render("Enter 确认选择，Esc 返回上一页")
 	case stepAskMore:
 		var b strings.Builder
-		b.WriteString(m.titleStyle.Render("上传 · Step 11/11 · 是否继续添加版本？") + "\n\n")
+		b.WriteString(m.titleStyle.Render("上传 · Step 11/11 · 是否继续添加版本？"))
+		b.WriteString("\n\n")
 		if len(m.act.versions) > 0 {
 			b.WriteString("已添加版本：\n")
 			for i, v := range m.act.versions {
@@ -1331,7 +1356,8 @@ func (m *mainModel) renderUploadStepsView() string {
 		return b.String() + "\n" + m.moreList.View() + "\n" + m.hintStyle.Render("Enter 确认选择，Esc 返回上一页")
 	case stepConfirm:
 		var b strings.Builder
-		b.WriteString(m.titleStyle.Render("上传 · 确认所有版本") + "\n\n")
+		b.WriteString(m.titleStyle.Render("上传 · 确认所有版本"))
+		b.WriteString("\n\n")
 		b.WriteString(fmt.Sprintf("模型名称：%s\n类型：%s\n\n", m.act.u.name, m.act.u.typ))
 		for i, v := range m.act.versions {
 			b.WriteString(fmt.Sprintf("[%d] 版本=%s  base=%s\n", i+1, dash(v.version), dash(v.base)))

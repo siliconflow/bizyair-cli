@@ -122,7 +122,7 @@ var BaseModelStr = parseMapKey(SupportedBaseModels)
 
 func parseMapKey[T any](myMap map[string]T) string {
 	strs := make([]string, 0)
-	for k, _ := range myMap {
+	for k := range myMap {
 		strs = append(strs, k)
 	}
 	return "'" + strings.Join(strs, "','") + "'"
