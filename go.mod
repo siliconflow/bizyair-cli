@@ -10,8 +10,11 @@ require (
 	github.com/cloudwego/hertz/cmd/hz v0.9.0
 	github.com/dustin/go-humanize v1.0.1
 	github.com/nickalie/go-webpbin v0.0.0-20220110095747-f10016bf2dc1
+	github.com/nicksnyder/go-i18n/v2 v2.6.1
 	github.com/samber/lo v1.46.0
 	github.com/urfave/cli/v2 v2.27.2
+	go.yaml.in/yaml/v3 v3.0.4
+	golang.org/x/text v0.32.0
 	gopkg.in/yaml.v3 v3.0.1
 )
 
@@ -47,6 +50,5 @@ require (
 	github.com/xo/terminfo v0.0.0-20220910002029-abceb7e1c41e // indirect
 	github.com/xrash/smetrics v0.0.0-20240312152122-5f08fbb34913 // indirect
 	golang.org/x/sys v0.36.0 // indirect
-	golang.org/x/text v0.24.0 // indirect
 	golang.org/x/time v0.5.0 // indirect
 )

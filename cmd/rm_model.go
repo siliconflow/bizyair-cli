@@ -5,6 +5,7 @@ import (
 	"os"
 
 	"github.com/cloudwego/hertz/cmd/hz/util/logs"
+	"github.com/siliconflow/bizyair-cli/internal/i18n"
 	"github.com/siliconflow/bizyair-cli/lib"
 	"github.com/siliconflow/bizyair-cli/lib/actions"
 	"github.com/siliconflow/bizyair-cli/meta"
@@ -53,7 +54,7 @@ func RemoveModel(c *cli.Context) error {
 	}
 
 	if modelId == 0 {
-		return cli.Exit(fmt.Errorf("model '%s' not found", args.Name), meta.LoadError)
+		return cli.Exit(i18n.NewError("error.model.not_found_named", map[string]any{"Name": args.Name}, nil), meta.LoadError)
 	}
 
 	// 调用统一的删除逻辑
@@ -62,6 +63,6 @@ func RemoveModel(c *cli.Context) error {
 		return cli.Exit(result.Error, meta.ServerError)
 	}
 
-	fmt.Fprintln(os.Stdout, "Model removed successfully.")
+	fmt.Fprintln(os.Stdout, i18n.T("cli.model.remove_success"))
 	return nil
 }

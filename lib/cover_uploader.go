@@ -2,9 +2,10 @@ package lib
 
 import (
 	"context"
-	"fmt"
 	"path/filepath"
 	"strings"
+
+	"github.com/siliconflow/bizyair-cli/internal/i18n"
 )
 
 // UploadCover 统一封面上传逻辑（支持 URL 和本地文件）
@@ -32,7 +33,7 @@ func UploadCover(client BizyAPI, coverInput string, ctx context.Context, statusC
 	if IsHTTPURL(coverInput) {
 		p, cfn, err := DownloadToTemp(coverInput)
 		if err != nil {
-			return "", WithStep("封面下载", fmt.Errorf("下载失败: %s, %v", coverInput, err))
+			return "", WithStep(i18n.T("step.cover_download"), i18n.NewError("error.cover.download_failed", map[string]any{"Input": coverInput}, err))
 		}
 		localPath = p
 		cleanup = cfn
@@ -41,12 +42,12 @@ func UploadCover(client BizyAPI, coverInput string, ctx context.Context, statusC
 
 	// 2. 校验封面文件格式和大小（视频限 100MB）
 	if err := ValidateCoverFile(localPath); err != nil {
-		return "", WithStep("封面校验", err)
+		return "", WithStep(i18n.T("step.cover_validation"), err)
 	}
 
 	// 2.5. 如果是图片，转换为WebP格式
 	if statusCallback != nil {
-		statusCallback("converting", "封面转换中...")
+		statusCallback("converting", i18n.T("cover.status.converting"))
 	}
 
 	webpPath, webpCleanup, err := ConvertImageToWebP(localPath)
@@ -56,14 +57,14 @@ func UploadCover(client BizyAPI, coverInput string, ctx context.Context, statusC
 		webpPath = localPath
 		convertFailed = true
 		if statusCallback != nil {
-			statusCallback("fallback", "转换失败，使用原格式")
+			statusCallback("fallback", i18n.T("cover.status.fallback"))
 		}
 	} else {
 		if webpCleanup != nil {
 			defer webpCleanup()
 		}
 		if statusCallback != nil && webpPath != localPath {
-			statusCallback("ready", "封面已准备")
+			statusCallback("ready", i18n.T("cover.status.ready"))
 		}
 	}
 
@@ -80,7 +81,7 @@ func UploadCover(client BizyAPI, coverInput string, ctx context.Context, statusC
 	// 3. 获取上传凭证
 	token, err := client.GetUploadToken(uploadFileName, "inputs")
 	if err != nil {
-		return "", WithStep("封面凭证", fmt.Errorf("获取上传凭证失败: %s, %v", coverInput, err))
+		return "", WithStep(i18n.T("step.cover_credentials"), i18n.NewError("error.cover.credentials_failed", map[string]any{"Input": coverInput}, err))
 	}
 
 	fileRec := token.Data.File
@@ -90,7 +91,7 @@ func UploadCover(client BizyAPI, coverInput string, ctx context.Context, statusC
 	ossCli, err := NewAliOssStorageClient(storage.Endpoint, storage.Bucket,
 		fileRec.AccessKeyId, fileRec.AccessKeySecret, fileRec.SecurityToken)
 	if err != nil {
-		return "", WithStep("封面OSS客户端", fmt.Errorf("创建 OSS 客户端失败: %s, %v", coverInput, err))
+		return "", WithStep(i18n.T("step.cover_oss_client"), i18n.NewError("error.cover.oss_client_failed", map[string]any{"Input": coverInput}, err))
 	}
 
 	coverFile := &FileToUpload{
@@ -101,21 +102,21 @@ func UploadCover(client BizyAPI, coverInput string, ctx context.Context, statusC
 
 	_, err = ossCli.UploadFileCtx(ctx, coverFile, fileRec.ObjectKey, "", nil)
 	if err != nil {
-		return "", WithStep("封面上传", fmt.Errorf("上传 OSS 失败: %s, %v", coverInput, err))
+		return "", WithStep(i18n.T("step.cover_upload"), i18n.NewError("error.cover.upload_failed", map[string]any{"Input": coverInput}, err))
 	}
 
 	// 5. 提交并获取可用 URL
 	commit, err := client.CommitInputResource(uploadFileName, fileRec.ObjectKey)
 	if err != nil {
-		return "", WithStep("封面提交", fmt.Errorf("提交失败: %s, %v", coverInput, err))
+		return "", WithStep(i18n.T("step.cover_commit"), i18n.NewError("error.cover.commit_failed", map[string]any{"Input": coverInput}, err))
 	}
 
 	if commit == nil || commit.Data.Url == "" {
-		return "", WithStep("封面提交", fmt.Errorf("未获取到有效 URL"))
+		return "", WithStep(i18n.T("step.cover_commit"), i18n.NewError("error.cover.url_missing", nil, nil))
 	}
 
 	if statusCallback != nil {
-		statusCallback("done", "封面已上传")
+		statusCallback("done", i18n.T("cover.status.done"))
 	}
 
 	return commit.Data.Url, nil

@@ -15,6 +15,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/dustin/go-humanize"
+	"github.com/siliconflow/bizyair-cli/internal/i18n"
 )
 
 var lastID int64
@@ -79,15 +80,15 @@ type KeyMap struct {
 // DefaultKeyMap defines the default keybindings.
 func DefaultKeyMap() KeyMap {
 	return KeyMap{
-		GoToTop:  key.NewBinding(key.WithKeys("g"), key.WithHelp("g", "first")),
-		GoToLast: key.NewBinding(key.WithKeys("G"), key.WithHelp("G", "last")),
-		Down:     key.NewBinding(key.WithKeys("j", "down", "ctrl+n"), key.WithHelp("j", "down")),
-		Up:       key.NewBinding(key.WithKeys("k", "up", "ctrl+p"), key.WithHelp("k", "up")),
-		PageUp:   key.NewBinding(key.WithKeys("K", "pgup"), key.WithHelp("pgup", "page up")),
-		PageDown: key.NewBinding(key.WithKeys("J", "pgdown"), key.WithHelp("pgdown", "page down")),
-		Back:     key.NewBinding(key.WithKeys("h", "backspace", "left", "esc"), key.WithHelp("h", "back")),
-		Open:     key.NewBinding(key.WithKeys("l", "right", "enter"), key.WithHelp("l", "open")),
-		Select:   key.NewBinding(key.WithKeys("enter"), key.WithHelp("enter", "select")),
+		GoToTop:  key.NewBinding(key.WithKeys("g"), key.WithHelp("g", i18n.T("tui.filepicker.first", nil))),
+		GoToLast: key.NewBinding(key.WithKeys("G"), key.WithHelp("G", i18n.T("tui.filepicker.last", nil))),
+		Down:     key.NewBinding(key.WithKeys("j", "down", "ctrl+n"), key.WithHelp("j", i18n.T("tui.filepicker.down", nil))),
+		Up:       key.NewBinding(key.WithKeys("k", "up", "ctrl+p"), key.WithHelp("k", i18n.T("tui.filepicker.up", nil))),
+		PageUp:   key.NewBinding(key.WithKeys("K", "pgup"), key.WithHelp("pgup", i18n.T("tui.filepicker.page_up", nil))),
+		PageDown: key.NewBinding(key.WithKeys("J", "pgdown"), key.WithHelp("pgdown", i18n.T("tui.filepicker.page_down", nil))),
+		Back:     key.NewBinding(key.WithKeys("h", "backspace", "left", "esc"), key.WithHelp("h", i18n.T("tui.filepicker.back", nil))),
+		Open:     key.NewBinding(key.WithKeys("l", "right", "enter"), key.WithHelp("l", i18n.T("tui.filepicker.open", nil))),
+		Select:   key.NewBinding(key.WithKeys("enter"), key.WithHelp("enter", i18n.T("tui.filepicker.select", nil))),
 	}
 }
 
@@ -125,7 +126,7 @@ func DefaultStylesWithRenderer(r *lipgloss.Renderer) Styles {
 		Permission:       r.NewStyle().Foreground(lipgloss.Color("244")),
 		Selected:         r.NewStyle().Foreground(lipgloss.Color("212")).Bold(true),
 		FileSize:         r.NewStyle().Foreground(lipgloss.Color("240")).Width(fileSizeWidth).Align(lipgloss.Right),
-		EmptyDirectory:   r.NewStyle().Foreground(lipgloss.Color("240")).PaddingLeft(paddingLeft).SetString("Bummer. No Files Found."),
+		EmptyDirectory:   r.NewStyle().Foreground(lipgloss.Color("240")).PaddingLeft(paddingLeft).SetString(i18n.T("tui.input.empty_directory", nil)),
 	}
 }
 

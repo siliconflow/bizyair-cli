@@ -15,6 +15,7 @@ import (
 
 	"github.com/cloudwego/hertz/cmd/hz/util/logs"
 	"github.com/samber/lo"
+	"github.com/siliconflow/bizyair-cli/internal/i18n"
 	"github.com/siliconflow/bizyair-cli/meta"
 )
 
@@ -324,7 +325,7 @@ func (c *Client) authHeader() map[string]string {
 func (c *Client) doGet(urlStr string, queryParams interface{}, header map[string]string) ([]byte, int, error) {
 	parsedURL, err := url.Parse(urlStr)
 	if err != nil {
-		return nil, -1, err
+		return nil, -1, i18n.NewError("error.network.invalid_url", map[string]any{"URL": urlStr}, err)
 	}
 
 	if queryParams != nil {
@@ -360,7 +361,7 @@ func (c *Client) doGet(urlStr string, queryParams interface{}, header map[string
 
 	req, err := http.NewRequest(meta.HTTPGet, parsedURL.String(), nil)
 	if err != nil {
-		return nil, -1, err
+		return nil, -1, i18n.NewError("error.network.create_request", map[string]any{"Method": meta.HTTPGet, "URL": parsedURL.String()}, err)
 	}
 
 	if len(header) > 0 {
@@ -372,23 +373,26 @@ func (c *Client) doGet(urlStr string, queryParams interface{}, header map[string
 
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
-		return nil, -1, err
+		return nil, -1, i18n.NewError("error.network.request_failed", map[string]any{"Method": meta.HTTPGet, "URL": parsedURL.String()}, err)
 	}
 	defer resp.Body.Close()
 
 	body, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		return nil, resp.StatusCode, i18n.NewError("error.network.response_read_failed", map[string]any{"URL": parsedURL.String()}, err)
+	}
 	return body, resp.StatusCode, err
 }
 
 func (c *Client) doPost(url string, data interface{}, header map[string]string) ([]byte, int, error) {
 	jsonData, err := json.Marshal(data)
 	if err != nil {
-		return nil, -1, err
+		return nil, -1, i18n.NewError("error.network.encode_request", map[string]any{"Method": meta.HTTPPost, "URL": url}, err)
 	}
 
 	req, err := http.NewRequest(meta.HTTPPost, url, bytes.NewBuffer(jsonData))
 	if err != nil {
-		return nil, -1, err
+		return nil, -1, i18n.NewError("error.network.create_request", map[string]any{"Method": meta.HTTPPost, "URL": url}, err)
 	}
 
 	if len(header) > 0 {
@@ -401,23 +405,26 @@ func (c *Client) doPost(url string, data interface{}, header map[string]string) 
 
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
-		return nil, -1, err
+		return nil, -1, i18n.NewError("error.network.request_failed", map[string]any{"Method": meta.HTTPPost, "URL": url}, err)
 	}
 	defer resp.Body.Close()
 
 	body, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		return nil, resp.StatusCode, i18n.NewError("error.network.response_read_failed", map[string]any{"URL": url}, err)
+	}
 	return body, resp.StatusCode, err
 }
 
 func (c *Client) doDelete(url string, data interface{}, header map[string]string) ([]byte, int, error) {
 	jsonData, err := json.Marshal(data)
 	if err != nil {
-		return nil, -1, err
+		return nil, -1, i18n.NewError("error.network.encode_request", map[string]any{"Method": meta.HTTPDelete, "URL": url}, err)
 	}
 
 	req, err := http.NewRequest(meta.HTTPDelete, url, bytes.NewBuffer(jsonData))
 	if err != nil {
-		return nil, -1, err
+		return nil, -1, i18n.NewError("error.network.create_request", map[string]any{"Method": meta.HTTPDelete, "URL": url}, err)
 	}
 
 	if len(header) > 0 {
@@ -429,37 +436,45 @@ func (c *Client) doDelete(url string, data interface{}, header map[string]string
 
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
-		return nil, -1, err
+		return nil, -1, i18n.NewError("error.network.request_failed", map[string]any{"Method": meta.HTTPDelete, "URL": url}, err)
 	}
 	defer resp.Body.Close()
 
 	// 读取响应体
 	body, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		return nil, resp.StatusCode, i18n.NewError("error.network.response_read_failed", map[string]any{"URL": url}, err)
+	}
 	return body, resp.StatusCode, err
 }
 
 func handleError(responseBody []byte, statusCode int) error {
-	rawMessage := string(responseBody)
-	if statusCode == http.StatusNotFound {
-		return fmt.Errorf("server not found, you can use \"--base_domain\" to specify the target domain")
-	}
+	rawMessage := strings.TrimSpace(string(responseBody))
 	var parsedResponse Response[interface{}]
 	err := json.Unmarshal(responseBody, &parsedResponse)
-	if err != nil {
-		rawMessage = strings.TrimFunc(rawMessage, func(r rune) bool {
-			return unicode.Is(unicode.Quotation_Mark, r)
-		})
-		if rawMessage == "" {
-			return fmt.Errorf("unknown server error")
+	if err == nil {
+		if messageID, exists := meta.ServerErrorMessageIDs[parsedResponse.Code]; exists {
+			return &APIError{
+				HTTPStatus: statusCode, Code: parsedResponse.Code, RawMessage: parsedResponse.Message, KnownCodeMessageID: messageID,
+			}
 		}
-		return fmt.Errorf("%s", rawMessage)
+		detail := parsedResponse.Message
+		if detail == "" {
+			detail = rawMessage
+		}
+		if statusCode == http.StatusNotFound {
+			return &APIError{HTTPStatus: statusCode, Code: parsedResponse.Code, KnownCodeMessageID: "error.server.not_found", RawMessage: detail}
+		}
+		return &APIError{HTTPStatus: statusCode, Code: parsedResponse.Code, RawMessage: detail}
 	}
 
-	if errno, exists := meta.ServerErrors[parsedResponse.Code]; exists {
-		return errno
+	rawMessage = strings.TrimFunc(rawMessage, func(r rune) bool {
+		return unicode.Is(unicode.Quotation_Mark, r)
+	})
+	if statusCode == http.StatusNotFound {
+		return &APIError{HTTPStatus: statusCode, KnownCodeMessageID: "error.server.not_found", RawMessage: rawMessage}
 	}
-
-	return fmt.Errorf("unexpected http status code: %d, message: %s", statusCode, rawMessage)
+	return &APIError{HTTPStatus: statusCode, RawMessage: rawMessage}
 }
 
 func handleResponse[T any](responseBody []byte) (*Response[T], error) {
@@ -467,14 +482,14 @@ func handleResponse[T any](responseBody []byte) (*Response[T], error) {
 	err := json.Unmarshal(responseBody, &parsedResponse)
 	if err != nil {
 		logs.Debugf("error: %s\n", err)
-		return nil, err
+		return nil, &APIError{HTTPStatus: http.StatusOK, RawMessage: strings.TrimSpace(string(responseBody))}
 	}
 
 	if parsedResponse.Code != meta.OKCode {
-		if errno, exists := meta.ServerErrors[parsedResponse.Code]; exists {
-			return nil, errno
+		if messageID, exists := meta.ServerErrorMessageIDs[parsedResponse.Code]; exists {
+			return nil, &APIError{HTTPStatus: http.StatusOK, Code: parsedResponse.Code, RawMessage: parsedResponse.Message, KnownCodeMessageID: messageID}
 		}
-		return nil, fmt.Errorf("server error: %s", parsedResponse.Message)
+		return nil, &APIError{HTTPStatus: http.StatusOK, Code: parsedResponse.Code, RawMessage: parsedResponse.Message}
 	}
 	return &parsedResponse, nil
 }

@@ -3,10 +3,10 @@ package lib
 import (
 	"context"
 	"errors"
-	"fmt"
 	"os"
 
 	"github.com/cloudwego/hertz/cmd/hz/util/logs"
+	"github.com/siliconflow/bizyair-cli/internal/i18n"
 	"github.com/siliconflow/bizyair-cli/lib/filehash"
 )
 
@@ -31,10 +31,10 @@ func UnifiedUpload(opts UploadOptions) (string, error) {
 	// 1. 获取文件信息
 	st, err := os.Stat(opts.File.Path)
 	if err != nil {
-		return "", WithStep("读取文件信息", err)
+		return "", WithStep(i18n.T("step.read_file_info"), err)
 	}
 	if st.IsDir() {
-		return "", WithStep("校验路径", fmt.Errorf("仅支持文件上传，不支持目录: %s", opts.File.Path))
+		return "", WithStep(i18n.T("step.validate_path"), i18n.NewError("validation.file_upload_only", map[string]any{"Path": opts.File.Path}, nil))
 	}
 
 	// 确保文件大小已设置
@@ -45,11 +45,11 @@ func UnifiedUpload(opts UploadOptions) (string, error) {
 	// 2. 计算文件哈希
 	sha256sum, md5Hash, err := filehash.CalculateHash(opts.File.Path)
 	if err != nil {
-		return "", WithStep("计算哈希", err)
+		return "", WithStep(i18n.T("step.calculate_hash"), err)
 	}
 	opts.File.Signature = sha256sum
 
-	logs.Debugf("[%s] 文件哈希: %s\n", opts.FileIndex, sha256sum)
+	logs.Debugf("[%s] file hash: %s\n", opts.FileIndex, sha256sum)
 
 	// 3. 尝试加载断点续传信息
 	resumed := false
@@ -61,11 +61,11 @@ func UnifiedUpload(opts UploadOptions) (string, error) {
 
 	// 4. 如果有有效的 checkpoint，尝试续传
 	if checkpoint != nil && ValidateCheckpoint(checkpoint, opts.File) {
-		logs.Debugf("[%s] 发现有效的 checkpoint，准备续传\n", opts.FileIndex)
+		logs.Debugf("[%s] valid checkpoint found; preparing to resume\n", opts.FileIndex)
 
 		// 检查 checkpoint 中的凭证是否可用且未过期
 		if checkpoint.AccessKeyId != "" && checkpoint.AccessKeySecret != "" && !IsCredentialExpired(checkpoint.Expiration) {
-			logs.Debugf("[%s] checkpoint 凭证有效，使用缓存凭证\n", opts.FileIndex)
+			logs.Debugf("[%s] checkpoint credentials are valid; using cached credentials\n", opts.FileIndex)
 			cli, oerr := NewAliOssStorageClient(
 				checkpoint.Endpoint, checkpoint.Bucket,
 				checkpoint.AccessKeyId, checkpoint.AccessKeySecret,
@@ -76,11 +76,11 @@ func UnifiedUpload(opts UploadOptions) (string, error) {
 				ossClient = cli
 				objectKey = checkpoint.ObjectKey
 			} else {
-				logs.Warnf("[%s] 使用 checkpoint 凭证失败: %v，将刷新凭证\n", opts.FileIndex, oerr)
+				logs.Warnf("[%s] checkpoint credentials failed: %v; refreshing credentials\n", opts.FileIndex, oerr)
 			}
 		} else {
 			// 凭证过期或不存在：删除 checkpoint，重新上传
-			logs.Warnf("[%s] checkpoint 凭证已过期，删除 checkpoint 并重新上传\n", opts.FileIndex)
+			logs.Warnf("[%s] checkpoint credentials expired; deleting checkpoint and restarting\n", opts.FileIndex)
 			if checkpointFile != "" {
 				_ = DeleteCheckpoint(checkpointFile)
 			}
@@ -92,14 +92,14 @@ func UnifiedUpload(opts UploadOptions) (string, error) {
 	if ossClient == nil {
 		ossCert, err := opts.Client.OssSign(sha256sum, opts.ModelType)
 		if err != nil {
-			return "", WithStep("获取上传签名", err)
+			return "", WithStep(i18n.T("step.upload_signature"), err)
 		}
 
 		fileRecord := ossCert.Data.File
 
 		// 文件已存在于服务器，直接跳过
 		if fileRecord.Id > 0 {
-			logs.Debugf("[%s] 文件已存在，跳过上传\n", opts.FileIndex)
+			logs.Debugf("[%s] file already exists; skipping upload\n", opts.FileIndex)
 			opts.File.Id = fileRecord.Id
 			opts.File.RemoteKey = fileRecord.ObjectKey
 
@@ -119,7 +119,7 @@ func UnifiedUpload(opts UploadOptions) (string, error) {
 			fileRecord.SecurityToken,
 		)
 		if err != nil {
-			return "", WithStep("创建OSS客户端", err)
+			return "", WithStep(i18n.T("step.create_oss_client"), err)
 		}
 		cli.SetExpiration(fileRecord.Expiration)
 		ossClient = cli
@@ -133,7 +133,7 @@ func UnifiedUpload(opts UploadOptions) (string, error) {
 		if errors.Is(err, context.Canceled) {
 			return "", err // 直接返回不包装，保持 context.Canceled 类型
 		}
-		return "", WithStep("OSS上传", err)
+		return "", WithStep(i18n.T("step.oss_upload"), err)
 	}
 
 	// 7. 提交文件
@@ -143,10 +143,10 @@ func UnifiedUpload(opts UploadOptions) (string, error) {
 	}
 	_, err = opts.Client.CommitFileV2(sha256sum, commitKey, md5Hash, opts.ModelType)
 	if err != nil {
-		return "", WithStep("提交文件", err)
+		return "", WithStep(i18n.T("step.commit_file"), err)
 	}
 
-	logs.Debugf("[%s] 上传成功: %s\n", opts.FileIndex, objectKey)
+	logs.Debugf("[%s] upload succeeded: %s\n", opts.FileIndex, objectKey)
 	resumed = true // 标记为成功
 
 	if resumed {

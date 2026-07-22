@@ -2,6 +2,7 @@ package tui
 
 import (
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/siliconflow/bizyair-cli/internal/i18n"
 	"github.com/siliconflow/bizyair-cli/lib"
 	"github.com/siliconflow/bizyair-cli/lib/actions"
 	"github.com/siliconflow/bizyair-cli/meta"
@@ -26,6 +27,6 @@ func runLogout() tea.Cmd {
 		if err != nil {
 			return actionDoneMsg{out: "", err: err}
 		}
-		return actionDoneMsg{out: "Logged out successfully\n", err: nil}
+		return actionDoneMsg{out: i18n.T("cli.logout.success", nil) + "\n", err: nil}
 	}
 }

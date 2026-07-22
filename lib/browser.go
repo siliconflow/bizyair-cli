@@ -1,9 +1,10 @@
 package lib
 
 import (
-	"fmt"
 	"os/exec"
 	"runtime"
+
+	"github.com/siliconflow/bizyair-cli/internal/i18n"
 )
 
 // MyModelsURL 是"我的模型"页面的 URL
@@ -28,16 +29,16 @@ func OpenBrowser(url string) (string, error) {
 			}
 		}
 		if cmd == nil {
-			return "", fmt.Errorf("未找到可用的浏览器命令")
+			return "", i18n.NewError("error.browser.command_missing", nil, nil)
 		}
 	default:
-		return "", fmt.Errorf("不支持的操作系统: %s", runtime.GOOS)
+		return "", i18n.NewError("error.browser.os_unsupported", map[string]any{"OS": runtime.GOOS}, nil)
 	}
 
 	err := cmd.Start()
 	if err != nil {
-		return "", fmt.Errorf("无法启动浏览器: %v", err)
+		return "", i18n.NewError("error.browser.start_failed", nil, err)
 	}
 
-	return "已在浏览器中打开", nil
+	return i18n.T("browser.opened"), nil
 }

@@ -1,12 +1,12 @@
 package lib
 
 import (
-	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
 
 	"github.com/nickalie/go-webpbin"
+	"github.com/siliconflow/bizyair-cli/internal/i18n"
 )
 
 // getWebPVendorPath 获取WebP工具的存储路径（相对于可执行文件）
@@ -40,7 +40,7 @@ func ConvertImageToWebP(sourcePath string) (string, func(), error) {
 	// 创建临时输出文件
 	tmpFile, err := os.CreateTemp("", "cover-*.webp")
 	if err != nil {
-		return "", nil, fmt.Errorf("无法创建临时文件: %w", err)
+		return "", nil, i18n.NewError("error.io.temp_file_failed", nil, err)
 	}
 	tmpPath := tmpFile.Name()
 	tmpFile.Close() // CWebP需要文件路径，先关闭文件
@@ -76,7 +76,7 @@ func ConvertImageToWebP(sourcePath string) (string, func(), error) {
 		Run()
 	if err != nil {
 		cleanup()
-		return "", nil, fmt.Errorf("无法转换为WebP格式: %w", err)
+		return "", nil, i18n.NewError("error.cover.convert_failed", map[string]any{"Path": sourcePath}, err)
 	}
 
 	return tmpPath, cleanup, nil

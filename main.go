@@ -1,23 +1,33 @@
 package main
 
 import (
+	"fmt"
+	"os"
+
 	"github.com/cloudwego/hertz/cmd/hz/util/logs"
 	"github.com/siliconflow/bizyair-cli/cmd"
-	"os"
+	"github.com/siliconflow/bizyair-cli/internal/i18n"
 )
 
 func main() {
-	Run()
+	if err := Run(); err != nil {
+		fmt.Fprintln(os.Stderr, err)
+	}
 }
 
-func Run() {
+func Run() error {
 	defer func() {
 		logs.Flush()
 	}()
 
-	cli := cmd.Init()
-	err := cli.Run(os.Args)
+	language, err := i18n.Resolve(os.Args[1:], os.LookupEnv)
 	if err != nil {
-		logs.Errorf("%v\n", err)
+		return err
 	}
+	if err := i18n.Configure(language); err != nil {
+		return err
+	}
+
+	cli := cmd.Init()
+	return cli.Run(os.Args)
 }

@@ -14,6 +14,7 @@ import (
 	"github.com/aliyun/alibabacloud-oss-go-sdk-v2/oss"
 	"github.com/aliyun/alibabacloud-oss-go-sdk-v2/oss/credentials"
 	"github.com/cloudwego/hertz/cmd/hz/util/logs"
+	"github.com/siliconflow/bizyair-cli/internal/i18n"
 	"github.com/siliconflow/bizyair-cli/meta"
 )
 
@@ -90,7 +91,7 @@ func (a *AliOssStorageClient) UploadFileCtx(ctx context.Context, file *FileToUpl
 	// 获取文件信息
 	fileInfo, err := os.Stat(file.Path)
 	if err != nil {
-		return "", fmt.Errorf("failed to stat file %v", err)
+		return "", i18n.NewError("error.io.stat_failed", map[string]any{"Path": file.Path}, err)
 	}
 
 	totalSize := fileInfo.Size()
@@ -99,7 +100,7 @@ func (a *AliOssStorageClient) UploadFileCtx(ctx context.Context, file *FileToUpl
 	// 打开文件
 	f, err := os.Open(file.Path)
 	if err != nil {
-		return "", fmt.Errorf("failed to open local file %v", err)
+		return "", i18n.NewError("error.io.open_file_failed", map[string]any{"Path": file.Path}, err)
 	}
 	defer f.Close()
 
@@ -124,7 +125,7 @@ func (a *AliOssStorageClient) UploadFileCtx(ctx context.Context, file *FileToUpl
 
 	_, err = a.ossClient.PutObject(ctx, putRequest)
 	if err != nil {
-		return "", fmt.Errorf("failed to put object %v", err)
+		return "", i18n.NewError("error.oss.put_failed", map[string]any{"Object": objectName}, err)
 	}
 
 	// 确保进度回调显示100%
@@ -164,7 +165,7 @@ func (a *AliOssStorageClient) UploadFileMultipart(ctx context.Context, file *Fil
 	// 获取文件信息
 	fileInfo, err := os.Stat(file.Path)
 	if err != nil {
-		return "", fmt.Errorf("failed to stat file: %v", err)
+		return "", i18n.NewError("error.io.stat_failed", map[string]any{"Path": file.Path}, err)
 	}
 
 	totalSize := fileInfo.Size()
@@ -247,7 +248,7 @@ func (a *AliOssStorageClient) UploadFileMultipart(ctx context.Context, file *Fil
 	if uploadID == "" {
 		initResult, err := a.initiateMultipartUpload(ctx, objectName)
 		if err != nil {
-			return "", fmt.Errorf("failed to initiate multipart upload: %v", err)
+			return "", i18n.NewError("error.oss.multipart_start_failed", map[string]any{"Object": objectName}, err)
 		}
 		uploadID = *initResult.UploadId
 		logs.Debugf("[%s] initiated new upload (uploadID: %s)\n", fileIndex, uploadID)
@@ -318,13 +319,13 @@ func (a *AliOssStorageClient) UploadFileMultipart(ctx context.Context, file *Fil
 
 		// 其他错误：保留 checkpoint，便于下次自动断点续传；不调用 Abort
 		logs.Warnf("[%s] upload failed, keep checkpoint for resuming: %v\n", fileIndex, err)
-		return "", fmt.Errorf("failed to upload parts: %v", err)
+		return "", i18n.NewError("error.oss.parts_failed", map[string]any{"Object": objectName}, err)
 	}
 
 	// 完成分片上传
 	_, err = a.completeMultipartUpload(ctx, objectName, uploadID, parts)
 	if err != nil {
-		return "", fmt.Errorf("failed to complete multipart upload: %v", err)
+		return "", i18n.NewError("error.oss.multipart_complete_failed", map[string]any{"Object": objectName}, err)
 	}
 
 	// 确保进度回调显示100%
@@ -372,7 +373,7 @@ func (a *AliOssStorageClient) uploadParts(
 	// 打开文件
 	f, err := os.Open(file.Path)
 	if err != nil {
-		return nil, fmt.Errorf("failed to open file: %v", err)
+		return nil, i18n.NewError("error.io.open_file_failed", map[string]any{"Path": file.Path}, err)
 	}
 	defer f.Close()
 
@@ -452,7 +453,7 @@ func (a *AliOssStorageClient) uploadParts(
 			// 上传单个分片（带重试）
 			part, err := a.uploadPartWithRetry(ctx, f, objectKey, uploadID, partNum, off, size, fileIndex, int(partCount))
 			if err != nil {
-				errChan <- fmt.Errorf("part %d failed: %v", partNum, err)
+				errChan <- i18n.NewError("error.oss.part_failed", map[string]any{"Part": partNum}, err)
 				return
 			}
 
@@ -548,7 +549,7 @@ func (a *AliOssStorageClient) uploadPartWithRetry(
 		}, nil
 	}
 
-	return oss.UploadPart{}, fmt.Errorf("failed after %d retries: %v", maxRetries+1, lastErr)
+	return oss.UploadPart{}, i18n.NewError("error.oss.part_retries_exhausted", map[string]any{"Attempts": maxRetries + 1, "Part": partNumber}, lastErr)
 }
 
 // completeMultipartUpload 完成分片上传

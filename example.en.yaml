@@ -1,0 +1,42 @@
+# Batch upload configuration
+#
+# Command-line examples:
+# One version with an introduction read from a file:
+#   bizyair upload -t LoRA -n my_model -p model.safetensors --intro-path intro.md
+#
+# Multiple versions with separate intro files:
+#   bizyair upload -t LoRA -n my_model \
+#     -p v1.safetensors --intro-path intro_v1.txt \
+#     -p v2.safetensors --intro-path intro_v2.md
+#
+# Mixed input (version 1 uses a file; version 2 uses direct text):
+#   bizyair upload -t LoRA -n my_model \
+#     -p v1.safetensors --intro-path intro.txt \
+#     -p v2.safetensors --intro "Introduction entered directly"
+#
+models:
+  - name: "anime_style_lora"
+    type: "LoRA"
+    versions:
+      - name: "v1.0"  # Optional; defaults to v1.0
+        base_model: "Flux.D 1"
+        model_path: "models/anime_v1.safetensors"
+        cover_path: "covers/anime_v1.jpg"  # Local file path
+        intro: "First anime-style model release"  # Direct text
+        public: true  # Optional; defaults to false
+
+      - name: "v2.0"  # Optional; defaults to v2.0
+        base_model: "Flux.D 1"
+        model_path: "models/anime_v2.safetensors"
+        cover_url: "https://example.com/cover.jpg"  # Remote URL
+        intro_path: "descriptions/v2_intro.txt"  # Read from a file
+        public: false
+
+  - name: "realistic_checkpoint"
+    type: "Checkpoint"
+    versions:
+      - base_model: "SD 1.5"  # Defaults to v1.0 when name is omitted
+        model_path: "checkpoints/realistic.ckpt"
+        cover_path: "covers/realistic.webp"
+        intro_path: "descriptions/realistic.md"
+        # public defaults to false when omitted

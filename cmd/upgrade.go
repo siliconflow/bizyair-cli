@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/siliconflow/bizyair-cli/internal/i18n"
 	"github.com/siliconflow/bizyair-cli/lib"
 	"github.com/siliconflow/bizyair-cli/meta"
 	"github.com/urfave/cli/v2"
@@ -17,8 +18,8 @@ func Upgrade(c *cli.Context) error {
 	checkOnly := c.Bool("check")
 	force := c.Bool("force")
 
-	fmt.Printf("BizyAir CLI 升级工具\n")
-	fmt.Printf("当前版本: %s\n", meta.Version)
+	fmt.Println(i18n.T("cli.upgrade.title"))
+	fmt.Println(i18n.T("cli.upgrade.current_version", map[string]any{"Version": meta.Version}))
 	fmt.Printf("==================\n")
 
 	// 创建升级选项
@@ -32,10 +33,11 @@ func Upgrade(c *cli.Context) error {
 		},
 		ProgressFunc: func(downloaded, total int64) {
 			percentage := float64(downloaded) / float64(total) * 100
-			fmt.Printf("\r下载进度: %.1f%% (%s / %s)",
-				percentage,
-				formatBytes(downloaded),
-				formatBytes(total))
+			fmt.Printf("\r%s", i18n.T("cli.upgrade.download_progress", map[string]any{
+				"Percentage": fmt.Sprintf("%.1f", percentage),
+				"Downloaded": formatBytes(downloaded),
+				"Total":      formatBytes(total),
+			}))
 		},
 	}
 
@@ -52,15 +54,15 @@ func Upgrade(c *cli.Context) error {
 	if !result.Success {
 		fmt.Fprintf(os.Stderr, "❌ %s\n", result.Message)
 		if result.Error != nil {
-			fmt.Fprintf(os.Stderr, "错误详情: %v\n", result.Error)
+			fmt.Fprintln(os.Stderr, i18n.T("cli.upgrade.error_detail", map[string]any{"Cause": result.Error}))
 		}
-		return cli.Exit("升级失败", meta.LoadError)
+		return cli.Exit(i18n.T("cli.upgrade.failed"), meta.LoadError)
 	}
 
 	fmt.Printf("%s\n", result.Message)
 
 	if result.NeedUpgrade && !checkOnly {
-		fmt.Printf("\n提示: 请重新运行命令以使用新版本\n")
+		fmt.Printf("\n%s\n", i18n.T("cli.upgrade.restart_hint"))
 	}
 
 	return nil

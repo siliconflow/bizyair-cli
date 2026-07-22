@@ -1,343 +1,300 @@
 <h1 align="center">BizyAir CLI</h1>
 
-<p align="center">
-<p>
+<p align="center"><a href="./README.zh-CN.md">简体中文</a> | <strong>English</strong></p>
 
-BizyAir CLI 是一个开源命令行工具，您可以从 [GitHub](https://github.com/siliconflow/bizyair-cli) 获取最新版本。
+BizyAir CLI is an open-source command-line tool. Download the latest release from [GitHub](https://github.com/siliconflow/bizyair-cli).
 
-## 简介
+## Overview
 
-BizyAir CLI 是用于管理 BizyAir 上模型文件的命令行工具。它提供了**交互式界面（TUI）**和**命令行（CLI）**两种使用模式，让您可以轻松上传和管理 BizyAir 模型。
+BizyAir CLI manages model files on BizyAir. It provides both an interactive terminal interface (TUI) and regular command-line commands (CLI), making it suitable for guided use, scripts, and automation.
 
-### ✨ 核心特性
+### Key features
 
-- 🎨 **交互式 TUI 界面** - 友好的图形化交互体验，无需记忆命令
-- 🚀 **断点续传** - 上传中断后自动从断点继续，节省时间
-- ⚡ **并发上传** - 最多 3 个并发，显著提升上传速度
-- 📦 **分片上传** - 大文件（>100MB）自动分片上传，更稳定
-- 🖼️ **智能封面处理** - 自动转换为 WebP 格式，支持图片和视频
-- 📝 **灵活的介绍输入** - 支持直接输入或从文件导入（.txt/.md）
-- 📋 **YAML 批量上传** - 通过配置文件一次上传多个模型
-- 🌐 **VPN 检测** - 自动检测 VPN 并给出友好提示
-- 📊 **实时进度显示** - 上传速率、进度条实时更新
-- 🔄 **自动升级** - 一键升级到最新版本，支持版本检查和安全回滚
+- Interactive TUI with a guided upload workflow and file picker
+- Resumable uploads using local checkpoints
+- Up to three concurrent uploads
+- Automatic multipart upload for files larger than 100 MB
+- Image and video cover support with automatic WebP conversion
+- Direct or `.txt`/`.md` model introductions
+- YAML batch uploads for multiple models and versions
+- VPN detection and upload-performance warnings
+- Live progress, transfer rate, and per-version status
+- Built-in update checks, installation, and safe rollback
+- Standard English and Simplified Chinese interfaces
 
-## 发布版本
+## Releases
 
-所有发布版本请[点击这里查看](https://github.com/siliconflow/bizyair-cli/releases)。
+See all published versions on the [GitHub Releases page](https://github.com/siliconflow/bizyair-cli/releases).
 
-## 安装
+## Installation
 
-BizyAir CLI 支持 Linux、macOS 和 Windows 平台。所有平台的二进制文件都可以从 [GitHub Release 页面](https://github.com/siliconflow/bizyair-cli/releases) 下载。
+BizyAir CLI supports Linux, macOS, and Windows. Prebuilt binaries for each platform are available on the [GitHub Releases page](https://github.com/siliconflow/bizyair-cli/releases).
 
-### Linux 安装
+### Linux
 
-1. 从 [Release 页面](https://github.com/siliconflow/bizyair-cli/releases) 下载最新版本：
+1. Download the latest release:
 
    ```bash
-   # 设置版本号（请替换为最新版本）
+   # Replace this with the latest version
    VERSION=0.2.1
 
-   # 下载 Linux amd64 版本
+   # Linux amd64
    wget https://github.com/siliconflow/bizyair-cli/releases/download/v${VERSION}/bizyair-v${VERSION}-linux-amd64.tar.gz
 
-   # 或下载 Linux arm64 版本
+   # Linux arm64
    # wget https://github.com/siliconflow/bizyair-cli/releases/download/v${VERSION}/bizyair-v${VERSION}-linux-arm64.tar.gz
    ```
 
-2. 解压并安装：
+2. Extract and install:
 
    ```bash
-   # 解压文件
    tar -xzvf bizyair-v${VERSION}-linux-amd64.tar.gz
-
-   # 安装到系统路径
    sudo install bizyair /usr/local/bin/bizyair
 
-   # 或者安装到用户目录（无需 sudo）
+   # User-only installation without sudo:
    # mkdir -p ~/.local/bin
    # install bizyair ~/.local/bin/bizyair
-   # 确保 ~/.local/bin 在您的 PATH 中
+   # Ensure ~/.local/bin is on PATH.
    ```
 
-3. 验证安装：
+3. Verify the installation:
 
    ```bash
    bizyair --version
    ```
 
-### macOS 安装
+### macOS
 
-1. 从 [Release 页面](https://github.com/siliconflow/bizyair-cli/releases) 下载最新版本：
+1. Download the latest release:
 
    ```bash
-   # 设置版本号（请替换为最新版本）
    VERSION=0.2.1
 
-   # 下载 macOS arm64 版本（Apple Silicon，如 M1/M2/M3）
+   # Apple Silicon (M1/M2/M3 and newer)
    curl -LO https://github.com/siliconflow/bizyair-cli/releases/download/v${VERSION}/bizyair-v${VERSION}-macos-arm64.tar.gz
 
-   # 或下载 macOS amd64 版本（Intel 芯片）
+   # Intel macOS
    # curl -LO https://github.com/siliconflow/bizyair-cli/releases/download/v${VERSION}/bizyair-v${VERSION}-macos-amd64.tar.gz
    ```
 
-2. 解压并安装：
+2. Extract and install:
 
    ```bash
-   # 解压文件
    tar -xzvf bizyair-v${VERSION}-macos-arm64.tar.gz
-
-   # 添加执行权限
    chmod +x bizyair
-
-   # 安装到系统路径
    sudo install bizyair /usr/local/bin/bizyair
 
-   # 或者安装到用户目录（无需 sudo）
+   # User-only installation without sudo:
    # mkdir -p ~/.local/bin
    # install bizyair ~/.local/bin/bizyair
-   # 确保 ~/.local/bin 在您的 PATH 中
    ```
 
-3. 首次运行时，macOS 可能会提示安全警告，请按以下步骤操作：
+3. If macOS displays a security warning on first launch, remove the quarantine attribute:
 
    ```bash
-   # 移除隔离属性
    sudo xattr -d com.apple.quarantine /usr/local/bin/bizyair
    ```
 
-   或者在系统设置中允许运行：
+   Alternatively, open **System Settings → Privacy & Security**, find the blocked `bizyair` executable, and choose **Open Anyway**.
 
-   - 打开 **系统设置** → **隐私与安全性**
-   - 找到被阻止的 `bizyair` 并点击 **仍要打开**
-
-4. 验证安装：
+4. Verify the installation:
 
    ```bash
    bizyair --version
    ```
 
-### Windows 安装
+### Windows
 
-1. 从 [Release 页面](https://github.com/siliconflow/bizyair-cli/releases) 下载最新版本：
-
-   - 下载 `bizyair-v{VERSION}-windows-amd64.zip` 文件
-
-2. 解压文件：
-
-   - 右键点击下载的 `.zip` 文件
-   - 选择 **解压全部** 或使用解压工具（如 7-Zip）
-   - 将 `bizyair.exe` 解压到您选择的目录（例如 `C:\Program Files\BizyAir\`）
-
-3. 添加到系统 PATH（推荐）：
-
-   - 右键点击 **此电脑** → **属性** → **高级系统设置**
-   - 点击 **环境变量**
-   - 在 **系统变量** 中找到 `Path`，点击 **编辑**
-   - 点击 **新建**，添加 `bizyair.exe` 所在的目录路径
-   - 点击 **确定** 保存
-
-4. 验证安装：
-
-   打开 **命令提示符** 或 **PowerShell**：
+1. Download `bizyair-v{VERSION}-windows-amd64.zip` from the Releases page.
+2. Extract `bizyair.exe` to a directory such as `C:\Program Files\BizyAir\`.
+3. Add that directory to the system `Path` environment variable:
+   - Open **This PC → Properties → Advanced system settings**.
+   - Select **Environment Variables**.
+   - Edit the system `Path`, add the BizyAir directory, and save.
+4. Open Command Prompt or PowerShell and verify the installation:
 
    ```powershell
    bizyair --version
    ```
 
-   如果没有添加到 PATH，可以使用完整路径运行：
+   Without a `Path` entry, use the full executable path:
 
    ```powershell
    C:\Program Files\BizyAir\bizyair.exe --version
    ```
 
-## 从源码构建
+## Building from source
 
-BizyAir CLI 当前使用 GO v1.22.X 或更高版本。
-要从源码构建，您需要：
+BizyAir CLI requires Go 1.24 or newer.
 
-1. 克隆仓库
-2. 构建并运行可执行文件
+1. Clone this repository.
+2. Build and run the executable:
 
    ```shell
    make build && ./execs/bizyair
    ```
 
-- Windows 系统运行：`make build_windows`
-- MacOS 系统运行：`make build_mac`
-- Linux 系统运行：`make build_linux` 或 `make build_linux_arm64`
+Platform targets:
 
----
+- Windows: `make build_windows`
+- macOS: `make build_mac`
+- Linux amd64: `make build_linux`
+- Linux arm64: `make build_linux_arm64`
 
-## 使用模式
+## Interface language
 
-BizyAir CLI 提供两种使用模式，您可以根据自己的喜好选择：
+BizyAir CLI supports English (`en`) and Simplified Chinese (`zh-CN`). It resolves the language once at startup; it does not persist a preference and does not switch languages inside the TUI.
 
-### 🎨 交互式界面（TUI）- 推荐新手使用
+The precedence is:
 
-直接运行 `bizyair` 命令即可进入友好的交互式界面：
+```text
+--lang > system language > en
+```
+
+Without `--lang`, Simplified and Traditional Chinese system locales both use the Simplified Chinese interface. All other, empty, or unrecognized system languages use English.
+
+```bash
+# Global options must appear before the subcommand
+bizyair --lang en upload --help
+bizyair --lang zh-CN upgrade --check
+```
+
+`--lang` accepts only `en` and `zh-CN`. System locales such as `zh-CN`, `zh-Hans`, `zh-TW`, and `zh-Hant` are detected automatically and all select the Simplified Chinese interface. An unsupported explicit value returns an error listing the supported values.
+
+## Usage modes
+
+### Interactive TUI
+
+Run BizyAir without a subcommand:
 
 ```bash
 bizyair
 ```
 
-TUI 模式特点：
+The TUI provides guided input, immediate validation, file selection, VPN warnings, multi-version uploads, and live progress. It is the recommended starting point for new users.
 
-- ✅ 图形化界面，操作直观
-- ✅ 逐步引导，不易出错
-- ✅ 实时反馈和进度显示
-- ✅ 支持文件选择器
-- ✅ 自动 VPN 检测和提示
+### Command-line mode
 
-### ⌨️ 命令行模式（CLI）- 适合脚本和自动化
-
-使用命令行参数直接执行操作：
+Pass a subcommand and options for scripting or automation:
 
 ```bash
-bizyair upload -n mymodel -t LoRA -p /path/to/model.safetensors -b "Flux.1 D" -cover /path/to/cover.jpg
+bizyair upload -n mymodel -t LoRA -p /path/to/model.safetensors \
+  -b "Flux.1 D" --cover /path/to/cover.jpg --intro "Model introduction"
 ```
 
-CLI 模式特点：
+CLI mode supports YAML batches, environment variables, and CI/CD integration.
 
-- ✅ 快速执行，适合脚本
-- ✅ 支持 YAML 批量上传
-- ✅ 可集成到 CI/CD 流程
-- ✅ 支持环境变量配置
-
----
-
-## 升级到最新版本
-
-BizyAir CLI 支持一键升级到最新版本：
+## Updating BizyAir CLI
 
 ```bash
-# 检查更新
+# Check without installing
 bizyair upgrade --check
 
-# 执行升级
+# Install the latest release
 sudo bizyair upgrade
 ```
 
----
+## Quick start
 
-## 快速开始
+### Option 1: interactive TUI
 
-### 方式一：使用交互式界面（推荐）
+1. Run `bizyair`.
+2. On first use, enter an API key obtained from [BizyAir](https://bizyair.cn) and press Enter.
+3. Choose an action:
+   - Upload model
+   - My models
+   - Log out
+   - Exit
+4. Follow the upload steps. You can select files or type paths, add multiple versions, and monitor progress and transfer speed.
 
-1. **启动 TUI**
+### Option 2: command line
 
-```bash
-bizyair
-```
+#### 1. Log in
 
-2. **首次使用需要登录**
-
-   - 输入您的 API Key（从 [BizyAir](https://bizyair.cn) 获取）
-   - 按 Enter 确认
-
-3. **选择功能**
-
-   - 上传模型：交互式收集参数并上传
-   - 我的模型：在浏览器中查看已上传的模型
-   - 退出登录：清除本地 API Key
-   - 退出程序
-
-4. **上传模型**
-   - 按照界面提示逐步输入信息
-   - 支持文件选择器或手动输入路径
-   - 支持多版本上传
-   - 自动显示上传进度和速率
-
-### 方式二：使用命令行
-
-#### 1. 登录
-
-BizyAir CLI 使用 API Key 进行身份验证。要登录您的设备，运行以下命令：
+BizyAir CLI authenticates with an API key:
 
 ```bash
-# 如果您已设置环境变量 SF_API_KEY
+# Uses SF_API_KEY when it is set
 bizyair login
 
-# 或使用 --key/-k 选项指定
-bizyair login -k $SF_API_KEY
+# Or provide a key explicitly
+bizyair login -k "$SF_API_KEY"
 ```
 
-#### 2. 上传模型
+#### 2. Upload a model
 
-**单版本上传示例：**
+Single version:
 
 ```bash
 bizyair upload -n mymodel -t LoRA \
   -p /local/path/model.safetensors \
   -b "Flux.1 D" \
-  -cover "/path/to/cover.jpg" \
-  --intro "这是一个动漫风格的 LoRA 模型"
+  --cover "/path/to/cover.jpg" \
+  --intro "An anime-style LoRA model"
 ```
 
-**多版本上传示例：**
+Multiple versions:
 
 ```bash
 bizyair upload -n mymodel -t Checkpoint \
-  -v "v1.0" -p /path/file1.safetensors -b SDXL --intro "第一版" -cover "/path/cover1.jpg" \
-  -v "v2.0" -p /path/file2.safetensors -b "SD 1.5" --intro "第二版" -cover "/path/cover2.jpg"
+  -v "v1.0" -p /path/file1.safetensors -b SDXL --intro "First release" --cover "/path/cover1.jpg" \
+  -v "v2.0" -p /path/file2.safetensors -b "SD 1.5" --intro "Second release" --cover "/path/cover2.jpg"
 ```
 
-**核心参数说明：**
+Core options:
 
-- `-n, --name`: 模型名称（必填）
-- `-t, --type`: 模型类型（必填，如 LoRA、Checkpoint、Controlnet 等）
-- `-p, --path`: 模型文件路径（必填，可多次指定）
-- `-b, --base`: 基础模型（必填，如 "Flux.1 D"、SDXL、"SD 1.5" 等）
-- `-cover`: 封面文件或 URL（必填）
-- `-i, --intro`: 模型介绍文本（必填）
-- `--intro-path`: 从文件导入介绍（与 `-i` 二选一）
-- `-v, --version`: 版本名称（可选，默认 v1.0）
-- `--public`: 是否公开版本（可选，默认 false）
+- `-n, --name`: model name (required)
+- `-t, --type`: model type, such as `LoRA`, `Checkpoint`, or `Controlnet` (required)
+- `-p, --path`: model file; repeat for multiple versions (required)
+- `-b, --base`: Base Model, such as `Flux.1 D`, `SDXL`, or `SD 1.5` (required)
+- `--cover`: local cover file or URL (required)
+- `-i, --intro`: introduction text (required unless `--intro-path` is used)
+- `--intro-path`: `.txt` or `.md` introduction file
+- `-v, --version`: version name (optional; defaults to `v1.0`)
+- `--public`: whether the corresponding version is public (optional; defaults to `false`)
 
-#### 3. 封面上传（必填）
+#### 3. Cover uploads
 
-封面支持**本地文件**和 **URL** 两种方式，会自动上传到 OSS 并转换为 WebP 格式：
+Covers are required and may be local files or URLs. Images are converted to WebP before upload when possible.
 
 ```bash
-# 使用本地文件
+# Local cover
 bizyair upload -n mymodel -t LoRA -p model.safetensors -b "Flux.1 D" \
-  -cover "/path/to/cover.jpg" --intro "介绍文本"
+  --cover "/path/to/cover.jpg" --intro "Introduction"
 
-# 使用 URL
+# Remote cover
 bizyair upload -n mymodel -t LoRA -p model.safetensors -b "Flux.1 D" \
-  -cover "https://example.com/cover.jpg" --intro "介绍文本"
+  --cover "https://example.com/cover.jpg" --intro "Introduction"
 ```
 
-**支持的格式：**
+Supported formats:
 
-- 图片：`.jpg`、`.jpeg`、`.png`、`.gif`、`.webp`
-- 视频：`.mp4`、`.webm`、`.mov`（最大 100MB）
+- Images: `.jpg`, `.jpeg`, `.png`, `.gif`, `.webp`
+- Videos: `.mp4`, `.webm`, `.mov` (up to 100 MB)
 
-**WebP 转换：** 图片封面会自动转换为 WebP 格式以优化加载速度。如果转换失败，会自动回退到原始格式。
+If WebP conversion fails, the original cover format is used automatically.
 
-#### 4. 介绍文本输入
+#### 4. Model introductions
 
-支持两种方式输入模型介绍（最多 5000 字）：
+Introductions may contain up to 5,000 characters:
 
 ```bash
-# 方式1：直接输入文本
+# Direct text
 bizyair upload -n mymodel -t LoRA -p model.safetensors -b "Flux.1 D" \
-  -cover cover.jpg --intro "这是模型的详细介绍..."
+  --cover cover.jpg --intro "A detailed model introduction..."
 
-# 方式2：从文件导入（支持 .txt 和 .md）
+# Import from .txt or .md
 bizyair upload -n mymodel -t LoRA -p model.safetensors -b "Flux.1 D" \
-  -cover cover.jpg --intro-path intro.md
+  --cover cover.jpg --intro-path intro.md
 ```
 
-#### 5. YAML 批量上传
+#### 5. YAML batch uploads
 
-使用 YAML 配置文件可以一次上传多个模型：
+Upload multiple models from one configuration file:
 
 ```bash
 bizyair upload -f config.yaml
 ```
-
-**YAML 配置示例：**
 
 ```yaml
 models:
@@ -348,7 +305,7 @@ models:
         base_model: "Flux.1 D"
         model_path: "models/anime_v1.safetensors"
         cover_path: "covers/anime_v1.jpg"
-        intro: "第一版动漫风格模型"
+        intro: "First anime-style model release"
         public: true
 
       - name: "v2.0"
@@ -367,111 +324,105 @@ models:
         intro_path: "descriptions/realistic.md"
 ```
 
-**YAML 配置说明：**
+Configuration fields:
 
-- `model_path`: 模型文件路径（相对于 YAML 文件）
-- `cover_path` / `cover_url`: 封面文件或 URL（二选一）
-- `intro` / `intro_path`: 介绍文本或文件（二选一）
-- `name`: 版本名称（可选，自动递增）
-- `public`: 是否公开（可选，默认 false）
+- `model_path`: model file path, resolved relative to the YAML file
+- `cover_path` / `cover_url`: choose one local cover or remote cover
+- `intro` / `intro_path`: choose direct text or an introduction file
+- `name`: optional version name; generated automatically when omitted
+- `public`: optional visibility; defaults to `false`
 
-详细配置说明请参考 [example.yaml](./example.yaml)
+See [example.en.yaml](./example.en.yaml) for a complete English-commented example. The equivalent Chinese-commented example is [example.yaml](./example.yaml).
 
-#### 6. 断点续传
+#### 6. Resumable uploads
 
-上传中断后，重新运行相同命令会自动从断点继续：
+After an interrupted upload, rerun the same command to resume:
 
 ```bash
-# 第一次上传（中断）
 bizyair upload -n mymodel -t Checkpoint -p large-model.safetensors -b SDXL \
-  -cover cover.jpg --intro "介绍"
-# ^C (中断)
+  --cover cover.jpg --intro "Introduction"
+# Press Ctrl+C
 
-# 重新运行相同命令，自动续传
+# Run the same command again; uploaded parts are reused.
 bizyair upload -n mymodel -t Checkpoint -p large-model.safetensors -b SDXL \
-  -cover cover.jpg --intro "介绍"
-# ✓ 从断点继续上传
+  --cover cover.jpg --intro "Introduction"
 ```
 
-Checkpoint 文件保存在 `~/.bizyair/uploads/` 目录。
+Checkpoint files are stored under `~/.bizyair/uploads/`.
 
-#### 7. 查看和管理模型
+#### 7. View and manage models
 
 ```bash
-# 查看我的模型（在浏览器中打开）
+# Open My Models in a browser
 bizyair model ls
 
-# 删除模型
+# Delete a model
 bizyair model rm -n mymodel -t Checkpoint
 ```
 
-#### 8. 退出登录
+#### 8. Log out
 
 ```bash
 bizyair logout
 ```
 
----
+## Supported model types and Base Models
 
-## 支持的模型类型和基础模型
+### Model types
 
-### 模型类型
+- `Checkpoint` — complete model checkpoint
+- `LoRA` — low-rank adaptation model
+- `Controlnet` — control network
+- `VAE` — variational autoencoder
+- `UNet` — U-Net model
+- `CLIP` — CLIP model
+- `Upscaler` — super-resolution model
+- `Detection` — object detection model
+- `Other` — another model type
 
-- `Checkpoint` - 完整模型检查点
-- `LoRA` - 低秩适应模型
-- `Controlnet` - 控制网络
-- `VAE` - 变分自编码器
-- `UNet` - U-Net 模型
-- `CLIP` - CLIP 模型
-- `Upscaler` - 超分辨率模型
-- `Detection` - 检测模型
-- `Other` - 其他类型
+### Common Base Models
 
-### 基础模型
+- `Flux.1 D`
+- `Flux.1 Kontext`
+- `SDXL`
+- `SD 1.5`
+- `SD 3.5`
+- `Pony`
+- `Kolors`
+- `Hunyuan 1`
+- `WAN Video`
+- `Qwen-Image`
+- `Other`
 
-- `Flux.1 D` - Flux.1 D 模型
-- `Flux.1 Kontext` - Flux.1 Kontext 模型
-- `SDXL` - Stable Diffusion XL
-- `SD 1.5` - Stable Diffusion 1.5
-- `SD 3.5` - Stable Diffusion 3.5
-- `Pony` - Pony Diffusion
-- `Kolors` - Kolors 模型
-- `Hunyuan 1` - 混元 1
-- `WAN Video` - WAN Video 模型
-- `Qwen-Image` - Qwen 图像模型
-- `Other` - 其他基础模型
+The CLI retrieves the authoritative Base Model list from the API and uses its built-in list only as a fallback.
 
----
+## Documentation
 
-## 详细文档
+- [example.en.yaml](./example.en.yaml) — English-commented YAML example
+- [example.yaml](./example.yaml) — Chinese-commented YAML example
+- [docs/i18n.md](./docs/i18n.md) — translation maintenance rules
 
-- [example.yaml](./example.yaml) - YAML 配置示例
+## Troubleshooting
 
----
+### How do I obtain an API key?
 
-## 常见问题
+Create an account at [BizyAir](https://bizyair.cn) and obtain a key from your account settings.
 
-### 如何获取 API Key？
+### What should I do when an upload fails?
 
-访问 [BizyAir](https://bizyair.cn) 注册并在个人设置中获取 API Key。
+1. Check the network connection.
+2. Confirm the API key is valid.
+3. Check whether a VPN is affecting the connection.
+4. Rerun the same command; interrupted file uploads can resume.
 
-### 上传失败怎么办？
+### How do I remove checkpoint files?
 
-1. 检查网络连接
-2. 确认 API Key 是否有效
-3. 查看是否使用了 VPN（可能影响上传速度）
-4. 尝试重新运行命令（支持断点续传）
+Checkpoint files are stored in `~/.bizyair/uploads/` and may be deleted manually when no interrupted uploads need to resume.
 
-### 如何清除 Checkpoint 文件？
+### What happens if cover conversion fails?
 
-Checkpoint 文件保存在 `~/.bizyair/uploads/` 目录，可以手动删除。
+The uploader automatically falls back to the original file format, so the upload can continue.
 
-### 封面转换失败怎么办？
+## Contributing
 
-如果 WebP 转换失败，系统会自动回退到原始格式，不影响上传。
-
----
-
-## 贡献
-
-欢迎提交 Issue 和 Pull Request！
+Issues and pull requests are welcome. When adding user-facing text, update both embedded catalogs and follow [the i18n maintenance guide](./docs/i18n.md).

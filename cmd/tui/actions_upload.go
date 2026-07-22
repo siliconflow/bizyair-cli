@@ -7,6 +7,7 @@ import (
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/siliconflow/bizyair-cli/internal/i18n"
 	"github.com/siliconflow/bizyair-cli/lib"
 	"github.com/siliconflow/bizyair-cli/lib/actions"
 	"github.com/siliconflow/bizyair-cli/meta"
@@ -47,7 +48,7 @@ func runUploadActionMulti(u uploadInputs, versions []versionItem) tea.Cmd {
 			if err != nil || apiKey == "" {
 				ch <- actionDoneMsg{
 					out: "",
-					err: lib.WithStep("上传/鉴权", fmt.Errorf("未登录或缺少 API Key，请先登录")),
+					err: lib.WithStep(i18n.T("step.login_validation", nil), i18n.NewError("error.auth.api_key_missing", nil, nil)),
 				}
 				return
 			}
@@ -61,7 +62,7 @@ func runUploadActionMulti(u uploadInputs, versions []versionItem) tea.Cmd {
 			if err != nil {
 				ch <- actionDoneMsg{
 					out: "",
-					err: lib.WithStep("获取基础模型列表", fmt.Errorf("无法从API获取基础模型列表: %w", err)),
+					err: lib.WithStep(i18n.T("step.get_base_models", nil), i18n.NewError("error.base_models.fetch_failed", nil, err)),
 				}
 				return
 			}
@@ -73,7 +74,7 @@ func runUploadActionMulti(u uploadInputs, versions []versionItem) tea.Cmd {
 			if len(allowedModels) == 0 {
 				ch <- actionDoneMsg{
 					out: "",
-					err: lib.WithStep("获取基础模型列表", fmt.Errorf("API返回的基础模型列表为空")),
+					err: lib.WithStep(i18n.T("step.get_base_models", nil), i18n.NewError("error.base_models.empty", nil, nil)),
 				}
 				return
 			}
@@ -117,34 +118,36 @@ func runUploadActionMulti(u uploadInputs, versions []versionItem) tea.Cmd {
 			if !result.Success {
 				if result.CanceledByUser {
 					var sb strings.Builder
-					sb.WriteString("✓ 上传已取消\n\n")
-					sb.WriteString("已上传的部分已保存checkpoint，下次上传相同文件时会自动续传。\n")
+					sb.WriteString(i18n.T("tui.upload.canceled_title", nil) + "\n\n")
+					sb.WriteString(i18n.T("tui.upload.checkpoint_saved", nil) + "\n")
 					folder, _ := lib.GetCheckpointDir()
 					if folder != "" {
-						sb.WriteString(fmt.Sprintf("Checkpoint文件位置: %s\n", folder))
+						sb.WriteString(i18n.T("tui.upload.checkpoint_location", map[string]any{"Path": folder}) + "\n")
 					}
 					ch <- actionDoneMsg{out: sb.String(), err: nil}
 					return
 				}
 
 				var sb strings.Builder
-				sb.WriteString("上传失败\n")
+				sb.WriteString(i18n.T("tui.upload.failed_title", nil) + "\n")
 				for _, err := range result.Errors {
 					sb.WriteString(fmt.Sprintf("- %v\n", err))
 				}
 				ch <- actionDoneMsg{
 					out: sb.String(),
-					err: lib.WithStep("上传", fmt.Errorf("上传失败")),
+					err: lib.WithStep(i18n.T("step.upload", nil), i18n.NewError("cli.upload.failed", nil, nil)),
 				}
 				return
 			}
 
 			// 成功
 			var out strings.Builder
-			out.WriteString("Uploaded successfully\n")
+			out.WriteString(i18n.T("tui.upload.success", nil) + "\n")
 			if result.SuccessCount < result.TotalCount {
-				out.WriteString(fmt.Sprintf("部分版本失败：成功 %d/%d\n",
-					result.SuccessCount, result.TotalCount))
+				out.WriteString(i18n.T("tui.upload.partial", map[string]any{
+					"Success": result.SuccessCount,
+					"Total":   result.TotalCount,
+				}) + "\n")
 				for _, err := range result.Errors {
 					out.WriteString(fmt.Sprintf("- %v\n", err))
 				}

@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"sync"
 
+	"github.com/siliconflow/bizyair-cli/internal/i18n"
 	"github.com/siliconflow/bizyair-cli/lib"
 )
 
@@ -20,7 +21,7 @@ func ExecuteUpload(api lib.BizyAPI, input UploadInput, callback UploadCallback) 
 	if input.ApiKey == "" {
 		return UploadResult{
 			Success: false,
-			Errors:  []error{lib.WithStep("上传", lib.NewValidationError("未登录或缺少API Key"))},
+			Errors:  []error{lib.WithStep(i18n.T("step.upload"), i18n.NewError("error.auth.api_key_missing", nil, nil))},
 		}
 	}
 
@@ -36,15 +37,15 @@ func ExecuteUpload(api lib.BizyAPI, input UploadInput, callback UploadCallback) 
 		if err != nil {
 			return UploadResult{
 				Success: false,
-				Errors:  []error{lib.WithStep("检查模型", err)},
+				Errors:  []error{lib.WithStep(i18n.T("step.check_model"), err)},
 			}
 		}
 		if exists {
 			return UploadResult{
 				Success: false,
 				Errors: []error{
-					lib.WithStep("检查模型",
-						lib.NewValidationError(fmt.Sprintf("模型名 '%s' 已存在，请使用不同的名称或启用覆盖", input.ModelName))),
+					lib.WithStep(i18n.T("step.check_model"),
+						i18n.NewError("validation.model_exists", map[string]any{"Name": input.ModelName}, nil)),
 				},
 			}
 		}
@@ -55,44 +56,44 @@ func ExecuteUpload(api lib.BizyAPI, input UploadInput, callback UploadCallback) 
 
 func validateUploadInput(input UploadInput) error {
 	if err := lib.ValidateModelType(input.ModelType); err != nil {
-		return lib.WithStep("参数验证", fmt.Errorf("模型类型无效: %w", err))
+		return lib.WithStep(i18n.T("step.validate_parameters"), i18n.NewError("validation.model_type_invalid", nil, err))
 	}
 
 	if err := lib.ValidateModelName(input.ModelName); err != nil {
-		return lib.WithStep("参数验证", fmt.Errorf("模型名称无效: %w", err))
+		return lib.WithStep(i18n.T("step.validate_parameters"), i18n.NewError("validation.model_name_invalid", nil, err))
 	}
 
 	if len(input.Versions) == 0 {
-		return lib.WithStep("参数验证", lib.NewValidationError("至少需要一个版本"))
+		return lib.WithStep(i18n.T("step.validate_parameters"), i18n.NewError("validation.version_required", nil, nil))
 	}
 
 	for i, ver := range input.Versions {
 		if ver.Path == "" {
-			return lib.WithStep("参数验证", lib.NewValidationError(fmt.Sprintf("版本 %d: 路径不能为空", i+1)))
+			return lib.WithStep(i18n.T("step.validate_parameters"), i18n.NewError("validation.version_path_required", map[string]any{"Version": i + 1}, nil))
 		}
 
 		stat, err := os.Stat(ver.Path)
 		if err != nil {
-			return lib.WithStep("参数验证", fmt.Errorf("版本 %d: 路径无效: %w", i+1, err))
+			return lib.WithStep(i18n.T("step.validate_parameters"), i18n.NewError("validation.version_path_invalid", map[string]any{"Version": i + 1}, err))
 		}
 
 		if stat.IsDir() {
-			return lib.WithStep("参数验证", lib.NewValidationError(fmt.Sprintf("版本 %d: 不支持目录上传，仅支持文件", i+1)))
+			return lib.WithStep(i18n.T("step.validate_parameters"), i18n.NewError("validation.version_directory_unsupported", map[string]any{"Version": i + 1}, nil))
 		}
 
 		if ver.CoverUrl == "" {
-			return lib.WithStep("参数验证", lib.NewValidationError(fmt.Sprintf("版本 %d: 封面是必填项", i+1)))
+			return lib.WithStep(i18n.T("step.validate_parameters"), i18n.NewError("validation.version_cover_required", map[string]any{"Version": i + 1}, nil))
 		}
 
 		// 验证基础模型 - 使用从API获取的列表
 		if ver.BaseModel != "" {
 			if err := lib.ValidateBaseModel(ver.BaseModel, input.AllowedBaseModels); err != nil {
-				return lib.WithStep("参数验证", fmt.Errorf("版本 %d: 基础模型无效: %w", i+1, err))
+				return lib.WithStep(i18n.T("step.validate_parameters"), i18n.NewError("validation.version_base_model_invalid", map[string]any{"Version": i + 1}, err))
 			}
 		}
 
 		if ver.Version == "" {
-			return lib.WithStep("参数验证", lib.NewValidationError(fmt.Sprintf("版本 %d: 版本号不能为空", i+1)))
+			return lib.WithStep(i18n.T("step.validate_parameters"), i18n.NewError("validation.version_name_required", map[string]any{"Version": i + 1}, nil))
 		}
 	}
 
@@ -191,7 +192,7 @@ func uploadVersionsConcurrently(
 	if err != nil {
 		return UploadResult{
 			Success: false,
-			Errors:  []error{lib.WithStep("提交模型", err)},
+			Errors:  []error{lib.WithStep(i18n.T("step.commit_model"), err)},
 		}
 	}
 
@@ -233,14 +234,14 @@ func uploadSingleVersion(
 			return singleVersionResult{Canceled: true}
 		}
 		return singleVersionResult{
-			Error: lib.WithStep(fmt.Sprintf("版本%d封面上传", index+1), err),
+			Error: lib.WithStep(i18n.T("step.version_cover_upload", map[string]any{"Version": index + 1}), err),
 		}
 	}
 
 	stat, err := os.Stat(version.Path)
 	if err != nil {
 		return singleVersionResult{
-			Error: lib.WithStep(fmt.Sprintf("版本%d读取文件", index+1), err),
+			Error: lib.WithStep(i18n.T("step.version_read_file", map[string]any{"Version": index + 1}), err),
 		}
 	}
 
@@ -279,7 +280,7 @@ func uploadSingleVersion(
 			return singleVersionResult{Canceled: true}
 		}
 		return singleVersionResult{
-			Error: lib.WithStep(fmt.Sprintf("版本%d文件上传", index+1), err),
+			Error: lib.WithStep(i18n.T("step.version_file_upload", map[string]any{"Version": index + 1}), err),
 		}
 	}
 

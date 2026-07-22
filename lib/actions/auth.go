@@ -1,6 +1,7 @@
 package actions
 
 import (
+	"github.com/siliconflow/bizyair-cli/internal/i18n"
 	"github.com/siliconflow/bizyair-cli/lib"
 )
 
@@ -10,7 +11,7 @@ func ExecuteLogin(api lib.BizyAPI, apiKey string) LoginResult {
 	if apiKey == "" {
 		return LoginResult{
 			Success: false,
-			Error:   lib.WithStep("登录", lib.NewValidationError("API Key不能为空")),
+			Error:   lib.WithStep(i18n.T("step.login"), i18n.NewError("validation.api_key_required", nil, nil)),
 		}
 	}
 
@@ -18,7 +19,7 @@ func ExecuteLogin(api lib.BizyAPI, apiKey string) LoginResult {
 	if err != nil {
 		return LoginResult{
 			Success: false,
-			Error:   lib.WithStep("登录校验", err),
+			Error:   lib.WithStep(i18n.T("step.login_validation"), err),
 		}
 	}
 
@@ -26,7 +27,7 @@ func ExecuteLogin(api lib.BizyAPI, apiKey string) LoginResult {
 	if err != nil {
 		return LoginResult{
 			Success: false,
-			Error:   lib.WithStep("保存凭据", err),
+			Error:   lib.WithStep(i18n.T("step.save_credentials"), err),
 		}
 	}
 
@@ -41,7 +42,7 @@ func ExecuteLogin(api lib.BizyAPI, apiKey string) LoginResult {
 func ExecuteLogout() error {
 	err := lib.NewSfFolder().RemoveKey()
 	if err != nil {
-		return lib.WithStep("登出", err)
+		return lib.WithStep(i18n.T("step.logout"), err)
 	}
 	return nil
 }

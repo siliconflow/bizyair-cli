@@ -26,7 +26,7 @@ func DetectVPN(ctx context.Context) *VPNDetectionResult {
 	// 方法1: 检查活跃的VPN网络接口（带流量检查）
 	if hasActiveVPNInterface() {
 		result.IsUsingVPN = true
-		result.DetectionMethod = "网络接口检测"
+		result.DetectionMethod = "network-interface"
 		result.Confidence = "high"
 		return result
 	}
@@ -34,7 +34,7 @@ func DetectVPN(ctx context.Context) *VPNDetectionResult {
 	// 方法2: 检查路由表是否有VPN路由
 	if hasVPNRoutes() {
 		result.IsUsingVPN = true
-		result.DetectionMethod = "路由表检测"
+		result.DetectionMethod = "route-table"
 		result.Confidence = "high"
 		return result
 	}
@@ -42,7 +42,7 @@ func DetectVPN(ctx context.Context) *VPNDetectionResult {
 	// 方法3: 检查到目标服务器的连接质量（降低为辅助判断）
 	if hasHighLatency(ctx) {
 		result.IsUsingVPN = true
-		result.DetectionMethod = "网络延迟检测"
+		result.DetectionMethod = "network-latency"
 		result.Confidence = "low"
 		return result
 	}
@@ -217,11 +217,11 @@ func hasHighLatency(ctx context.Context) bool {
 func GetVPNInterfaceInfo() string {
 	interfaces, err := net.Interfaces()
 	if err != nil {
-		return fmt.Sprintf("获取接口失败: %v", err)
+		return fmt.Sprintf("failed to list network interfaces: %v", err)
 	}
 
 	var info strings.Builder
-	info.WriteString("网络接口信息:\n")
+	info.WriteString("Network interfaces:\n")
 
 	for _, iface := range interfaces {
 		if iface.Flags&net.FlagUp == 0 {
@@ -233,11 +233,11 @@ func GetVPNInterfaceInfo() string {
 			continue
 		}
 
-		info.WriteString(fmt.Sprintf("\n接口: %s\n", iface.Name))
-		info.WriteString(fmt.Sprintf("  状态: UP=%v, RUNNING=%v\n",
+		info.WriteString(fmt.Sprintf("\nInterface: %s\n", iface.Name))
+		info.WriteString(fmt.Sprintf("  Status: UP=%v, RUNNING=%v\n",
 			iface.Flags&net.FlagUp != 0,
 			iface.Flags&net.FlagRunning != 0))
-		info.WriteString("  地址:\n")
+		info.WriteString("  Addresses:\n")
 		for _, addr := range addrs {
 			info.WriteString(fmt.Sprintf("    %s\n", addr.String()))
 		}

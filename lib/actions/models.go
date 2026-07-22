@@ -1,6 +1,7 @@
 package actions
 
 import (
+	"github.com/siliconflow/bizyair-cli/internal/i18n"
 	"github.com/siliconflow/bizyair-cli/lib"
 	"github.com/siliconflow/bizyair-cli/meta"
 )
@@ -8,7 +9,7 @@ import (
 func ListModels(api lib.BizyAPI, input ListModelsInput) ListModelsResult {
 	if input.ApiKey == "" {
 		return ListModelsResult{
-			Error: lib.WithStep("查询模型列表", lib.NewValidationError("未登录或缺少API Key")),
+			Error: lib.WithStep(i18n.T("step.list_models"), i18n.NewError("error.auth.api_key_missing", nil, nil)),
 		}
 	}
 
@@ -43,7 +44,7 @@ func ListModels(api lib.BizyAPI, input ListModelsInput) ListModelsResult {
 	)
 	if err != nil {
 		return ListModelsResult{
-			Error: lib.WithStep("查询模型列表", err),
+			Error: lib.WithStep(i18n.T("step.list_models"), err),
 		}
 	}
 
@@ -57,13 +58,13 @@ func GetModelDetail(api lib.BizyAPI, modelId int64) ModelDetailResult {
 	resp, err := api.GetBizyModelDetail(modelId)
 	if err != nil {
 		return ModelDetailResult{
-			Error: lib.WithStep("查询模型详情", err),
+			Error: lib.WithStep(i18n.T("step.model_detail"), err),
 		}
 	}
 
 	if resp == nil || resp.Data.Id == 0 {
 		return ModelDetailResult{
-			Error: lib.WithStep("查询模型详情", lib.NewValidationError("未获取到模型详情")),
+			Error: lib.WithStep(i18n.T("step.model_detail"), i18n.NewError("error.model.detail_missing", nil, nil)),
 		}
 	}
 
@@ -77,7 +78,7 @@ func DeleteModel(api lib.BizyAPI, modelId int64) DeleteModelResult {
 	if err != nil {
 		return DeleteModelResult{
 			Success: false,
-			Error:   lib.WithStep("删除模型", err),
+			Error:   lib.WithStep(i18n.T("step.delete_model"), err),
 		}
 	}
 

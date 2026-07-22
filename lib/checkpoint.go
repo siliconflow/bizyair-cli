@@ -2,7 +2,6 @@ package lib
 
 import (
 	"encoding/json"
-	"fmt"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -10,6 +9,7 @@ import (
 
 	"github.com/aliyun/alibabacloud-oss-go-sdk-v2/oss"
 	"github.com/cloudwego/hertz/cmd/hz/util/logs"
+	"github.com/siliconflow/bizyair-cli/internal/i18n"
 	"github.com/siliconflow/bizyair-cli/meta"
 )
 
@@ -47,14 +47,14 @@ func GetCheckpointDir() (string, error) {
 	}
 
 	if homeDir == "" {
-		return "", fmt.Errorf("unable to determine home directory")
+		return "", i18n.NewError("error.io.home_directory_missing", nil, nil)
 	}
 
 	checkpointDir := filepath.Join(homeDir, meta.SfFolder, meta.CheckpointFolder)
 
 	// 确保目录存在
 	if err := os.MkdirAll(checkpointDir, 0770); err != nil {
-		return "", fmt.Errorf("failed to create checkpoint directory: %v", err)
+		return "", i18n.NewError("error.checkpoint.directory_failed", map[string]any{"Path": checkpointDir}, err)
 	}
 
 	return checkpointDir, nil
@@ -75,23 +75,23 @@ func GetCheckpointFile(sha256sum string) (string, error) {
 // SaveCheckpoint 保存断点信息到JSON文件
 func SaveCheckpoint(info *CheckpointInfo) error {
 	if info.FileSignature == "" {
-		return fmt.Errorf("file signature is empty, cannot save checkpoint")
+		return i18n.NewError("error.checkpoint.signature_required", nil, nil)
 	}
 
 	checkpointFile, err := GetCheckpointFile(info.FileSignature)
 	if err != nil {
-		return fmt.Errorf("failed to get checkpoint file path: %v", err)
+		return i18n.NewError("error.checkpoint.path_failed", nil, err)
 	}
 
 	// 序列化为JSON
 	data, err := json.MarshalIndent(info, "", "  ")
 	if err != nil {
-		return fmt.Errorf("failed to marshal checkpoint info: %v", err)
+		return i18n.NewError("error.checkpoint.encode_failed", nil, err)
 	}
 
 	// 写入文件
 	if err := os.WriteFile(checkpointFile, data, 0644); err != nil {
-		return fmt.Errorf("failed to write checkpoint file: %v", err)
+		return i18n.NewError("error.checkpoint.write_failed", map[string]any{"Path": checkpointFile}, err)
 	}
 
 	logs.Debugf("checkpoint saved: %s\n", checkpointFile)
@@ -108,13 +108,13 @@ func LoadCheckpoint(checkpointFile string) (*CheckpointInfo, error) {
 	// 读取文件
 	data, err := os.ReadFile(checkpointFile)
 	if err != nil {
-		return nil, fmt.Errorf("failed to read checkpoint file: %v", err)
+		return nil, i18n.NewError("error.checkpoint.read_failed", map[string]any{"Path": checkpointFile}, err)
 	}
 
 	// 反序列化
 	var info CheckpointInfo
 	if err := json.Unmarshal(data, &info); err != nil {
-		return nil, fmt.Errorf("failed to unmarshal checkpoint info: %v", err)
+		return nil, i18n.NewError("error.checkpoint.decode_failed", map[string]any{"Path": checkpointFile}, err)
 	}
 
 	logs.Debugf("checkpoint loaded: %s\n", checkpointFile)
@@ -128,7 +128,7 @@ func DeleteCheckpoint(checkpointFile string) error {
 	}
 
 	if err := os.Remove(checkpointFile); err != nil {
-		return fmt.Errorf("failed to delete checkpoint file: %v", err)
+		return i18n.NewError("error.checkpoint.delete_failed", map[string]any{"Path": checkpointFile}, err)
 	}
 
 	logs.Debugf("checkpoint deleted: %s\n", checkpointFile)

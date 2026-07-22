@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/samber/lo"
+	"github.com/siliconflow/bizyair-cli/internal/i18n"
 	"github.com/siliconflow/bizyair-cli/meta"
 )
 
@@ -21,7 +22,7 @@ func EnsureAbsPath(p string) string {
 // ValidateModelName 校验模型名称格式
 func ValidateModelName(name string) error {
 	if name == "" {
-		return fmt.Errorf("模型名称不能为空")
+		return i18n.NewError("validation.model_name_required", nil, nil)
 	}
 	return nil
 }
@@ -29,11 +30,11 @@ func ValidateModelName(name string) error {
 // ValidateModelType 校验模型类型
 func ValidateModelType(modelType string) error {
 	if modelType == "" {
-		return fmt.Errorf("模型类型不能为空")
+		return i18n.NewError("validation.model_type_required", nil, nil)
 	}
 	mt := meta.UploadFileType(modelType)
 	if !lo.Contains(meta.ModelTypes, mt) {
-		return fmt.Errorf("不支持的模型类型 [%s]，仅支持 %s", modelType, meta.ModelTypesStr)
+		return i18n.NewError("validation.model_type_unsupported", map[string]any{"Type": modelType, "Supported": meta.ModelTypesStr}, nil)
 	}
 	return nil
 }
@@ -41,10 +42,10 @@ func ValidateModelType(modelType string) error {
 // ValidatePath 校验文件路径是否存在
 func ValidatePath(path string) error {
 	if path == "" {
-		return fmt.Errorf("文件路径不能为空")
+		return i18n.NewError("validation.path_required", nil, nil)
 	}
 	if _, err := os.Stat(path); os.IsNotExist(err) {
-		return fmt.Errorf("路径不存在: %s", path)
+		return i18n.NewError("validation.path_not_found", map[string]any{"Path": path}, err)
 	}
 	return nil
 }
@@ -53,18 +54,19 @@ func ValidatePath(path string) error {
 // allowedModels: 从API获取的允许的基础模型列表，必须提供
 func ValidateBaseModel(baseModel string, allowedModels []string) error {
 	if baseModel == "" {
-		return fmt.Errorf("基础模型不能为空")
+		return i18n.NewError("validation.base_model_required", nil, nil)
 	}
 
 	// 如果没有提供允许的模型列表，返回错误
 	if len(allowedModels) == 0 {
-		return fmt.Errorf("无法验证基础模型：未提供允许的模型列表，请先从API获取")
+		return i18n.NewError("validation.base_model_list_missing", nil, nil)
 	}
 
 	// 使用提供的列表验证
 	if !lo.Contains(allowedModels, baseModel) {
-		return fmt.Errorf("不支持的基础模型: %s (支持的模型: %s)",
-			baseModel, strings.Join(allowedModels, ", "))
+		return i18n.NewError("validation.base_model_unsupported", map[string]any{
+			"Model": baseModel, "Supported": strings.Join(allowedModels, ", "),
+		}, nil)
 	}
 
 	return nil
@@ -74,14 +76,14 @@ func ValidateBaseModel(baseModel string, allowedModels []string) error {
 // Deprecated: 使用 ValidateBaseModel 并传入从API获取的列表
 func ValidateBaseModelLegacy(baseModel string) error {
 	if baseModel == "" {
-		return fmt.Errorf("基础模型不能为空")
+		return i18n.NewError("validation.base_model_required", nil, nil)
 	}
 	valid, exists := meta.SupportedBaseModels[baseModel]
 	if !exists {
-		return fmt.Errorf("不支持的基础模型: %s", baseModel)
+		return i18n.NewError("validation.base_model_unsupported_simple", map[string]any{"Model": baseModel}, nil)
 	}
 	if !valid {
-		return fmt.Errorf("基础模型无效: %s", baseModel)
+		return i18n.NewError("validation.base_model_invalid", map[string]any{"Model": baseModel}, nil)
 	}
 	return nil
 }
@@ -90,7 +92,7 @@ func ValidateBaseModelLegacy(baseModel string) error {
 func ValidateCoverFile(path string) error {
 	info, err := os.Stat(path)
 	if err != nil {
-		return fmt.Errorf("封面文件不存在: %w", err)
+		return i18n.NewError("validation.cover_not_found", map[string]any{"Path": path}, err)
 	}
 
 	ext := strings.ToLower(filepath.Ext(path))
@@ -98,15 +100,16 @@ func ValidateCoverFile(path string) error {
 	// 检查格式
 	supportedExts := []string{".jpg", ".jpeg", ".png", ".gif", ".webp", ".mp4", ".webm", ".mov"}
 	if !lo.Contains(supportedExts, ext) {
-		return fmt.Errorf("不支持的封面格式: %s（支持: %s）", ext, strings.Join(supportedExts, ", "))
+		return i18n.NewError("validation.cover_format_unsupported", map[string]any{"Format": ext, "Supported": strings.Join(supportedExts, ", ")}, nil)
 	}
 
 	// 视频文件大小限制 100MB
 	if ext == ".mp4" || ext == ".webm" || ext == ".mov" {
 		maxSize := int64(100 * 1024 * 1024)
 		if info.Size() > maxSize {
-			return fmt.Errorf("视频封面大小超过限制（%.1f MB > 100 MB）",
-				float64(info.Size())/(1024*1024))
+			return i18n.NewError("validation.cover_too_large", map[string]any{
+				"Size": fmt.Sprintf("%.1f", float64(info.Size())/(1024*1024)), "Limit": 100,
+			}, nil)
 		}
 	}
 
@@ -133,21 +136,21 @@ func GetSupportedCoverFormats() string {
 // ValidateIntroFile 验证介绍文件格式
 func ValidateIntroFile(path string) error {
 	if path == "" {
-		return fmt.Errorf("intro 文件路径不能为空")
+		return i18n.NewError("validation.intro_path_required", nil, nil)
 	}
 
 	info, err := os.Stat(path)
 	if err != nil {
-		return fmt.Errorf("文件不存在: %w", err)
+		return i18n.NewError("validation.file_not_found", map[string]any{"Path": path}, err)
 	}
 
 	if info.IsDir() {
-		return fmt.Errorf("路径是目录，需要文件: %s", path)
+		return i18n.NewError("validation.file_is_directory", map[string]any{"Path": path}, nil)
 	}
 
 	ext := strings.ToLower(filepath.Ext(path))
 	if ext != ".txt" && ext != ".md" {
-		return fmt.Errorf("不支持的文件格式，仅支持 .txt 和 .md 文件")
+		return i18n.NewError("validation.intro_format_unsupported", nil, nil)
 	}
 
 	return nil
@@ -157,7 +160,7 @@ func ValidateIntroFile(path string) error {
 func ReadIntroFile(path string) (string, error) {
 	content, err := os.ReadFile(path)
 	if err != nil {
-		return "", fmt.Errorf("读取文件失败: %w", err)
+		return "", i18n.NewError("validation.file_read_failed", map[string]any{"Path": path}, err)
 	}
 
 	text := strings.TrimSpace(string(content))

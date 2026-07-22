@@ -1,7 +1,6 @@
 package tui
 
 import (
-	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -10,6 +9,7 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/siliconflow/bizyair-cli/internal/i18n"
 	"github.com/siliconflow/bizyair-cli/lib/format"
 )
 
@@ -113,12 +113,12 @@ func (m *mainModel) renderPathInputWithCompletion() string {
 
 		// 渲染灰色预览提示（在独立的一行）
 		grayStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("240"))
-		previewText := fmt.Sprintf("建议: %s", suggestion)
+		previewText := i18n.T("tui.upload.suggestion", map[string]any{"Path": suggestion})
 		result.WriteString(grayStyle.Render(previewText))
 
 		// 显示匹配数量
 		if m.act.pathMatchCount > 1 {
-			countHint := fmt.Sprintf(" (%d 个匹配)", m.act.pathMatchCount)
+			countHint := i18n.T("tui.upload.matches", map[string]any{"Count": m.act.pathMatchCount})
 			hintStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("244"))
 			result.WriteString(hintStyle.Render(countHint))
 		}
@@ -193,7 +193,7 @@ func (m *mainModel) validateAndSetPath(path string) error {
 		}
 	}
 	if !isSupported {
-		return fmt.Errorf("不支持的文件格式，支持的格式：%s", strings.Join(supportedExts, ", "))
+		return i18n.NewError("tui.error.format_unsupported", map[string]any{"Supported": strings.Join(supportedExts, ", ")}, nil)
 	}
 	if err := validatePath(path); err != nil {
 		return err
@@ -207,9 +207,11 @@ func (m *mainModel) validateAndSetPath(path string) error {
 // 上传进行时视图（复用原进度渲染）
 func (m *mainModel) renderUploadRunningView() string {
 	var summaryBuilder strings.Builder
-	summaryBuilder.WriteString(fmt.Sprintf("- type: %s\n- name: %s\n", dash(m.act.u.typ), dash(m.act.u.name)))
+	summaryBuilder.WriteString(i18n.T("tui.upload.running_summary", map[string]any{"Type": dash(m.act.u.typ), "Name": dash(m.act.u.name)}) + "\n")
 	for i, v := range m.act.versions {
-		summaryBuilder.WriteString(fmt.Sprintf("  [%d] version=%s base=%s cover=%s path=%s intro=%s\n", i+1, dash(v.version), dash(v.base), dash(v.cover), dash(v.path), dash(truncateToLines(v.intro, 2))))
+		summaryBuilder.WriteString(i18n.T("tui.upload.running_version", map[string]any{
+			"Index": i + 1, "Version": dash(v.version), "Base": dash(v.base), "Cover": dash(v.cover), "Path": dash(v.path), "Intro": dash(truncateToLines(v.intro, 2)),
+		}) + "\n")
 	}
 	summary := summaryBuilder.String()
 
@@ -221,7 +223,7 @@ func (m *mainModel) renderUploadRunningView() string {
 				m.coverStatus = ""
 				m.coverStatusWarning = false
 			}
-			progressSection.WriteString(fmt.Sprintf("当前: (%s) %s\n", m.uploadProg.fileIndex, m.uploadProg.fileName))
+			progressSection.WriteString(i18n.T("tui.upload.current_file", map[string]any{"Index": m.uploadProg.fileIndex, "File": m.uploadProg.fileName}) + "\n")
 		} else {
 			// 准备阶段，显示封面状态或默认提示
 			if m.coverStatus != "" {
@@ -235,7 +237,7 @@ func (m *mainModel) renderUploadRunningView() string {
 					progressSection.WriteString("\n")
 				}
 			} else {
-				progressSection.WriteString("准备上传…\n")
+				progressSection.WriteString(i18n.T("tui.upload.preparing", nil) + "\n")
 			}
 		}
 		for i := range m.verProgress {
@@ -254,7 +256,7 @@ func (m *mainModel) renderUploadRunningView() string {
 			if i == m.uploadProg.verIdx {
 				prefix = "▶ "
 			}
-			progressSection.WriteString(fmt.Sprintf("%s[%d/%d] 版本=%s\n", prefix, i+1, len(m.verProgress), dash(versionLabel)))
+			progressSection.WriteString(i18n.T("tui.upload.version_progress", map[string]any{"Prefix": prefix, "Current": i + 1, "Total": len(m.verProgress), "Version": dash(versionLabel)}) + "\n")
 			if total > 0 {
 				progressSection.WriteString(fmt.Sprintf("%s%s\n", prefix, bar))
 				// 显示进度百分比、已上传/总大小和速率
@@ -292,7 +294,7 @@ func (m *mainModel) renderUploadRunningView() string {
 					fileLine = m.coverStatus
 				}
 			} else {
-				fileLine = "准备上传…"
+				fileLine = i18n.T("tui.upload.preparing", nil)
 			}
 			progLine = m.progress.View()
 			speedLine = ""
@@ -308,12 +310,12 @@ func (m *mainModel) renderUploadRunningView() string {
 
 	var hint string
 	if m.canceling {
-		hint = m.hintStyle.Render("正在取消上传，请稍候...（已上传部分会保存，支持断点续传）")
+		hint = m.hintStyle.Render(i18n.T("tui.upload.canceling", nil))
 	} else {
-		hint = m.hintStyle.Render("按 Ctrl+C 取消上传（已上传部分会保存，支持断点续传）")
+		hint = m.hintStyle.Render(i18n.T("tui.upload.cancel_hint", nil))
 	}
 
-	return m.titleStyle.Render("上传中 · 请稍候") + "\n\n" + summary + "\n\n" + progressSection.String() + "\n\n" + hint
+	return m.titleStyle.Render(i18n.T("tui.upload.running_title", nil)) + "\n\n" + summary + "\n\n" + progressSection.String() + "\n\n" + hint
 }
 
 // 根据当前动作处理输入与触发命令
@@ -440,8 +442,7 @@ func (m *mainModel) updateUploadInputs(msg tea.Msg) tea.Cmd {
 			switch km.String() {
 			case "enter":
 				if it, ok := m.coverMethodList.SelectedItem().(listItem); ok {
-					method := it.title
-					if strings.Contains(method, "URL") {
+					if it.value == "url" {
 						m.act.coverUploadMethod = "url"
 						m.coverUrlInputFocused = true
 						m.coverPathInputFocused = false
@@ -503,15 +504,15 @@ func (m *mainModel) updateUploadInputs(msg tea.Msg) tea.Cmd {
 					if i := strings.Index(raw, ";"); i >= 0 {
 						first = strings.TrimSpace(raw[:i])
 						m.inpCover.SetValue(first)
-						m.act.filePickerErr = errors.New("检测到分号，仅保留第一个 URL")
+						m.act.filePickerErr = i18n.NewError("tui.error.cover_multiple_urls", nil, nil)
 						warned = true
 					}
 					if _, err := os.Stat(first); err == nil {
-						m.act.filePickerErr = fmt.Errorf("检测到本地路径，请返回上一步选择本地上传")
+						m.act.filePickerErr = i18n.NewError("tui.error.cover_local_in_url", nil, nil)
 						return clearFilePickerErrorAfter(3 * time.Second)
 					}
 					if !IsHTTPURL(first) {
-						m.act.filePickerErr = fmt.Errorf("请输入封面的 URL（以 http/https 开头）")
+						m.act.filePickerErr = i18n.NewError("tui.error.cover_url_required", nil, nil)
 						return clearFilePickerErrorAfter(3 * time.Second)
 					}
 					check := first
@@ -519,7 +520,7 @@ func (m *mainModel) updateUploadInputs(msg tea.Msg) tea.Cmd {
 						check = check[:q]
 					}
 					if !isSupportedCoverFormat(check) {
-						m.act.filePickerErr = fmt.Errorf("URL 格式不支持: %s\n支持的格式: %s", first, getSupportedCoverFormats())
+						m.act.filePickerErr = i18n.NewError("tui.error.cover_url_format", map[string]any{"URL": first, "Supported": getSupportedCoverFormats()}, nil)
 						return clearFilePickerErrorAfter(3 * time.Second)
 					}
 					m.act.cur.cover = first
@@ -569,7 +570,7 @@ func (m *mainModel) updateUploadInputs(msg tea.Msg) tea.Cmd {
 						p := strings.TrimSpace(m.inpPath.Value())
 						info, err := os.Stat(p)
 						if err != nil {
-							m.act.filePickerErr = fmt.Errorf("路径不存在: %s", p)
+							m.act.filePickerErr = i18n.NewError("tui.error.path_missing", map[string]any{"Path": p}, err)
 							return clearFilePickerErrorAfter(3 * time.Second)
 						}
 						if info.IsDir() {
@@ -656,7 +657,7 @@ func (m *mainModel) updateUploadInputs(msg tea.Msg) tea.Cmd {
 				}
 				if didSelect, p := m.filepicker.DidSelectDisabledFile(msg); didSelect {
 					if info, err := os.Stat(p); err == nil && !info.IsDir() {
-						m.act.filePickerErr = errors.New(p + " 文件格式不支持")
+						m.act.filePickerErr = i18n.NewError("tui.error.file_format", map[string]any{"Path": p}, nil)
 						return clearFilePickerErrorAfter(3 * time.Second)
 					}
 				}
@@ -671,8 +672,7 @@ func (m *mainModel) updateUploadInputs(msg tea.Msg) tea.Cmd {
 			switch km.String() {
 			case "enter":
 				if it, ok := m.introMethodList.SelectedItem().(listItem); ok {
-					method := it.title
-					if strings.Contains(method, "文件导入") {
+					if it.value == "file" {
 						m.act.introInputMethod = "file"
 						m.act.useFilePicker = true
 						m.act.introPathInputFocused = true
@@ -760,7 +760,7 @@ func (m *mainModel) updateUploadInputs(msg tea.Msg) tea.Cmd {
 						p := strings.TrimSpace(m.inpPath.Value())
 						info, err := os.Stat(p)
 						if err != nil {
-							m.act.filePickerErr = fmt.Errorf("路径不存在: %s", p)
+							m.act.filePickerErr = i18n.NewError("tui.error.path_missing", map[string]any{"Path": p}, err)
 							return clearFilePickerErrorAfter(3 * time.Second)
 						}
 						if info.IsDir() {
@@ -780,7 +780,7 @@ func (m *mainModel) updateUploadInputs(msg tea.Msg) tea.Cmd {
 							return clearFilePickerErrorAfter(3 * time.Second)
 						}
 						if strings.TrimSpace(content) == "" {
-							m.act.filePickerErr = fmt.Errorf("模型介绍（intro）是必填项，文件内容不能为空")
+							m.act.filePickerErr = i18n.NewError("tui.error.intro_empty", nil, nil)
 							return clearFilePickerErrorAfter(3 * time.Second)
 						}
 						m.taIntro.SetValue(content)
@@ -845,7 +845,7 @@ func (m *mainModel) updateUploadInputs(msg tea.Msg) tea.Cmd {
 							return clearFilePickerErrorAfter(3 * time.Second)
 						}
 						if strings.TrimSpace(content) == "" {
-							m.act.filePickerErr = fmt.Errorf("模型介绍（intro）是必填项，文件内容不能为空")
+							m.act.filePickerErr = i18n.NewError("tui.error.intro_empty", nil, nil)
 							return clearFilePickerErrorAfter(3 * time.Second)
 						}
 						m.taIntro.SetValue(content)
@@ -857,7 +857,7 @@ func (m *mainModel) updateUploadInputs(msg tea.Msg) tea.Cmd {
 				}
 				if didSelect, p := m.filepicker.DidSelectDisabledFile(msg); didSelect {
 					if info, err := os.Stat(p); err == nil && !info.IsDir() {
-						m.act.filePickerErr = errors.New(p + " 文件格式不支持")
+						m.act.filePickerErr = i18n.NewError("tui.error.file_format", map[string]any{"Path": p}, nil)
 						return clearFilePickerErrorAfter(3 * time.Second)
 					}
 				}
@@ -872,7 +872,7 @@ func (m *mainModel) updateUploadInputs(msg tea.Msg) tea.Cmd {
 				case "ctrl+s":
 					intro := strings.TrimSpace(m.taIntro.Value())
 					if intro == "" {
-						m.err = fmt.Errorf("模型介绍（intro）是必填项，请提供介绍文本或通过文件导入")
+						m.err = i18n.NewError("tui.error.intro_required", nil, nil)
 						return nil
 					}
 					if len([]rune(intro)) > 5000 {
@@ -932,7 +932,7 @@ func (m *mainModel) updateUploadInputs(msg tea.Msg) tea.Cmd {
 						m.filepicker.CurrentDirectory = path
 						return m.filepicker.Init()
 					} else {
-						m.act.filePickerErr = fmt.Errorf("路径无效或不是目录: %s", path)
+						m.act.filePickerErr = i18n.NewError("tui.error.directory_invalid", map[string]any{"Path": path}, nil)
 						return clearFilePickerErrorAfter(3 * time.Second)
 					}
 				}
@@ -971,7 +971,7 @@ func (m *mainModel) updateUploadInputs(msg tea.Msg) tea.Cmd {
 					path := strings.TrimSpace(m.inpPath.Value())
 					info, err := os.Stat(path)
 					if err != nil {
-						m.act.filePickerErr = fmt.Errorf("路径不存在: %s", path)
+						m.act.filePickerErr = i18n.NewError("tui.error.path_missing", map[string]any{"Path": path}, err)
 						return clearFilePickerErrorAfter(3 * time.Second)
 					}
 					if info.IsDir() {
@@ -1045,7 +1045,7 @@ func (m *mainModel) updateUploadInputs(msg tea.Msg) tea.Cmd {
 			}
 			if didSelect, path := m.filepicker.DidSelectDisabledFile(msg); didSelect {
 				if info, err := os.Stat(path); err == nil && !info.IsDir() {
-					m.act.filePickerErr = errors.New(path + " 文件格式不支持")
+					m.act.filePickerErr = i18n.NewError("tui.error.file_format", map[string]any{"Path": path}, nil)
 					return clearFilePickerErrorAfter(3 * time.Second)
 				}
 			}
@@ -1058,13 +1058,7 @@ func (m *mainModel) updateUploadInputs(msg tea.Msg) tea.Cmd {
 			switch km.String() {
 			case "enter":
 				if it, ok := m.publicList.SelectedItem().(listItem); ok {
-					title := it.title
-					// 默认第一个是"否，保持私有"，第二个是"是，公开模型"
-					if strings.HasPrefix(title, "是") {
-						m.act.cur.public = true
-					} else {
-						m.act.cur.public = false
-					}
+					m.act.cur.public = it.value == "public"
 					m.upStep = stepAskMore
 					return nil
 				}
@@ -1082,8 +1076,7 @@ func (m *mainModel) updateUploadInputs(msg tea.Msg) tea.Cmd {
 			switch km.String() {
 			case "enter":
 				if it, ok := m.moreList.SelectedItem().(listItem); ok {
-					title := it.title
-					if strings.HasPrefix(title, "是") {
+					if it.value == "add" {
 						m.act.versions = append(m.act.versions, m.act.cur)
 						next := fmt.Sprintf("v%d.0", len(m.act.versions)+1)
 						m.act.cur = versionItem{}
@@ -1133,11 +1126,11 @@ func (m *mainModel) renderUploadStepsView() string {
 			}
 			m.typeList.SetHeight(h)
 		}
-		return m.titleStyle.Render("上传 · Step 1/9 · 选择模型类型") + "\n\n" + m.typeList.View() + "\n" + m.hintStyle.Render("确认：Enter，返回：Esc")
+		return m.titleStyle.Render(uploadTitle(1, "tui.upload.section.type")) + "\n\n" + m.typeList.View() + "\n" + m.hintStyle.Render(i18n.T("tui.hint.confirm_back", nil))
 	case stepName:
-		return m.titleStyle.Render("上传 · Step 2/9 · 模型名称") + "\n\n" + m.inpName.View() + "\n" + m.hintStyle.Render("确认：Enter，返回：Esc")
+		return m.titleStyle.Render(uploadTitle(2, "tui.upload.section.name")) + "\n\n" + m.inpName.View() + "\n" + m.hintStyle.Render(i18n.T("tui.hint.confirm_back", nil))
 	case stepVersion:
-		return m.titleStyle.Render("上传 · Step 3/9 · 版本名称（默认 v1.0）") + "\n\n" + m.inpVersion.View() + "\n" + m.hintStyle.Render("确认：Enter，返回：Esc")
+		return m.titleStyle.Render(uploadTitle(3, "tui.upload.section.version")) + "\n\n" + m.inpVersion.View() + "\n" + m.hintStyle.Render(i18n.T("tui.hint.confirm_back", nil))
 	case stepBase:
 		if _, ih := m.innerSize(); ih > 0 {
 			h := ih - 12
@@ -1148,13 +1141,13 @@ func (m *mainModel) renderUploadStepsView() string {
 		}
 		// 如果基础模型类型还在加载中
 		if m.loadingBaseModelTypes {
-			return m.titleStyle.Render("上传 · Step 4/9 · Base Model（必选）") + "\n\n" + m.sp.View() + " 正在加载基础模型类型列表…\n" + m.hintStyle.Render("返回：Esc")
+			return m.titleStyle.Render(uploadTitle(4, "tui.upload.section.base")) + "\n\n" + m.sp.View() + " " + i18n.T("tui.upload.load_base_models", nil) + "\n" + m.hintStyle.Render(i18n.T("tui.hint.confirm_back", nil))
 		}
 		// 如果列表为空（加载失败），显示提示
 		if len(m.baseModelTypes) == 0 {
-			return m.titleStyle.Render("上传 · Step 4/9 · Base Model（必选）") + "\n\n" + m.baseList.View() + "\n" + m.hintStyle.Render("（使用本地列表）选择后 Enter，返回：Esc")
+			return m.titleStyle.Render(uploadTitle(4, "tui.upload.section.base")) + "\n\n" + m.baseList.View() + "\n" + m.hintStyle.Render(i18n.T("tui.upload.local_base_models", nil))
 		}
-		return m.titleStyle.Render("上传 · Step 4/9 · Base Model（必选）") + "\n\n" + m.baseList.View() + "\n" + m.hintStyle.Render("选择后 Enter，返回：Esc")
+		return m.titleStyle.Render(uploadTitle(4, "tui.upload.section.base")) + "\n\n" + m.baseList.View() + "\n" + m.hintStyle.Render(i18n.T("tui.upload.select_base_model", nil))
 	case stepCoverMethod:
 		if _, ih := m.innerSize(); ih > 0 {
 			h := ih - 12
@@ -1163,28 +1156,28 @@ func (m *mainModel) renderUploadStepsView() string {
 			}
 			m.coverMethodList.SetHeight(h)
 		}
-		return m.titleStyle.Render("上传 · Step 5/9 · 选择封面上传方式") + "\n\n" + m.coverMethodList.View() + "\n" + m.hintStyle.Render("选择后 Enter，返回：Esc")
+		return m.titleStyle.Render(uploadTitle(5, "tui.upload.section.cover_method")) + "\n\n" + m.coverMethodList.View() + "\n" + m.hintStyle.Render(i18n.T("tui.upload.select_then_enter", nil))
 	case stepCover:
 		var content strings.Builder
 
 		switch m.act.coverUploadMethod {
 		case "url":
-			content.WriteString(m.titleStyle.Render("上传 · Step 6/9 · 输入封面URL"))
+			content.WriteString(m.titleStyle.Render(uploadTitle(6, "tui.upload.section.cover_url")))
 			content.WriteString("\n\n")
-			content.WriteString("封面 URL（必填，仅 1 个图片或视频链接）：\n")
+			content.WriteString(i18n.T("tui.upload.cover_url_label", nil) + "\n")
 			content.WriteString(m.inpCover.View())
 			content.WriteString("\n\n")
 			if m.act.filePickerErr != nil {
 				content.WriteString(m.filepicker.Styles.DisabledFile.Render(m.act.filePickerErr.Error()))
 				content.WriteString("\n\n")
 			}
-			content.WriteString(m.hintStyle.Render("输入封面 URL（图片或视频，视频限 100MB），回车确认并进入下一步；Esc 返回选择上传方式"))
+			content.WriteString(m.hintStyle.Render(i18n.T("tui.upload.cover_url_hint", nil)))
 		case "local":
-			content.WriteString(m.titleStyle.Render("上传 · Step 6/9 · 选择本地封面文件"))
+			content.WriteString(m.titleStyle.Render(uploadTitle(6, "tui.upload.section.cover_local")))
 			content.WriteString("\n\n")
-			pathLabel := "本地文件路径输入："
+			pathLabel := i18n.T("tui.upload.local_path_label", nil)
 			if m.coverPathInputFocused {
-				pathLabel = m.titleStyle.Render("► " + pathLabel + "（当前焦点，按 Ctrl+P 切换）")
+				pathLabel = m.titleStyle.Render("► " + pathLabel + i18n.T("tui.upload.focused", nil))
 			} else {
 				pathLabel = m.hintStyle.Render(pathLabel)
 			}
@@ -1198,9 +1191,9 @@ func (m *mainModel) renderUploadStepsView() string {
 				content.WriteString("\n\n")
 			}
 
-			pickerLabel := "文件选择器："
+			pickerLabel := i18n.T("tui.upload.picker_label", nil)
 			if !m.coverPathInputFocused {
-				pickerLabel = m.titleStyle.Render("► 文件选择器：（当前焦点，按 Ctrl+P 切换）")
+				pickerLabel = m.titleStyle.Render("► " + pickerLabel + i18n.T("tui.upload.focused", nil))
 			} else {
 				pickerLabel = m.hintStyle.Render(pickerLabel)
 			}
@@ -1214,9 +1207,9 @@ func (m *mainModel) renderUploadStepsView() string {
 			content.WriteString("\n")
 
 			if m.coverPathInputFocused {
-				content.WriteString(m.hintStyle.Render("输入本地文件路径（视频限 100MB），Enter 确认；Ctrl+P 切换焦点；Esc 返回选择上传方式"))
+				content.WriteString(m.hintStyle.Render(i18n.T("tui.upload.cover_path_hint", nil)))
 			} else {
-				content.WriteString(m.hintStyle.Render("方向键导航，Enter 选择封面文件（视频限 100MB）；Ctrl+P 切换焦点；Esc 返回选择上传方式"))
+				content.WriteString(m.hintStyle.Render(i18n.T("tui.upload.cover_picker_hint", nil)))
 			}
 		}
 		return content.String()
@@ -1228,16 +1221,16 @@ func (m *mainModel) renderUploadStepsView() string {
 			}
 			m.introMethodList.SetHeight(h)
 		}
-		return m.titleStyle.Render("上传 · Step 7/10 · 选择介绍输入方式") + "\n\n" + m.introMethodList.View() + "\n" + m.hintStyle.Render("选择后 Enter，返回：Esc")
+		return m.titleStyle.Render(uploadTitle(7, "tui.upload.section.intro_method")) + "\n\n" + m.introMethodList.View() + "\n" + m.hintStyle.Render(i18n.T("tui.upload.select_then_enter", nil))
 	case stepIntro:
 		if m.act.introInputMethod == "file" {
 			// 文件导入模式渲染
 			var content strings.Builder
-			content.WriteString(m.titleStyle.Render("上传 · Step 8/10 · 从文件导入介绍内容"))
+			content.WriteString(m.titleStyle.Render(uploadTitle(8, "tui.upload.section.intro_file")))
 			content.WriteString("\n\n")
-			pathLabel := "本地文件路径输入："
+			pathLabel := i18n.T("tui.upload.local_path_label", nil)
 			if m.act.introPathInputFocused {
-				pathLabel = m.titleStyle.Render("► " + pathLabel + "（当前焦点，按 Ctrl+P 切换）")
+				pathLabel = m.titleStyle.Render("► " + pathLabel + i18n.T("tui.upload.focused", nil))
 			} else {
 				pathLabel = m.hintStyle.Render(pathLabel)
 			}
@@ -1251,9 +1244,9 @@ func (m *mainModel) renderUploadStepsView() string {
 				content.WriteString("\n\n")
 			}
 
-			pickerLabel := "文件选择器："
+			pickerLabel := i18n.T("tui.upload.picker_label", nil)
 			if !m.act.introPathInputFocused {
-				pickerLabel = m.titleStyle.Render("► 文件选择器：（当前焦点，按 Ctrl+P 切换）")
+				pickerLabel = m.titleStyle.Render("► " + pickerLabel + i18n.T("tui.upload.focused", nil))
 			} else {
 				pickerLabel = m.hintStyle.Render(pickerLabel)
 			}
@@ -1267,26 +1260,26 @@ func (m *mainModel) renderUploadStepsView() string {
 			content.WriteString("\n")
 
 			if m.act.introPathInputFocused {
-				content.WriteString(m.hintStyle.Render("输入 .txt 或 .md 文件路径，Enter 确认；Ctrl+P 切换焦点；Esc 返回选择输入方式"))
+				content.WriteString(m.hintStyle.Render(i18n.T("tui.upload.intro_path_hint", nil)))
 			} else {
-				content.WriteString(m.hintStyle.Render("方向键导航，Enter 选择介绍文件（.txt 或 .md，自动截断到 5000 字）；Ctrl+P 切换焦点；Esc 返回选择输入方式"))
+				content.WriteString(m.hintStyle.Render(i18n.T("tui.upload.intro_picker_hint", nil)))
 			}
 			return content.String()
 		} else {
 			// 直接输入模式渲染
 			charCount := len([]rune(m.taIntro.Value()))
-			charInfo := fmt.Sprintf("（%d/5000 字）", charCount)
-			return m.titleStyle.Render("上传 · Step 8/10 · 模型介绍") + " " + m.hintStyle.Render(charInfo) + "\n\n" + m.taIntro.View() + "\n" + m.hintStyle.Render("支持 Markdown 格式；提交：Ctrl+S，返回：Esc")
+			charInfo := i18n.T("tui.upload.intro_count", map[string]any{"Count": charCount})
+			return m.titleStyle.Render(uploadTitle(8, "tui.upload.section.intro")) + " " + m.hintStyle.Render(charInfo) + "\n\n" + m.taIntro.View() + "\n" + m.hintStyle.Render(i18n.T("tui.upload.intro_editor_hint", nil))
 		}
 	case stepPath:
 		var content strings.Builder
-		content.WriteString(m.titleStyle.Render("上传 · Step 9/11 · 选择文件"))
+		content.WriteString(m.titleStyle.Render(uploadTitle(9, "tui.upload.section.model_file")))
 		content.WriteString("\n\n")
-		pathInputLabel := "路径输入："
+		pathInputLabel := i18n.T("tui.upload.path_label", nil)
 		if m.act.pathInputFocused {
-			pathInputLabel = m.titleStyle.Render("► 路径输入：（当前焦点，按Ctrl+P切换至文件选择器）")
+			pathInputLabel = m.titleStyle.Render("► " + pathInputLabel + i18n.T("tui.upload.focused", nil))
 		} else {
-			pathInputLabel = m.hintStyle.Render("路径输入：")
+			pathInputLabel = m.hintStyle.Render(pathInputLabel)
 		}
 		content.WriteString(pathInputLabel)
 		content.WriteString("\n")
@@ -1298,29 +1291,29 @@ func (m *mainModel) renderUploadStepsView() string {
 			content.WriteString("\n\n")
 		}
 
-		filePickerLabel := "文件选择器："
+		filePickerLabel := i18n.T("tui.upload.picker_label", nil)
 		if !m.act.pathInputFocused {
-			filePickerLabel = m.titleStyle.Render("► 文件选择器：（当前焦点，按Ctrl+P切换至路径输入框）")
+			filePickerLabel = m.titleStyle.Render("► " + filePickerLabel + i18n.T("tui.upload.focused", nil))
 		} else {
-			filePickerLabel = m.hintStyle.Render("文件选择器：")
+			filePickerLabel = m.hintStyle.Render(filePickerLabel)
 		}
 		content.WriteString(filePickerLabel)
 		content.WriteString("\n")
 		if m.act.filePickerErr != nil {
 			content.WriteString(m.filepicker.Styles.DisabledFile.Render(m.act.filePickerErr.Error()))
 		} else if m.selectedFile == "" {
-			content.WriteString("选择一个文件:")
+			content.WriteString(i18n.T("tui.upload.choose_file", nil))
 		} else {
-			content.WriteString("已选择文件: ")
+			content.WriteString(i18n.T("tui.upload.selected_file", nil))
 			content.WriteString(m.filepicker.Styles.Selected.Render(m.selectedFile))
 		}
 		content.WriteString("\n")
 		content.WriteString(m.filepicker.View())
 		content.WriteString("\n")
 		if m.act.pathInputFocused {
-			content.WriteString(m.hintStyle.Render("输入有效目录将自动同步下方文件列表；Enter确认文件或切换目录；Ctrl+P切换焦点；Esc返回"))
+			content.WriteString(m.hintStyle.Render(i18n.T("tui.upload.model_path_hint", nil)))
 		} else {
-			content.WriteString(m.hintStyle.Render("方向键导航，Enter选择文件，Ctrl+P切换输入（输入框实时同步），Esc返回"))
+			content.WriteString(m.hintStyle.Render(i18n.T("tui.upload.model_picker_hint", nil)))
 		}
 		return content.String()
 	case stepPublic:
@@ -1331,21 +1324,25 @@ func (m *mainModel) renderUploadStepsView() string {
 			}
 			m.publicList.SetHeight(h)
 		}
-		return m.titleStyle.Render("上传 · Step 10/11 · 是否公开此版本？") + "\n\n" + m.publicList.View() + "\n" + m.hintStyle.Render("Enter 确认选择，Esc 返回上一页")
+		return m.titleStyle.Render(uploadTitle(10, "tui.upload.section.public")) + "\n\n" + m.publicList.View() + "\n" + m.hintStyle.Render(i18n.T("tui.upload.confirm_choice", nil))
 	case stepAskMore:
 		var b strings.Builder
-		b.WriteString(m.titleStyle.Render("上传 · Step 11/11 · 是否继续添加版本？"))
+		b.WriteString(m.titleStyle.Render(uploadTitle(11, "tui.upload.section.more")))
 		b.WriteString("\n\n")
 		if len(m.act.versions) > 0 {
-			b.WriteString("已添加版本：\n")
+			b.WriteString(i18n.T("tui.upload.added_versions", nil) + "\n")
 			for i, v := range m.act.versions {
-				b.WriteString(fmt.Sprintf("  - [%d] %s  base=%s  cover=%s  path=%s\n", i+1, dash(v.version), dash(v.base), dash(v.cover), dash(v.path)))
+				b.WriteString(i18n.T("tui.upload.version_summary", map[string]any{
+					"Index": i + 1, "Version": dash(v.version), "Base": dash(v.base), "Cover": dash(v.cover), "Path": dash(v.path),
+				}) + "\n")
 			}
 			b.WriteString("\n")
 		}
 		cur := m.act.cur
-		b.WriteString("当前版本：\n")
-		b.WriteString(fmt.Sprintf("  - %s  base=%s  cover=%s  path=%s\n\n", dash(cur.version), dash(cur.base), dash(cur.cover), dash(cur.path)))
+		b.WriteString(i18n.T("tui.upload.current_version", nil) + "\n")
+		b.WriteString(i18n.T("tui.upload.current_version_summary", map[string]any{
+			"Version": dash(cur.version), "Base": dash(cur.base), "Cover": dash(cur.cover), "Path": dash(cur.path),
+		}) + "\n\n")
 		if _, ih := m.innerSize(); ih > 0 {
 			h := ih - 12
 			if h < 5 {
@@ -1353,17 +1350,19 @@ func (m *mainModel) renderUploadStepsView() string {
 			}
 			m.moreList.SetHeight(h)
 		}
-		return b.String() + "\n" + m.moreList.View() + "\n" + m.hintStyle.Render("Enter 确认选择，Esc 返回上一页")
+		return b.String() + "\n" + m.moreList.View() + "\n" + m.hintStyle.Render(i18n.T("tui.upload.confirm_choice", nil))
 	case stepConfirm:
 		var b strings.Builder
-		b.WriteString(m.titleStyle.Render("上传 · 确认所有版本"))
+		b.WriteString(m.titleStyle.Render(i18n.T("tui.upload.section.confirm", nil)))
 		b.WriteString("\n\n")
-		b.WriteString(fmt.Sprintf("模型名称：%s\n类型：%s\n\n", m.act.u.name, m.act.u.typ))
+		b.WriteString(i18n.T("tui.upload.confirm_summary", map[string]any{"Name": m.act.u.name, "Type": m.act.u.typ}) + "\n\n")
 		for i, v := range m.act.versions {
-			b.WriteString(fmt.Sprintf("[%d] 版本=%s  base=%s\n", i+1, dash(v.version), dash(v.base)))
-			b.WriteString(fmt.Sprintf("cover=%s\npath=%s\nintro=%s\n\n", dash(v.cover), dash(v.path), dash(truncateToLines(v.intro, 2))))
+			b.WriteString(i18n.T("tui.upload.confirm_version", map[string]any{"Index": i + 1, "Version": dash(v.version), "Base": dash(v.base)}) + "\n")
+			b.WriteString(i18n.T("tui.upload.confirm_details", map[string]any{
+				"Cover": dash(v.cover), "Path": dash(v.path), "Intro": dash(truncateToLines(v.intro, 2)),
+			}) + "\n\n")
 		}
-		b.WriteString(m.hintStyle.Render("按 Enter 开始上传；Esc 返回上一步"))
+		b.WriteString(m.hintStyle.Render(i18n.T("tui.upload.confirm_hint", nil)))
 		return b.String()
 	}
 	return ""
