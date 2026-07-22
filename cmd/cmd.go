@@ -162,3 +162,21 @@ func setLogVerbose(verbose bool) {
 		logs.SetLevel(logs.LevelWarn)
 	}
 }
+
+func logArguments(args *config.Argument) {
+	if args == nil {
+		return
+	}
+	logs.Debugf("args: %#v\n", redactedArguments(args))
+}
+
+func redactedArguments(args *config.Argument) *config.Argument {
+	if args == nil {
+		return nil
+	}
+	safe := *args
+	if safe.ApiKey != "" {
+		safe.ApiKey = "[REDACTED]"
+	}
+	return &safe
+}

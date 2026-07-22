@@ -23,6 +23,7 @@ type UpgradeOptions struct {
 	ProgressFunc   func(downloaded, total int64) // 下载进度回调
 	StatusFunc     func(status string)           // 状态更新回调
 	Context        context.Context
+	ManifestURL    string
 }
 
 // UpgradeResult 升级结果
@@ -37,8 +38,15 @@ type UpgradeResult struct {
 
 // CheckForUpdate 检查更新
 func CheckForUpdate(currentVersion string) (*UpgradeResult, error) {
+	return CheckForUpdateContext(context.Background(), currentVersion, meta.ManifestURL)
+}
+
+func CheckForUpdateContext(ctx context.Context, currentVersion, manifestURL string) (*UpgradeResult, error) {
+	if manifestURL == "" {
+		manifestURL = meta.ManifestURL
+	}
 	// 加载 manifest
-	manifest, err := LoadManifestFromURL(meta.ManifestURL)
+	manifest, err := LoadManifestFromURLContext(ctx, manifestURL)
 	if err != nil {
 		return nil, i18n.NewError("error.upgrade.check_failed", nil, err)
 	}
@@ -85,7 +93,11 @@ func PerformUpgrade(opts UpgradeOptions) *UpgradeResult {
 
 	// 1. 检查更新
 	updateStatus(i18n.T("upgrade.status.checking"))
-	result, err := CheckForUpdate(opts.CurrentVersion)
+	manifestURL := opts.ManifestURL
+	if manifestURL == "" {
+		manifestURL = meta.ManifestURL
+	}
+	result, err := CheckForUpdateContext(ctx, opts.CurrentVersion, manifestURL)
 	if err != nil {
 		return &UpgradeResult{
 			Success: false,
@@ -116,7 +128,7 @@ func PerformUpgrade(opts UpgradeOptions) *UpgradeResult {
 
 	// 2. 加载 manifest
 	updateStatus(i18n.T("upgrade.status.fetching_release"))
-	manifest, err := LoadManifestFromURL(meta.ManifestURL)
+	manifest, err := LoadManifestFromURLContext(ctx, manifestURL)
 	if err != nil {
 		result.Success = false
 		result.Error = err

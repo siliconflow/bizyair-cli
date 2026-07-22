@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/cloudwego/hertz/cmd/hz/util/logs"
 	"github.com/siliconflow/bizyair-cli/internal/i18n"
 	"github.com/siliconflow/bizyair-cli/lib"
 	"github.com/siliconflow/bizyair-cli/lib/actions"
@@ -15,7 +14,7 @@ import (
 func RemoveModel(c *cli.Context) error {
 	args := parseArgument(c, meta.CmdRm)
 	setLogVerbose(args.Verbose)
-	logs.Debugf("args: %#v\n", args)
+	logArguments(args)
 
 	if err := lib.ValidateModelType(args.Type); err != nil {
 		return cli.Exit(err, meta.LoadError)
@@ -34,6 +33,7 @@ func RemoveModel(c *cli.Context) error {
 	// 先查找模型以获取ID
 	client := lib.NewClient(args.BaseDomain, apiKey)
 	listInput := actions.ListModelsInput{
+		Context:    c.Context,
 		ApiKey:     apiKey,
 		BaseDomain: args.BaseDomain,
 		ModelType:  args.Type,
@@ -58,7 +58,7 @@ func RemoveModel(c *cli.Context) error {
 	}
 
 	// 调用统一的删除逻辑
-	result := actions.DeleteModel(client, modelId)
+	result := actions.DeleteModelContext(c.Context, client, modelId)
 	if !result.Success {
 		return cli.Exit(result.Error, meta.ServerError)
 	}

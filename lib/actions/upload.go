@@ -33,7 +33,7 @@ func ExecuteUpload(api lib.BizyAPI, input UploadInput, callback UploadCallback) 
 	}
 
 	if !input.Overwrite {
-		exists, err := api.CheckModelExists(input.ModelName, input.ModelType)
+		exists, err := api.CheckModelExistsContext(ctx, input.ModelName, input.ModelType)
 		if err != nil {
 			return UploadResult{
 				Success: false,
@@ -188,7 +188,7 @@ func uploadVersionsConcurrently(
 		}
 	}
 
-	_, err := api.CommitModelV2(input.ModelName, input.ModelType, successVersions)
+	_, err := api.CommitModelV2Context(ctx, input.ModelName, input.ModelType, successVersions)
 	if err != nil {
 		return UploadResult{
 			Success: false,

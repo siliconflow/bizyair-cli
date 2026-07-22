@@ -210,7 +210,7 @@ jobs:
         env:
           VERSION: ${{ needs.prepare.outputs.version }}
           API_KEY: ${{ secrets.BIZYAIR_API_KEY }}
-          BASE_DOMAIN: ${{ secrets.BIZYAIR_BASE_DOMAIN || 'https://api.bizyair.cn' }}
+          BASE_DOMAIN: ${{ secrets.BIZYAIR_BASE_DOMAIN || 'https://bizyair.vip' }}
         run: |
           python tools/upload_release.py
 

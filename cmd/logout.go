@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/cloudwego/hertz/cmd/hz/util/logs"
 	"github.com/siliconflow/bizyair-cli/internal/i18n"
 	"github.com/siliconflow/bizyair-cli/lib/actions"
 	"github.com/siliconflow/bizyair-cli/meta"
@@ -14,7 +13,7 @@ import (
 func Logout(c *cli.Context) error {
 	args := parseArgument(c, meta.CmdLogout)
 	setLogVerbose(args.Verbose)
-	logs.Debugf("args: %#v\n", args)
+	logArguments(args)
 
 	// 调用统一的登出业务逻辑
 	if err := actions.ExecuteLogout(); err != nil {

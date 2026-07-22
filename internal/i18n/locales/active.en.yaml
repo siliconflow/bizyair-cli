@@ -123,7 +123,6 @@ tui:
     browser_failed: "Could not open the browser. Open {{.URL}} manually."
     login_failed: "Login failed."
     validating_name: "Checking whether the model name is already in use..."
-    vpn_warning: "⚠️ VPN detected; upload performance may be affected"
   upload:
     step_title: "Upload · Step {{.Current}}/{{.Total}} · {{.Name}}"
     section:
@@ -266,7 +265,7 @@ cli:
     upgrade: "Check for and install CLI updates"
   flag:
     verbose: "Enable verbose mode"
-    base_domain: "Specify the API domain."
+    base_domain: "Specify the BizyAir root domain used to derive API, metadata, web, and storage endpoints."
     api_key: "Specify the API key."
     type: "Specify the model type. Supported: {{.Types}}"
     path: "Specify a file path to upload. May be repeated."
@@ -352,6 +351,9 @@ cli:
 
 error:
   unknown: "Unknown error"
+  config:
+    base_domain_invalid: "Invalid BizyAir base domain {{.URL}}: {{.Cause}}"
+    base_domain_absolute: "BizyAir base domain {{.URL}} must be an absolute HTTP(S) URL."
   auth:
     not_logged_in: "Not logged in or API key missing: {{.Cause}}"
     api_key_missing: "Not logged in or API key missing."
@@ -385,6 +387,7 @@ error:
     create_request: "Could not create the {{.Method}} request for {{.URL}}: {{.Cause}}"
     request_failed: "The {{.Method}} request to {{.URL}} failed: {{.Cause}}"
     response_read_failed: "Could not read the response from {{.URL}}: {{.Cause}}"
+    response_too_large: "The response from {{.URL}} exceeds the {{.Limit}} byte safety limit."
   io:
     temp_file_failed: "Could not create a temporary file: {{.Cause}}"
     write_failed: "Could not write {{.Path}}: {{.Cause}}"

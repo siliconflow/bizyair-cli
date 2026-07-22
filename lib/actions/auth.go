@@ -1,6 +1,8 @@
 package actions
 
 import (
+	"context"
+
 	"github.com/siliconflow/bizyair-cli/internal/i18n"
 	"github.com/siliconflow/bizyair-cli/lib"
 )
@@ -8,6 +10,10 @@ import (
 // ExecuteLogin 执行登录操作
 // 验证API Key并保存到本地
 func ExecuteLogin(api lib.BizyAPI, apiKey string) LoginResult {
+	return ExecuteLoginContext(context.Background(), api, apiKey)
+}
+
+func ExecuteLoginContext(ctx context.Context, api lib.BizyAPI, apiKey string) LoginResult {
 	if apiKey == "" {
 		return LoginResult{
 			Success: false,
@@ -15,7 +21,7 @@ func ExecuteLogin(api lib.BizyAPI, apiKey string) LoginResult {
 		}
 	}
 
-	_, err := api.UserInfo()
+	_, err := api.UserInfoContext(ctx)
 	if err != nil {
 		return LoginResult{
 			Success: false,

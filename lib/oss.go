@@ -19,14 +19,10 @@ import (
 )
 
 type AliOssStorageClient struct {
-	ossClient        *oss.Client
-	ossBucketName    string
-	ossRegion        string
-	ossSecurityToken string
-	ossEndpoint      string
-	ossAccessKeyId   string
-	ossAccessKey     string
-	ossExpiration    string
+	ossClient     *oss.Client
+	ossBucketName string
+	ossRegion     string
+	ossEndpoint   string
 }
 
 type FileToUpload struct {
@@ -64,23 +60,14 @@ func NewAliOssStorageClient(endpoint, bucketName, accessKey, secretKey, security
 	client := oss.NewClient(cfg)
 
 	ossStorageClient := &AliOssStorageClient{
-		ossClient:        client,
-		ossBucketName:    bucketName,
-		ossRegion:        region,
-		ossSecurityToken: securityToken,
-		ossEndpoint:      endpoint,
-		ossAccessKeyId:   accessKey,
-		ossAccessKey:     secretKey,
-		ossExpiration:    "",
+		ossClient:     client,
+		ossBucketName: bucketName,
+		ossRegion:     region,
+		ossEndpoint:   endpoint,
 	}
 
-	logs.Debugf("new oss storage client: %v", ossStorageClient)
+	logs.Debugf("new oss storage client: endpoint=%s bucket=%s region=%s", endpoint, bucketName, region)
 	return ossStorageClient, nil
-}
-
-// SetExpiration 设置当前临时凭证过期时间（用于写入 checkpoint）
-func (a *AliOssStorageClient) SetExpiration(exp string) {
-	a.ossExpiration = exp
 }
 
 func (a *AliOssStorageClient) UploadFile(file *FileToUpload, objectName string, fileIndex string, progress func(int64, int64)) (string, error) {
@@ -211,28 +198,6 @@ func (a *AliOssStorageClient) UploadFileMultipart(ctx context.Context, file *Fil
 				objectName = checkpoint.ObjectKey
 				file.RemoteKey = objectName
 			}
-			// 如果 checkpoint 携带凭证，检查是否过期
-			if checkpoint.AccessKeyId != "" && checkpoint.AccessKeySecret != "" {
-				// 检查凭证是否过期
-				if !IsCredentialExpired(checkpoint.Expiration) {
-					logs.Debugf("[%s] checkpoint credentials are valid, using them\n", fileIndex)
-					if cli, cerr := NewAliOssStorageClient(checkpoint.Endpoint, checkpoint.Bucket, checkpoint.AccessKeyId, checkpoint.AccessKeySecret, checkpoint.SecurityToken); cerr == nil {
-						a.ossClient = cli.ossClient
-						a.ossBucketName = checkpoint.Bucket
-						a.ossRegion = parseRegionFromEndpoint(checkpoint.Endpoint)
-						a.ossSecurityToken = checkpoint.SecurityToken
-						a.ossEndpoint = checkpoint.Endpoint
-						a.ossAccessKeyId = checkpoint.AccessKeyId
-						a.ossAccessKey = checkpoint.AccessKeySecret
-					} else {
-						logs.Warnf("[%s] failed to rebuild client from checkpoint: %v\n", fileIndex, cerr)
-					}
-				} else {
-					logs.Warnf("[%s] checkpoint credentials expired, will refresh from server\n", fileIndex)
-				}
-			}
-			// 注意：即使凭证过期，我们仍保留 uploadID 和已上传分片信息
-			// 调用方需要提供新的凭证来继续上传
 			existingParts = checkpoint.UploadedParts
 		} else if checkpoint != nil {
 			logs.Warnf("[%s] checkpoint validation failed, starting new upload\n", fileIndex)
@@ -255,44 +220,24 @@ func (a *AliOssStorageClient) UploadFileMultipart(ctx context.Context, file *Fil
 
 		// 创建新的checkpoint
 		checkpoint = &CheckpointInfo{
-			ObjectKey:       objectName,
-			UploadID:        uploadID,
-			FilePath:        file.Path,
-			FileSize:        totalSize,
-			FileSignature:   file.Signature,
-			PartSize:        meta.MultipartPartSize,
-			TotalParts:      (totalSize + meta.MultipartPartSize - 1) / meta.MultipartPartSize,
-			UploadedParts:   []oss.UploadPart{},
-			CreatedAt:       time.Now(),
-			Bucket:          a.ossBucketName,
-			Region:          a.ossRegion,
-			Endpoint:        a.ossEndpoint,
-			AccessKeyId:     a.ossAccessKeyId,
-			AccessKeySecret: a.ossAccessKey,
-			SecurityToken:   a.ossSecurityToken,
-			Expiration:      a.ossExpiration,
+			ObjectKey:     objectName,
+			UploadID:      uploadID,
+			FilePath:      file.Path,
+			FileSize:      totalSize,
+			FileSignature: file.Signature,
+			PartSize:      meta.MultipartPartSize,
+			TotalParts:    (totalSize + meta.MultipartPartSize - 1) / meta.MultipartPartSize,
+			UploadedParts: []oss.UploadPart{},
+			CreatedAt:     time.Now(),
+			Bucket:        a.ossBucketName,
+			Region:        a.ossRegion,
+			Endpoint:      a.ossEndpoint,
 		}
 		// 保存当前使用的远端key，供上层在提交阶段复用
 		file.RemoteKey = objectName
 		// 立即保存一次 checkpoint（若启用）
 		if checkpointFile != "" {
 			_ = SaveCheckpoint(checkpoint)
-		}
-	} else if checkpoint != nil {
-		// 如果是从checkpoint续传，但凭证已更新（外部传入了新凭证），则更新checkpoint中的凭证信息
-		if checkpoint.AccessKeyId != a.ossAccessKeyId || checkpoint.Expiration != a.ossExpiration {
-			logs.Debugf("[%s] updating checkpoint with refreshed credentials\n", fileIndex)
-			checkpoint.Bucket = a.ossBucketName
-			checkpoint.Region = a.ossRegion
-			checkpoint.Endpoint = a.ossEndpoint
-			checkpoint.AccessKeyId = a.ossAccessKeyId
-			checkpoint.AccessKeySecret = a.ossAccessKey
-			checkpoint.SecurityToken = a.ossSecurityToken
-			checkpoint.Expiration = a.ossExpiration
-			// 立即保存更新后的凭证
-			if checkpointFile != "" {
-				_ = SaveCheckpoint(checkpoint)
-			}
 		}
 	}
 

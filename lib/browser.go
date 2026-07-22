@@ -5,10 +5,11 @@ import (
 	"runtime"
 
 	"github.com/siliconflow/bizyair-cli/internal/i18n"
+	"github.com/siliconflow/bizyair-cli/meta"
 )
 
 // MyModelsURL 是"我的模型"页面的 URL
-const MyModelsURL = "https://bizyair.cn/community?path=my"
+const MyModelsURL = meta.DefaultBaseDomain + "/community?path=my"
 
 // OpenBrowser 尝试在系统默认浏览器中打开指定的 URL
 // 返回 (成功消息, 错误)

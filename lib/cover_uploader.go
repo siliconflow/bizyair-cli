@@ -31,7 +31,7 @@ func UploadCover(client BizyAPI, coverInput string, ctx context.Context, statusC
 
 	// 1. 如果是 HTTP URL，下载到临时文件
 	if IsHTTPURL(coverInput) {
-		p, cfn, err := DownloadToTemp(coverInput)
+		p, cfn, err := DownloadToTempContext(ctx, coverInput)
 		if err != nil {
 			return "", WithStep(i18n.T("step.cover_download"), i18n.NewError("error.cover.download_failed", map[string]any{"Input": coverInput}, err))
 		}
@@ -79,7 +79,7 @@ func UploadCover(client BizyAPI, coverInput string, ctx context.Context, statusC
 	}
 
 	// 3. 获取上传凭证
-	token, err := client.GetUploadToken(uploadFileName, "inputs")
+	token, err := client.GetUploadTokenContext(ctx, uploadFileName, "inputs")
 	if err != nil {
 		return "", WithStep(i18n.T("step.cover_credentials"), i18n.NewError("error.cover.credentials_failed", map[string]any{"Input": coverInput}, err))
 	}
@@ -106,7 +106,7 @@ func UploadCover(client BizyAPI, coverInput string, ctx context.Context, statusC
 	}
 
 	// 5. 提交并获取可用 URL
-	commit, err := client.CommitInputResource(uploadFileName, fileRec.ObjectKey)
+	commit, err := client.CommitInputResourceContext(ctx, uploadFileName, fileRec.ObjectKey)
 	if err != nil {
 		return "", WithStep(i18n.T("step.cover_commit"), i18n.NewError("error.cover.commit_failed", map[string]any{"Input": coverInput}, err))
 	}

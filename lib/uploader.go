@@ -61,36 +61,13 @@ func UnifiedUpload(opts UploadOptions) (string, error) {
 
 	// 4. 如果有有效的 checkpoint，尝试续传
 	if checkpoint != nil && ValidateCheckpoint(checkpoint, opts.File) {
-		logs.Debugf("[%s] valid checkpoint found; preparing to resume\n", opts.FileIndex)
-
-		// 检查 checkpoint 中的凭证是否可用且未过期
-		if checkpoint.AccessKeyId != "" && checkpoint.AccessKeySecret != "" && !IsCredentialExpired(checkpoint.Expiration) {
-			logs.Debugf("[%s] checkpoint credentials are valid; using cached credentials\n", opts.FileIndex)
-			cli, oerr := NewAliOssStorageClient(
-				checkpoint.Endpoint, checkpoint.Bucket,
-				checkpoint.AccessKeyId, checkpoint.AccessKeySecret,
-				checkpoint.SecurityToken,
-			)
-			if oerr == nil {
-				cli.SetExpiration(checkpoint.Expiration)
-				ossClient = cli
-				objectKey = checkpoint.ObjectKey
-			} else {
-				logs.Warnf("[%s] checkpoint credentials failed: %v; refreshing credentials\n", opts.FileIndex, oerr)
-			}
-		} else {
-			// 凭证过期或不存在：删除 checkpoint，重新上传
-			logs.Warnf("[%s] checkpoint credentials expired; deleting checkpoint and restarting\n", opts.FileIndex)
-			if checkpointFile != "" {
-				_ = DeleteCheckpoint(checkpointFile)
-			}
-			checkpoint = nil // 重置为 nil，后续流程会走全新上传
-		}
+		logs.Debugf("[%s] valid checkpoint found; refreshing temporary credentials for resume\n", opts.FileIndex)
+		objectKey = checkpoint.ObjectKey
 	}
 
 	// 5. 如果没有有效的 OSS 客户端，获取新的签名
 	if ossClient == nil {
-		ossCert, err := opts.Client.OssSign(sha256sum, opts.ModelType)
+		ossCert, err := opts.Client.OssSignContext(ctx, sha256sum, opts.ModelType)
 		if err != nil {
 			return "", WithStep(i18n.T("step.upload_signature"), err)
 		}
@@ -108,6 +85,9 @@ func UnifiedUpload(opts UploadOptions) (string, error) {
 				opts.ProgressFunc(opts.File.Size, opts.File.Size)
 			}
 
+			if checkpointFile != "" {
+				_ = DeleteCheckpoint(checkpointFile)
+			}
 			return fileRecord.ObjectKey, nil
 		}
 
@@ -121,7 +101,6 @@ func UnifiedUpload(opts UploadOptions) (string, error) {
 		if err != nil {
 			return "", WithStep(i18n.T("step.create_oss_client"), err)
 		}
-		cli.SetExpiration(fileRecord.Expiration)
 		ossClient = cli
 		objectKey = fileRecord.ObjectKey
 	}
@@ -141,7 +120,7 @@ func UnifiedUpload(opts UploadOptions) (string, error) {
 	if opts.File.RemoteKey != "" {
 		commitKey = opts.File.RemoteKey
 	}
-	_, err = opts.Client.CommitFileV2(sha256sum, commitKey, md5Hash, opts.ModelType)
+	_, err = opts.Client.CommitFileV2Context(ctx, sha256sum, commitKey, md5Hash, opts.ModelType)
 	if err != nil {
 		return "", WithStep(i18n.T("step.commit_file"), err)
 	}

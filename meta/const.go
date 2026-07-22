@@ -12,7 +12,6 @@ const (
 	CmdUpload  = "upload"
 	CmdModel   = "model"
 	CmdLs      = "ls"
-	CmdLsFiles = "ls-files"
 	CmdDetail  = "detail"
 	CmdRm      = "rm"
 	CmdCommit  = "commit"
@@ -20,8 +19,17 @@ const (
 )
 
 const (
-	DefaultDomain = "https://api.bizyair.cn"
-	StorageDomain = "https://storage.bizyair.cn"
+	// DefaultServiceHost is the only Go default that needs to change for a
+	// future BizyAir domain migration (for example, .vip -> .ai).
+	DefaultServiceHost = "bizyair.vip"
+
+	// DefaultBaseDomain is the single configurable root used to derive all
+	// BizyAir service domains (api, meta, web, and storage).
+	DefaultBaseDomain = "https://" + DefaultServiceHost
+
+	// Deprecated: use DefaultBaseDomain. Kept for source compatibility.
+	DefaultDomain = DefaultBaseDomain
+	StorageDomain = "https://storage." + DefaultServiceHost
 )
 
 const (

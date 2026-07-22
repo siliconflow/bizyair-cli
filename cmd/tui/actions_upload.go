@@ -4,29 +4,27 @@ import (
 	"context"
 	"fmt"
 	"strings"
-	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/siliconflow/bizyair-cli/internal/i18n"
 	"github.com/siliconflow/bizyair-cli/lib"
 	"github.com/siliconflow/bizyair-cli/lib/actions"
-	"github.com/siliconflow/bizyair-cli/meta"
 )
 
 // checkModelExists 检查模型名是否已存在
-func checkModelExists(apiKey, modelName, modelType string) tea.Cmd {
+func checkModelExists(baseDomain, apiKey, modelName, modelType string) tea.Cmd {
 	return func() tea.Msg {
-		client := lib.NewClient(meta.DefaultDomain, apiKey)
-		exists, err := client.CheckModelExists(modelName, modelType)
+		client := lib.NewClient(baseDomain, apiKey)
+		exists, err := client.CheckModelExistsContext(context.Background(), modelName, modelType)
 		return checkModelExistsDoneMsg{exists: exists, err: err}
 	}
 }
 
 // loadBaseModelTypes 从后端加载基础模型类型列表
-func loadBaseModelTypes(apiKey string) tea.Cmd {
+func loadBaseModelTypes(baseDomain, apiKey string) tea.Cmd {
 	return func() tea.Msg {
-		client := lib.NewClient(meta.DefaultDomain, apiKey)
-		resp, err := client.GetBaseModelTypes()
+		client := lib.NewClient(baseDomain, apiKey)
+		resp, err := client.GetBaseModelTypesContext(context.Background())
 		if err != nil {
 			return baseModelTypesLoadedMsg{items: nil, err: err}
 		}
@@ -35,7 +33,7 @@ func loadBaseModelTypes(apiKey string) tea.Cmd {
 }
 
 // 多版本上传
-func runUploadActionMulti(u uploadInputs, versions []versionItem) tea.Cmd {
+func runUploadActionMulti(baseDomain string, u uploadInputs, versions []versionItem) tea.Cmd {
 	return func() tea.Msg {
 		ch := make(chan tea.Msg, 64)
 		ctx, cancel := context.WithCancel(context.Background())
@@ -54,11 +52,11 @@ func runUploadActionMulti(u uploadInputs, versions []versionItem) tea.Cmd {
 			}
 
 			// 创建客户端
-			client := lib.NewClient(meta.DefaultDomain, apiKey)
+			client := lib.NewClient(baseDomain, apiKey)
 
 			// 从API获取基础模型列表
 			allowedModels := []string{}
-			resp, err := client.GetBaseModelTypes()
+			resp, err := client.GetBaseModelTypesContext(ctx)
 			if err != nil {
 				ch <- actionDoneMsg{
 					out: "",
@@ -80,22 +78,12 @@ func runUploadActionMulti(u uploadInputs, versions []versionItem) tea.Cmd {
 			}
 
 			// 准备版本输入参数
-			actionVersions := make([]actions.VersionInput, len(versions))
-			for i, v := range versions {
-				actionVersions[i] = actions.VersionInput{
-					Version:      v.version,
-					Path:         v.path,
-					BaseModel:    v.base,
-					Introduction: v.intro,
-					CoverUrl:     v.cover,
-					Public:       v.public,
-				}
-			}
+			actionVersions := toActionVersions(versions)
 
 			// 准备上传输入参数
 			input := actions.UploadInput{
 				ApiKey:            apiKey,
-				BaseDomain:        meta.DefaultDomain,
+				BaseDomain:        baseDomain,
 				ModelType:         u.typ,
 				ModelName:         u.name,
 				Versions:          actionVersions,
@@ -111,7 +99,7 @@ func runUploadActionMulti(u uploadInputs, versions []versionItem) tea.Cmd {
 			ch <- uploadStartMsg{ch: ch, cancel: cancel}
 
 			// 执行上传
-			api := lib.NewClient(meta.DefaultDomain, apiKey)
+			api := lib.NewClient(baseDomain, apiKey)
 			result := actions.ExecuteUpload(api, input, callback)
 
 			// 处理结果
@@ -159,6 +147,21 @@ func runUploadActionMulti(u uploadInputs, versions []versionItem) tea.Cmd {
 	}
 }
 
+func toActionVersions(versions []versionItem) []actions.VersionInput {
+	actionVersions := make([]actions.VersionInput, len(versions))
+	for i, version := range versions {
+		actionVersions[i] = actions.VersionInput{
+			Version:      version.version,
+			Path:         version.path,
+			BaseModel:    version.base,
+			Introduction: version.intro,
+			CoverUrl:     version.cover,
+			Public:       version.public,
+		}
+	}
+	return actionVersions
+}
+
 // tuiUploadCallback TUI的进度回调实现
 type tuiUploadCallback struct {
 	ch chan<- tea.Msg
@@ -193,16 +196,5 @@ func (t *tuiUploadCallback) OnCoverStatus(index, total int, status, message stri
 		message:      message,
 	}:
 	default:
-	}
-}
-
-// checkVPN 执行VPN检测
-func checkVPN() tea.Cmd {
-	return func() tea.Msg {
-		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-		defer cancel()
-
-		result := lib.DetectVPN(ctx)
-		return vpnCheckMsg{result: result, err: nil}
 	}
 }

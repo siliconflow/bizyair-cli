@@ -21,6 +21,7 @@ import (
 )
 
 type mainModel struct {
+	baseDomain    string
 	step          mainStep
 	loggedIn      bool
 	apiKey        string
@@ -99,13 +100,13 @@ type mainModel struct {
 	// 封面状态追踪
 	coverStatus        string // 当前封面状态信息
 	coverStatusWarning bool   // 是否为警告状态（如转换失败回退）
-
-	// VPN检测相关
-	vpnCheckResult *lib.VPNDetectionResult
-	checkingVPN    bool
 }
 
 func newMainModel() mainModel {
+	return newMainModelWithBaseDomain(meta.DefaultBaseDomain)
+}
+
+func newMainModelWithBaseDomain(baseDomain string) mainModel {
 	mItems := []list.Item{
 		menuEntry{listItem{title: i18n.T("tui.menu.upload", nil), desc: i18n.T("tui.menu.upload_desc", nil)}, actionUpload},
 		menuEntry{listItem{title: i18n.T("tui.menu.models", nil), desc: i18n.T("tui.menu.models_desc", nil)}, actionLsModel},
@@ -232,6 +233,7 @@ func newMainModel() mainModel {
 	pr := progress.New(progress.WithDefaultGradient())
 
 	m := mainModel{
+		baseDomain:       baseDomain,
 		step:             mainStepHome,
 		menu:             menuList,
 		inpApi:           inApi,
@@ -382,7 +384,7 @@ func (m mainModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					return m, nil
 				}
 				m.running = true
-				return m, loginCmd(api)
+				return m, loginCmd(m.baseDomain, api)
 			case mainStepMenu:
 				if it, ok := m.menu.SelectedItem().(menuEntry); ok {
 					m.currentAction = it.key
@@ -393,26 +395,20 @@ func (m mainModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 						m.running = true
 						return m, runLogout()
 					case actionUpload:
-						m.checkingVPN = true
 						m.step = mainStepAction
 						m.act = actionInputs{}
 						m.upStep = stepType
 
-						var cmds []tea.Cmd
-
-						// 启动VPN检测
-						cmds = append(cmds, checkVPN())
-
 						// 如果还没有加载基础模型类型，则开始加载
 						if len(m.baseModelTypes) == 0 && !m.loadingBaseModelTypes {
 							m.loadingBaseModelTypes = true
-							cmds = append(cmds, loadBaseModelTypes(m.apiKey))
+							return m, loadBaseModelTypes(m.baseDomain, m.apiKey)
 						}
 
-						return m, tea.Batch(cmds...)
+						return m, nil
 					case actionLsModel:
 						m.running = true
-						return m, openMyModelsInBrowser()
+						return m, openMyModelsInBrowser(m.baseDomain)
 					}
 				}
 			case mainStepAction:
@@ -592,12 +588,6 @@ func (m mainModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		m.baseList.SetItems(bItems)
 		return m, nil
-	case vpnCheckMsg:
-		m.checkingVPN = false
-		if msg.err == nil && msg.result != nil {
-			m.vpnCheckResult = msg.result
-		}
-		return m, nil
 	case checkModelExistsDoneMsg:
 		m.running = false
 		if msg.err != nil {
@@ -672,14 +662,7 @@ func (m mainModel) View() string {
 	logoRendered := m.renderGradientLogo(m.smallLogo)
 	hint := m.renderStyledHint(m.getContextualHint())
 
-	// 如果检测到VPN且在上传流程中，添加VPN警告
-	var headerContent string
-	if m.step == mainStepAction && m.vpnCheckResult != nil && m.vpnCheckResult.IsUsingVPN {
-		vpnWarning := m.renderVPNWarning()
-		headerContent = lipgloss.JoinHorizontal(lipgloss.Top, logoRendered, "  ", hint, "  ", vpnWarning)
-	} else {
-		headerContent = lipgloss.JoinHorizontal(lipgloss.Top, logoRendered, "  ", hint)
-	}
+	headerContent := lipgloss.JoinHorizontal(lipgloss.Top, logoRendered, "  ", hint)
 	header := lipgloss.PlaceHorizontal(innerW, lipgloss.Left, headerContent)
 
 	// 退出确认界面优先级最高
@@ -773,12 +756,17 @@ func (m mainModel) renderGradientLogo(logoText string) string {
 }
 
 // openMyModelsInBrowser 在浏览器中打开我的模型页面
-func openMyModelsInBrowser() tea.Cmd {
+func openMyModelsInBrowser(baseDomain string) tea.Cmd {
 	return func() tea.Msg {
-		msg, err := lib.OpenBrowser(lib.MyModelsURL)
+		endpoints, resolveErr := lib.ResolveServiceEndpoints(baseDomain)
+		if resolveErr != nil {
+			return openBrowserDoneMsg{err: resolveErr}
+		}
+		url := endpoints.MyModelsURL()
+		msg, err := lib.OpenBrowser(url)
 		return openBrowserDoneMsg{
 			msg: msg,
-			url: lib.MyModelsURL,
+			url: url,
 			err: err,
 		}
 	}
@@ -786,7 +774,7 @@ func openMyModelsInBrowser() tea.Cmd {
 
 // 入口
 func MainTUI(c *cli.Context) error {
-	p := tea.NewProgram(newMainModel(), tea.WithAltScreen())
+	p := tea.NewProgram(newMainModelWithBaseDomain(c.String("base_domain")), tea.WithAltScreen())
 	model, err := p.Run()
 	if err != nil {
 		return err

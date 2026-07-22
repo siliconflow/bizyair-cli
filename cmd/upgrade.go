@@ -1,7 +1,6 @@
 package cmd
 
 import (
-	"context"
 	"fmt"
 	"os"
 
@@ -17,6 +16,10 @@ func Upgrade(c *cli.Context) error {
 
 	checkOnly := c.Bool("check")
 	force := c.Bool("force")
+	endpoints, err := lib.ResolveServiceEndpoints(globalArgs.BaseDomain)
+	if err != nil {
+		return cli.Exit(err, meta.LoadError)
+	}
 
 	fmt.Println(i18n.T("cli.upgrade.title"))
 	fmt.Println(i18n.T("cli.upgrade.current_version", map[string]any{"Version": meta.Version}))
@@ -27,7 +30,8 @@ func Upgrade(c *cli.Context) error {
 		CheckOnly:      checkOnly,
 		Force:          force,
 		CurrentVersion: meta.Version,
-		Context:        context.Background(),
+		Context:        c.Context,
+		ManifestURL:    endpoints.ManifestURL(),
 		StatusFunc: func(status string) {
 			fmt.Printf("%s\n", status)
 		},

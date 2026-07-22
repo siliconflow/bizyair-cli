@@ -123,7 +123,6 @@ tui:
     browser_failed: "无法打开浏览器，请在 {{.URL}} 查看。"
     login_failed: "登录失败。"
     validating_name: "正在校验模型名是否重复..."
-    vpn_warning: "⚠️ 检测到 VPN，可能影响上传"
   upload:
     step_title: "上传 · 第 {{.Current}}/{{.Total}} 步 · {{.Name}}"
     section:
@@ -266,7 +265,7 @@ cli:
     upgrade: "检查并升级 CLI 到最新版本"
   flag:
     verbose: "启用详细日志模式"
-    base_domain: "指定 API 请求域名。"
+    base_domain: "指定 BizyAir 根域名，用于派生 API、元数据、网页和存储端点。"
     api_key: "指定 API Key。"
     type: "指定模型类型。支持：{{.Types}}"
     path: "指定要上传的文件路径，可重复指定。"
@@ -346,6 +345,9 @@ cli:
 
 error:
   unknown: "未知错误"
+  config:
+    base_domain_invalid: "BizyAir 根域名 {{.URL}} 无效：{{.Cause}}"
+    base_domain_absolute: "BizyAir 根域名 {{.URL}} 必须是完整的 HTTP(S) URL。"
   auth:
     not_logged_in: "未登录或缺少 API Key：{{.Cause}}"
     api_key_missing: "未登录或缺少 API Key。"
@@ -379,6 +381,7 @@ error:
     create_request: "无法创建发往 {{.URL}} 的 {{.Method}} 请求：{{.Cause}}"
     request_failed: "发往 {{.URL}} 的 {{.Method}} 请求失败：{{.Cause}}"
     response_read_failed: "无法读取来自 {{.URL}} 的响应：{{.Cause}}"
+    response_too_large: "来自 {{.URL}} 的响应超过 {{.Limit}} 字节的安全上限。"
   io:
     temp_file_failed: "无法创建临时文件：{{.Cause}}"
     write_failed: "无法写入 {{.Path}}：{{.Cause}}"

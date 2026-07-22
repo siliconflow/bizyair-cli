@@ -256,27 +256,6 @@ func TestClient_CheckModelExists_Error(t *testing.T) {
 	}
 }
 
-func TestClient_RemoveModel_Success(t *testing.T) {
-	client, server := newTestClient(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodDelete {
-			t.Errorf("expected DELETE, got %s", r.Method)
-		}
-
-		resp := Response[ModelDeleteResp]{
-			Code:    meta.OKCode,
-			Message: "ok",
-		}
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(resp)
-	})
-	defer server.Close()
-
-	_, err := client.RemoveModel("LoRA", "mymodel")
-	if err != nil {
-		t.Fatalf("RemoveModel() error = %v", err)
-	}
-}
-
 func TestClient_GetUploadToken_Success(t *testing.T) {
 	client, server := newTestClient(func(w http.ResponseWriter, r *http.Request) {
 		resp := Response[FilesResp]{

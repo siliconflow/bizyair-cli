@@ -1,17 +1,18 @@
 package tui
 
 import (
+	"context"
+
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/siliconflow/bizyair-cli/internal/i18n"
 	"github.com/siliconflow/bizyair-cli/lib"
 	"github.com/siliconflow/bizyair-cli/lib/actions"
-	"github.com/siliconflow/bizyair-cli/meta"
 )
 
-func loginCmd(apiKey string) tea.Cmd {
+func loginCmd(baseDomain, apiKey string) tea.Cmd {
 	return func() tea.Msg {
-		api := lib.NewClient(meta.DefaultDomain, apiKey)
-		result := actions.ExecuteLogin(api, apiKey)
+		api := lib.NewClient(baseDomain, apiKey)
+		result := actions.ExecuteLoginContext(context.Background(), api, apiKey)
 		if !result.Success {
 			return loginDoneMsg{ok: false, err: result.Error}
 		}

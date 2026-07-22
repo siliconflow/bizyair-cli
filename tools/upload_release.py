@@ -14,14 +14,37 @@ import os
 import sys
 import json
 import requests
+from urllib.parse import urlparse, urlunparse
 from datetime import datetime
 from pathlib import Path
 import alibabacloud_oss_v2 as oss
 
 
-def get_upload_token(api_key, base_domain, filename):
+def resolve_service_domains(base_domain):
+    """Resolve api/storage origins from a single BizyAir root domain."""
+    parsed = urlparse(base_domain.rstrip("/"))
+    if parsed.scheme not in ("http", "https") or not parsed.hostname:
+        raise ValueError("BASE_DOMAIN must be an absolute HTTP(S) URL")
+
+    if parsed.port or parsed.hostname in ("localhost", "127.0.0.1", "::1") or parsed.path not in ("", "/"):
+        origin = base_domain.rstrip("/")
+        return origin, origin
+
+    root_host = parsed.hostname
+    for prefix in ("api.", "meta.", "storage."):
+        if root_host.startswith(prefix):
+            root_host = root_host[len(prefix):]
+            break
+
+    def origin(host):
+        return urlunparse((parsed.scheme, host, "", "", "", ""))
+
+    return origin(f"api.{root_host}"), origin(f"storage.{root_host}")
+
+
+def get_upload_token(api_key, api_domain, filename, cli_version):
     """获取 CLI 上传 token"""
-    url = f"{base_domain}/x/v1/upload/token"
+    url = f"{api_domain}/v1/upload/token"
     params = {
         "file_name": filename,
         "file_type": "cli",
@@ -29,10 +52,11 @@ def get_upload_token(api_key, base_domain, filename):
         "final_file_name": "true"
     }
     headers = {
-        "Authorization": f"Bearer {api_key}"
+        "Authorization": f"Bearer {api_key}",
+        "X-Silicon-CLI-Version": cli_version,
     }
     
-    response = requests.get(url, params=params, headers=headers)
+    response = requests.get(url, params=params, headers=headers, timeout=30)
     response.raise_for_status()
     
     data = response.json()
@@ -42,7 +66,7 @@ def get_upload_token(api_key, base_domain, filename):
     return data["data"]
 
 
-def upload_to_oss(file_path, token_data):
+def upload_to_oss(file_path, token_data, storage_domain):
     """上传文件到 OSS"""
     file_info = token_data["file"]
     storage_info = token_data["storage"]
@@ -81,17 +105,17 @@ def upload_to_oss(file_path, token_data):
     )
     
     # 返回完整 URL
-    url = f"https://storage.bizyair.cn/{file_info['object_key']}"
+    url = f"{storage_domain}/{file_info['object_key']}"
     return url, file_info["object_key"]
 
 
-def upload_manifest(manifest_data, api_key, base_domain):
+def upload_manifest(manifest_data, api_key, api_domain, storage_domain, cli_version):
     """上传 manifest.json"""
     # 将 manifest 转为 JSON 字符串
     manifest_json = json.dumps(manifest_data, indent=2, ensure_ascii=False)
     
     # 获取上传 token
-    token_data = get_upload_token(api_key, base_domain, "releases/manifest.json")
+    token_data = get_upload_token(api_key, api_domain, "releases/manifest.json", cli_version)
     
     file_info = token_data["file"]
     storage_info = token_data["storage"]
@@ -129,7 +153,7 @@ def upload_manifest(manifest_data, api_key, base_domain):
         )
     )
     
-    url = f"https://storage.bizyair.cn/{file_info['object_key']}"
+    url = f"{storage_domain}/{file_info['object_key']}"
     print(f"✅ Manifest 已上传: {url}")
     return url
 
@@ -138,14 +162,16 @@ def main():
     # 从环境变量获取配置
     version = os.getenv("VERSION")
     api_key = os.getenv("API_KEY")
-    base_domain = os.getenv("BASE_DOMAIN", "https://api.bizyair.cn")
+    base_domain = os.getenv("BASE_DOMAIN", "https://bizyair.vip")
     
     if not version or not api_key:
         print("❌ 错误: 缺少必要的环境变量 VERSION 或 API_KEY")
         sys.exit(1)
     
     print(f"开始上传版本: {version}")
-    print(f"API Domain: {base_domain}")
+    api_domain, storage_domain = resolve_service_domains(base_domain)
+    print(f"API Domain: {api_domain}")
+    print(f"Storage Domain: {storage_domain}")
     
     # 读取 dist 目录
     dist_dir = Path("dist")
@@ -194,7 +220,7 @@ def main():
         # 获取上传 token
         print(f"  获取上传凭证...")
         try:
-            token_data = get_upload_token(api_key, base_domain, filename)
+            token_data = get_upload_token(api_key, api_domain, filename, version)
         except Exception as e:
             print(f"  ❌ 获取 token 失败: {e}")
             sys.exit(1)
@@ -202,7 +228,7 @@ def main():
         # 上传文件
         print(f"  上传文件...")
         try:
-            url, object_key = upload_to_oss(str(binary_file), token_data)
+            url, object_key = upload_to_oss(str(binary_file), token_data, storage_domain)
             print(f"  ✅ 上传成功: {url}")
         except Exception as e:
             print(f"  ❌ 上传失败: {e}")
@@ -237,7 +263,7 @@ def main():
     # 上传 manifest
     print("\n上传 manifest.json...")
     try:
-        upload_manifest(manifest, api_key, base_domain)
+        upload_manifest(manifest, api_key, api_domain, storage_domain, version)
     except Exception as e:
         print(f"❌ 上传 manifest 失败: {e}")
         sys.exit(1)
@@ -247,4 +273,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-

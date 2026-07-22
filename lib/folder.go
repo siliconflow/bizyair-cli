@@ -1,7 +1,6 @@
 package lib
 
 import (
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -28,24 +27,29 @@ func (s *SfFolder) folderPath(filePath string) string {
 }
 
 func (s *SfFolder) SaveKey(apikey string) error {
-	err := os.MkdirAll(s.folderPath(""), 0660)
+	err := os.MkdirAll(s.folderPath(""), 0700)
 	if err != nil {
 		return i18n.NewError("error.io.create_directory_failed", map[string]any{"Path": s.folderPath("")}, err)
 	}
 
 	if runtime.GOOS != meta.OSWindows {
-		err = os.Chmod(s.folderPath(""), 0770)
+		err = os.Chmod(s.folderPath(""), 0700)
 		if err != nil {
 			return i18n.NewError("error.io.permissions_failed", map[string]any{"Path": s.folderPath("")}, err)
 		}
 	}
 
 	keyFilePath := s.folderPath(meta.SfApiKey)
-	file, err := os.OpenFile(keyFilePath, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0644)
+	file, err := os.OpenFile(keyFilePath, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0600)
 	if err != nil {
 		return i18n.NewError("error.auth.key_open_failed", map[string]any{"Path": keyFilePath}, err)
 	}
 	defer file.Close()
+	if runtime.GOOS != meta.OSWindows {
+		if err := file.Chmod(0600); err != nil {
+			return i18n.NewError("error.io.permissions_failed", map[string]any{"Path": keyFilePath}, err)
+		}
+	}
 
 	if _, err := file.WriteString(apikey); err != nil {
 		return i18n.NewError("error.auth.key_save_failed", map[string]any{"Path": keyFilePath}, err)
@@ -73,8 +77,16 @@ func (s *SfFolder) GetKey() (string, error) {
 	if os.IsNotExist(err) {
 		return "", i18n.NewError("error.auth.not_logged_in_simple", nil, err)
 	}
+	if err != nil {
+		return "", i18n.NewError("error.auth.key_load_failed", map[string]any{"Path": keyFilePath}, err)
+	}
+	if runtime.GOOS != meta.OSWindows {
+		if err := os.Chmod(keyFilePath, 0600); err != nil {
+			return "", i18n.NewError("error.io.permissions_failed", map[string]any{"Path": keyFilePath}, err)
+		}
+	}
 	// 读取文件内容
-	content, err := ioutil.ReadFile(keyFilePath)
+	content, err := os.ReadFile(keyFilePath)
 	if err != nil {
 		return "", i18n.NewError("error.auth.key_load_failed", map[string]any{"Path": keyFilePath}, err)
 	}

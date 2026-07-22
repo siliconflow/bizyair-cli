@@ -15,6 +15,7 @@ type LoginResult struct {
 
 // ListModelsInput 查询模型列表的输入参数
 type ListModelsInput struct {
+	Context    context.Context
 	ApiKey     string
 	BaseDomain string
 	ModelType  string   // 为空则查询所有类型

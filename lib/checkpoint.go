@@ -25,17 +25,13 @@ type CheckpointInfo struct {
 	UploadedParts []oss.UploadPart `json:"uploaded_parts"` // 已上传的分片列表
 	CreatedAt     time.Time        `json:"created_at"`     // 创建时间
 
-	// 用于恢复续传的凭证与存储信息
-	Bucket          string `json:"bucket,omitempty"`
-	Region          string `json:"region,omitempty"`
-	Endpoint        string `json:"endpoint,omitempty"`
-	AccessKeyId     string `json:"access_key_id,omitempty"`
-	AccessKeySecret string `json:"access_key_secret,omitempty"`
-	SecurityToken   string `json:"security_token,omitempty"`
-	Expiration      string `json:"expiration,omitempty"` // RFC3339 时间
+	// 用于恢复续传的非敏感存储信息。临时凭证每次从 API 刷新，不落盘。
+	Bucket   string `json:"bucket,omitempty"`
+	Region   string `json:"region,omitempty"`
+	Endpoint string `json:"endpoint,omitempty"`
 }
 
-// GetCheckpointDir 获取checkpoint目录路径 (~/.siliconflow/uploads/)
+// GetCheckpointDir 获取checkpoint目录路径 (~/.bizyair/uploads/)
 func GetCheckpointDir() (string, error) {
 	var homeDir string
 	currentOS := runtime.GOOS
@@ -53,8 +49,13 @@ func GetCheckpointDir() (string, error) {
 	checkpointDir := filepath.Join(homeDir, meta.SfFolder, meta.CheckpointFolder)
 
 	// 确保目录存在
-	if err := os.MkdirAll(checkpointDir, 0770); err != nil {
+	if err := os.MkdirAll(checkpointDir, 0700); err != nil {
 		return "", i18n.NewError("error.checkpoint.directory_failed", map[string]any{"Path": checkpointDir}, err)
+	}
+	if runtime.GOOS != meta.OSWindows {
+		if err := os.Chmod(checkpointDir, 0700); err != nil {
+			return "", i18n.NewError("error.io.permissions_failed", map[string]any{"Path": checkpointDir}, err)
+		}
 	}
 
 	return checkpointDir, nil
@@ -90,8 +91,13 @@ func SaveCheckpoint(info *CheckpointInfo) error {
 	}
 
 	// 写入文件
-	if err := os.WriteFile(checkpointFile, data, 0644); err != nil {
+	if err := os.WriteFile(checkpointFile, data, 0600); err != nil {
 		return i18n.NewError("error.checkpoint.write_failed", map[string]any{"Path": checkpointFile}, err)
+	}
+	if runtime.GOOS != meta.OSWindows {
+		if err := os.Chmod(checkpointFile, 0600); err != nil {
+			return i18n.NewError("error.io.permissions_failed", map[string]any{"Path": checkpointFile}, err)
+		}
 	}
 
 	logs.Debugf("checkpoint saved: %s\n", checkpointFile)
@@ -103,6 +109,11 @@ func LoadCheckpoint(checkpointFile string) (*CheckpointInfo, error) {
 	// 检查文件是否存在
 	if _, err := os.Stat(checkpointFile); os.IsNotExist(err) {
 		return nil, nil // 文件不存在，返回nil但不报错
+	}
+	if runtime.GOOS != meta.OSWindows {
+		if err := os.Chmod(checkpointFile, 0600); err != nil {
+			return nil, i18n.NewError("error.io.permissions_failed", map[string]any{"Path": checkpointFile}, err)
+		}
 	}
 
 	// 读取文件
@@ -133,20 +144,6 @@ func DeleteCheckpoint(checkpointFile string) error {
 
 	logs.Debugf("checkpoint deleted: %s\n", checkpointFile)
 	return nil
-}
-
-// IsCredentialExpired 检查凭证是否过期（提前5分钟判定为过期）
-func IsCredentialExpired(expiration string) bool {
-	if expiration == "" {
-		return true
-	}
-	exp, err := time.Parse(time.RFC3339, expiration)
-	if err != nil {
-		logs.Warnf("failed to parse expiration time: %v\n", err)
-		return true
-	}
-	// 提前5分钟判定为过期，避免边界情况
-	return time.Now().Add(5 * time.Minute).After(exp)
 }
 
 // ValidateCheckpoint 验证checkpoint是否有效（不比对 objectKey，仅校验文件与分片大小）

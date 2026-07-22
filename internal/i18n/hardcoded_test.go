@@ -19,8 +19,7 @@ var (
 )
 
 // TestUserOutputDoesNotUseHardcodedNaturalLanguage protects the display
-// entry points most likely to regress during routine feature work. Technical
-// debug helpers are deliberately outside this check.
+// entry points most likely to regress during routine feature work.
 func TestUserOutputDoesNotUseHardcodedNaturalLanguage(t *testing.T) {
 	_, filename, _, ok := runtime.Caller(0)
 	if !ok {
@@ -28,9 +27,6 @@ func TestUserOutputDoesNotUseHardcodedNaturalLanguage(t *testing.T) {
 	}
 	repositoryRoot := filepath.Clean(filepath.Join(filepath.Dir(filename), "..", ".."))
 	protectedRoots := []string{"cmd", "config", "lib"}
-	allowedFiles := map[string]bool{
-		filepath.Join(repositoryRoot, "lib", "vpn_detector.go"): true, // technical diagnostics
-	}
 
 	for _, protectedRoot := range protectedRoots {
 		root := filepath.Join(repositoryRoot, protectedRoot)
@@ -38,7 +34,7 @@ func TestUserOutputDoesNotUseHardcodedNaturalLanguage(t *testing.T) {
 			if walkErr != nil {
 				return walkErr
 			}
-			if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".go") || strings.HasSuffix(entry.Name(), "_test.go") || allowedFiles[path] {
+			if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".go") || strings.HasSuffix(entry.Name(), "_test.go") {
 				return nil
 			}
 			checkUserOutputFile(t, path)

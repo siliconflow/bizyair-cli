@@ -1,10 +1,12 @@
 package lib
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"net/http"
+	"os"
 	"time"
 
 	"github.com/siliconflow/bizyair-cli/internal/i18n"
@@ -32,11 +34,19 @@ type PlatformBinary struct {
 
 // LoadManifestFromURL 从 URL 加载 manifest.json
 func LoadManifestFromURL(url string) (*Manifest, error) {
+	return LoadManifestFromURLContext(context.Background(), url)
+}
+
+func LoadManifestFromURLContext(ctx context.Context, url string) (*Manifest, error) {
 	client := &http.Client{
 		Timeout: 30 * time.Second,
 	}
 
-	resp, err := client.Get(url)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	if err != nil {
+		return nil, i18n.NewError("error.manifest.download_failed", map[string]any{"URL": url}, err)
+	}
+	resp, err := client.Do(req)
 	if err != nil {
 		return nil, i18n.NewError("error.manifest.download_failed", map[string]any{"URL": url}, err)
 	}
@@ -46,7 +56,7 @@ func LoadManifestFromURL(url string) (*Manifest, error) {
 		return nil, i18n.NewError("error.manifest.http_status", map[string]any{"Status": resp.StatusCode, "URL": url}, nil)
 	}
 
-	body, err := ioutil.ReadAll(resp.Body)
+	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return nil, i18n.NewError("error.manifest.read_failed", nil, err)
 	}
@@ -61,7 +71,7 @@ func LoadManifestFromURL(url string) (*Manifest, error) {
 
 // LoadManifestFromFile 从本地文件加载 manifest.json
 func LoadManifestFromFile(path string) (*Manifest, error) {
-	data, err := ioutil.ReadFile(path)
+	data, err := os.ReadFile(path)
 	if err != nil {
 		return nil, i18n.NewError("error.manifest.file_read_failed", map[string]any{"Path": path}, err)
 	}
@@ -81,7 +91,7 @@ func SaveManifestToFile(manifest *Manifest, path string) error {
 		return i18n.NewError("error.manifest.encode_failed", nil, err)
 	}
 
-	if err := ioutil.WriteFile(path, data, 0644); err != nil {
+	if err := os.WriteFile(path, data, 0644); err != nil {
 		return i18n.NewError("error.manifest.write_failed", map[string]any{"Path": path}, err)
 	}
 

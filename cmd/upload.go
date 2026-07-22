@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"strings"
@@ -18,12 +19,12 @@ import (
 func Upload(c *cli.Context) error {
 	args := parseArgument(c, meta.CmdUpload)
 	setLogVerbose(args.Verbose)
-	logs.Debugf("args: %#v\n", args)
+	logArguments(args)
 
 	// 检查是否使用 YAML 配置文件批量上传
 	if args.FilePath != "" {
 		// 使用 YAML 配置文件
-		if err := uploadFromYaml(args.FilePath, args); err != nil {
+		if err := uploadFromYaml(c.Context, args.FilePath, args); err != nil {
 			return cli.Exit(err, meta.LoadError)
 		}
 		return nil
@@ -86,10 +87,11 @@ func Upload(c *cli.Context) error {
 		ModelName:  args.Name,
 		Versions:   versions,
 		Overwrite:  args.Overwrite,
+		Context:    c.Context,
 	}
 
 	client := lib.NewClient(args.BaseDomain, apiKey)
-	resp, err := client.GetBaseModelTypes()
+	resp, err := client.GetBaseModelTypesContext(c.Context)
 	if err != nil {
 		return cli.Exit(i18n.NewError("error.base_models.fetch_failed", nil, err), meta.ServerError)
 	}
@@ -139,17 +141,25 @@ func Upload(c *cli.Context) error {
 	}
 
 	// 全部成功时，显示模型详情
-	displayUploadedModelDetail(apiKey, args.BaseDomain, result.ModelName, result.ModelType)
+	displayUploadedModelDetail(c.Context, apiKey, args.BaseDomain, result.ModelName, result.ModelType)
 	return nil
 }
 
 // displayUploadedModelDetail 显示刚上传的模型详情
-func displayUploadedModelDetail(apiKey, baseDomain, modelName, modelType string) {
+func displayUploadedModelDetail(ctx context.Context, apiKey, baseDomain, modelName, modelType string) {
+	if ctx == nil {
+		ctx = context.Background()
+	}
 	// 后端需要时间处理，先等待1秒
-	time.Sleep(time.Second)
+	select {
+	case <-time.After(time.Second):
+	case <-ctx.Done():
+		return
+	}
 
 	// 查询模型列表，带重试逻辑
 	listInput := actions.ListModelsInput{
+		Context:    ctx,
 		ApiKey:     apiKey,
 		BaseDomain: baseDomain,
 		ModelType:  modelType,
@@ -168,7 +178,11 @@ func displayUploadedModelDetail(apiKey, baseDomain, modelName, modelType string)
 	for i := 0; i < maxRetries; i++ {
 		if i > 0 {
 			// 后续重试等待
-			time.Sleep(retryDelay)
+			select {
+			case <-time.After(retryDelay):
+			case <-ctx.Done():
+				return
+			}
 		}
 
 		listResult := actions.ListModels(client, listInput)
@@ -201,7 +215,12 @@ func displayUploadedModelDetail(apiKey, baseDomain, modelName, modelType string)
 	}
 
 	// 构建模型详情页面 URL
-	modelURL := fmt.Sprintf("https://bizyair.cn/community/models/my/%d", targetModel.Id)
+	endpoints, err := lib.ResolveServiceEndpoints(baseDomain)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "\n%s\n", err)
+		return
+	}
+	modelURL := endpoints.ModelDetailURL(targetModel.Id)
 
 	// 显示成功提示和链接
 	fmt.Fprintf(os.Stdout, "\n%s\n", i18n.T("cli.upload.published"))

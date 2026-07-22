@@ -17,7 +17,6 @@ BizyAir CLI manages model files on BizyAir. It provides both an interactive term
 - Image and video cover support with automatic WebP conversion
 - Direct or `.txt`/`.md` model introductions
 - YAML batch uploads for multiple models and versions
-- VPN detection and upload-performance warnings
 - Live progress, transfer rate, and per-version status
 - Built-in update checks, installation, and safe rollback
 - Standard English and Simplified Chinese interfaces
@@ -171,7 +170,7 @@ Run BizyAir without a subcommand:
 bizyair
 ```
 
-The TUI provides guided input, immediate validation, file selection, VPN warnings, multi-version uploads, and live progress. It is the recommended starting point for new users.
+The TUI provides guided input, immediate validation, file selection, multi-version uploads, and live progress. It is the recommended starting point for new users.
 
 ### Command-line mode
 
@@ -199,7 +198,7 @@ sudo bizyair upgrade
 ### Option 1: interactive TUI
 
 1. Run `bizyair`.
-2. On first use, enter an API key obtained from [BizyAir](https://bizyair.cn) and press Enter.
+2. On first use, enter an API key obtained from [BizyAir](https://bizyair.vip) and press Enter.
 3. Choose an action:
    - Upload model
    - My models
@@ -406,14 +405,13 @@ The CLI retrieves the authoritative Base Model list from the API and uses its bu
 
 ### How do I obtain an API key?
 
-Create an account at [BizyAir](https://bizyair.cn) and obtain a key from your account settings.
+Create an account at [BizyAir](https://bizyair.vip) and obtain a key from your account settings.
 
 ### What should I do when an upload fails?
 
 1. Check the network connection.
 2. Confirm the API key is valid.
-3. Check whether a VPN is affecting the connection.
-4. Rerun the same command; interrupted file uploads can resume.
+3. Rerun the same command; interrupted file uploads can resume.
 
 ### How do I remove checkpoint files?
 

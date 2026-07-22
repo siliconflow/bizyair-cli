@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -23,7 +24,7 @@ type modelUploadResult struct {
 }
 
 // uploadFromYaml 从 YAML 配置文件批量上传模型
-func uploadFromYaml(yamlPath string, args *config.Argument) error {
+func uploadFromYaml(ctx context.Context, yamlPath string, args *config.Argument) error {
 	// 1. 加载 YAML 配置
 	fmt.Fprintln(os.Stdout, i18n.T("cli.batch.loading", map[string]any{"Path": yamlPath}))
 	cfg, err := config.LoadYamlConfig(yamlPath)
@@ -70,7 +71,7 @@ func uploadFromYaml(yamlPath string, args *config.Argument) error {
 		versions := config.AutoIncrementVersionNames(model.Versions)
 
 		// 转换为 VersionInput 并执行上传
-		result := processModelUpload(apiKey, args.BaseDomain, model.Name, model.Type, versions, args.Overwrite)
+		result := processModelUpload(ctx, apiKey, args.BaseDomain, model.Name, model.Type, versions, args.Overwrite)
 		results = append(results, result)
 
 		// 显示结果
@@ -79,7 +80,7 @@ func uploadFromYaml(yamlPath string, args *config.Argument) error {
 				"Name": result.ModelName, "Success": result.VersionSuccess, "Total": result.VersionTotal,
 			}))
 			// 显示模型详情
-			displayUploadedModelDetail(apiKey, args.BaseDomain, result.ModelName, result.ModelType)
+			displayUploadedModelDetail(ctx, apiKey, args.BaseDomain, result.ModelName, result.ModelType)
 		} else {
 			fmt.Fprintf(os.Stderr, "\n%s\n", i18n.T("cli.batch.model_failed", map[string]any{"Name": result.ModelName, "Cause": result.Error}))
 		}
@@ -105,6 +106,7 @@ func uploadFromYaml(yamlPath string, args *config.Argument) error {
 
 // processModelUpload 处理单个模型的上传（包括转换和上传）
 func processModelUpload(
+	ctx context.Context,
 	apiKey string,
 	baseDomain string,
 	modelName string,
@@ -138,11 +140,12 @@ func processModelUpload(
 	}
 
 	// 执行上传
-	return uploadSingleModelFromYaml(apiKey, baseDomain, modelName, modelType, versionInputs, overwrite)
+	return uploadSingleModelFromYaml(ctx, apiKey, baseDomain, modelName, modelType, versionInputs, overwrite)
 }
 
 // uploadSingleModelFromYaml 上传单个模型（从 YAML 配置）
 func uploadSingleModelFromYaml(
+	ctx context.Context,
 	apiKey string,
 	baseDomain string,
 	modelName string,
@@ -155,7 +158,7 @@ func uploadSingleModelFromYaml(
 
 	// 从API获取基础模型列表
 	allowedModels := []string{}
-	resp, err := client.GetBaseModelTypes()
+	resp, err := client.GetBaseModelTypesContext(ctx)
 	if err != nil {
 		return modelUploadResult{
 			ModelName: modelName,
@@ -172,6 +175,7 @@ func uploadSingleModelFromYaml(
 
 	// 准备上传输入
 	input := actions.UploadInput{
+		Context:           ctx,
 		ApiKey:            apiKey,
 		BaseDomain:        baseDomain,
 		ModelType:         modelType,
