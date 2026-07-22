@@ -43,7 +43,7 @@ func ResolveServiceEndpoints(baseDomain string) (ServiceEndpoints, error) {
 	u.Fragment = ""
 	u.Path = strings.TrimRight(u.Path, "/")
 	normalized := strings.TrimRight(u.String(), "/")
-	hostname := u.Hostname()
+	hostname := strings.ToLower(u.Hostname())
 
 	if hostname == "localhost" || net.ParseIP(hostname) != nil || u.Port() != "" || u.Path != "" {
 		return ServiceEndpoints{
@@ -52,7 +52,7 @@ func ResolveServiceEndpoints(baseDomain string) (ServiceEndpoints, error) {
 	}
 
 	rootHost := hostname
-	for _, prefix := range []string{"api.", "meta.", "storage."} {
+	for _, prefix := range []string{"api.", "meta.", "storage.", "www."} {
 		if strings.HasPrefix(rootHost, prefix) {
 			rootHost = strings.TrimPrefix(rootHost, prefix)
 			break

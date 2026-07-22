@@ -30,8 +30,8 @@ def resolve_service_domains(base_domain):
         origin = base_domain.rstrip("/")
         return origin, origin
 
-    root_host = parsed.hostname
-    for prefix in ("api.", "meta.", "storage."):
+    root_host = parsed.hostname.lower()
+    for prefix in ("api.", "meta.", "storage.", "www."):
         if root_host.startswith(prefix):
             root_host = root_host[len(prefix):]
             break

@@ -43,7 +43,7 @@ func UnifiedUpload(opts UploadOptions) (string, error) {
 	}
 
 	// 2. 计算文件哈希
-	sha256sum, md5Hash, err := filehash.CalculateHash(opts.File.Path)
+	sha256sum, md5Hash, err := filehash.CalculateHashContext(ctx, opts.File.Path)
 	if err != nil {
 		return "", WithStep(i18n.T("step.calculate_hash"), err)
 	}
