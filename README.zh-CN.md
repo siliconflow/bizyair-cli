@@ -181,12 +181,11 @@ BizyAir CLI 标准支持英语（`en`）和简体中文（`zh-CN`）。语言在
 语言选择优先级为：`--lang` > 系统语言 > 英语。未指定 `--lang` 时，简体中文和繁体中文系统都会使用简体中文界面；其他、空值或无法识别的系统语言统一使用英语。
 
 ```bash
-# 全局参数应放在子命令之前
 bizyair --lang zh-CN upload --help
-bizyair --lang en upgrade --check
+bizyair upgrade --lang en --check
 ```
 
-`--lang` 只接受 `en` 和 `zh-CN`。系统 locale 中的 `zh-CN`、`zh-Hans`、`zh-TW`、`zh-Hant` 等会被自动识别，并统一选择简体中文界面。显式设置为其他值会返回错误并列出支持值。
+`--lang` 可以放在子命令之前或之后，且只接受 `en` 和 `zh-CN`。系统 locale 中的 `zh-CN`、`zh-Hans`、`zh-TW`、`zh-Hant` 等会被自动识别，并统一选择简体中文界面。显式设置为其他值会返回错误并列出支持值。
 
 ### 🎨 交互式界面（TUI）- 推荐新手使用
 

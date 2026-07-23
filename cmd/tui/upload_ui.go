@@ -373,7 +373,7 @@ func (m *mainModel) updateUploadInputs(msg tea.Msg) tea.Cmd {
 				m.act.u.name = name
 				// 调用后端校验模型名是否重复
 				m.running = true
-				return checkModelExists(m.baseDomain, m.apiKey, name, m.act.u.typ)
+				return checkModelExists(m.ctx, m.baseDomain, m.apiKey, name, m.act.u.typ)
 			case "esc":
 				m.upStep = stepType
 				return nil
@@ -1102,7 +1102,7 @@ func (m *mainModel) updateUploadInputs(msg tea.Msg) tea.Cmd {
 			switch km.String() {
 			case "enter":
 				m.running = true
-				return runUploadActionMulti(m.baseDomain, m.act.u, m.act.versions)
+				return runUploadActionMulti(m.ctx, m.baseDomain, m.act.u, m.act.versions)
 			case "esc":
 				m.act.confirming = false
 				m.upStep = stepAskMore

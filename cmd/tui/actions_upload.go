@@ -12,19 +12,25 @@ import (
 )
 
 // checkModelExists 检查模型名是否已存在
-func checkModelExists(baseDomain, apiKey, modelName, modelType string) tea.Cmd {
+func checkModelExists(ctx context.Context, baseDomain, apiKey, modelName, modelType string) tea.Cmd {
+	if ctx == nil {
+		ctx = context.Background()
+	}
 	return func() tea.Msg {
 		client := lib.NewClient(baseDomain, apiKey)
-		exists, err := client.CheckModelExistsContext(context.Background(), modelName, modelType)
+		exists, err := client.CheckModelExistsContext(ctx, modelName, modelType)
 		return checkModelExistsDoneMsg{exists: exists, err: err}
 	}
 }
 
 // loadBaseModelTypes 从后端加载基础模型类型列表
-func loadBaseModelTypes(baseDomain, apiKey string) tea.Cmd {
+func loadBaseModelTypes(ctx context.Context, baseDomain, apiKey string) tea.Cmd {
+	if ctx == nil {
+		ctx = context.Background()
+	}
 	return func() tea.Msg {
 		client := lib.NewClient(baseDomain, apiKey)
-		resp, err := client.GetBaseModelTypesContext(context.Background())
+		resp, err := client.GetBaseModelTypesContext(ctx)
 		if err != nil {
 			return baseModelTypesLoadedMsg{items: nil, err: err}
 		}
@@ -33,10 +39,13 @@ func loadBaseModelTypes(baseDomain, apiKey string) tea.Cmd {
 }
 
 // 多版本上传
-func runUploadActionMulti(baseDomain string, u uploadInputs, versions []versionItem) tea.Cmd {
+func runUploadActionMulti(parentCtx context.Context, baseDomain string, u uploadInputs, versions []versionItem) tea.Cmd {
+	if parentCtx == nil {
+		parentCtx = context.Background()
+	}
 	return func() tea.Msg {
 		ch := make(chan tea.Msg, 64)
-		ctx, cancel := context.WithCancel(context.Background())
+		ctx, cancel := context.WithCancel(parentCtx)
 
 		go func() {
 			defer close(ch)

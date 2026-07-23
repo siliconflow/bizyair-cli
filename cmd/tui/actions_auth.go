@@ -9,10 +9,13 @@ import (
 	"github.com/siliconflow/bizyair-cli/lib/actions"
 )
 
-func loginCmd(baseDomain, apiKey string) tea.Cmd {
+func loginCmd(ctx context.Context, baseDomain, apiKey string) tea.Cmd {
+	if ctx == nil {
+		ctx = context.Background()
+	}
 	return func() tea.Msg {
 		api := lib.NewClient(baseDomain, apiKey)
-		result := actions.ExecuteLoginContext(context.Background(), api, apiKey)
+		result := actions.ExecuteLoginContext(ctx, api, apiKey)
 		if !result.Success {
 			return loginDoneMsg{ok: false, err: result.Error}
 		}

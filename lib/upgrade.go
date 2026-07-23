@@ -42,28 +42,33 @@ func CheckForUpdate(currentVersion string) (*UpgradeResult, error) {
 }
 
 func CheckForUpdateContext(ctx context.Context, currentVersion, manifestURL string) (*UpgradeResult, error) {
+	result, _, err := checkForUpdateWithManifest(ctx, currentVersion, manifestURL)
+	return result, err
+}
+
+func checkForUpdateWithManifest(ctx context.Context, currentVersion, manifestURL string) (*UpgradeResult, *Manifest, error) {
 	if manifestURL == "" {
 		manifestURL = meta.ManifestURL
 	}
 	// 加载 manifest
 	manifest, err := LoadManifestFromURLContext(ctx, manifestURL)
 	if err != nil {
-		return nil, i18n.NewError("error.upgrade.check_failed", nil, err)
+		return nil, nil, i18n.NewError("error.upgrade.check_failed", nil, err)
 	}
 
 	if manifest.LatestVersion == "" {
-		return nil, i18n.NewError("error.manifest.latest_missing", nil, nil)
+		return nil, nil, i18n.NewError("error.manifest.latest_missing", nil, nil)
 	}
 
 	// 解析版本
 	current, err := ParseVersion(currentVersion)
 	if err != nil {
-		return nil, i18n.NewError("error.upgrade.current_version_invalid", map[string]any{"Version": currentVersion}, err)
+		return nil, nil, i18n.NewError("error.upgrade.current_version_invalid", map[string]any{"Version": currentVersion}, err)
 	}
 
 	latest, err := ParseVersion(manifest.LatestVersion)
 	if err != nil {
-		return nil, i18n.NewError("error.upgrade.latest_version_invalid", map[string]any{"Version": manifest.LatestVersion}, err)
+		return nil, nil, i18n.NewError("error.upgrade.latest_version_invalid", map[string]any{"Version": manifest.LatestVersion}, err)
 	}
 
 	// 比较版本
@@ -74,7 +79,7 @@ func CheckForUpdateContext(ctx context.Context, currentVersion, manifestURL stri
 		CurrentVersion: current.String(),
 		LatestVersion:  latest.String(),
 		Success:        true,
-	}, nil
+	}, manifest, nil
 }
 
 // PerformUpgrade 执行升级
@@ -97,7 +102,7 @@ func PerformUpgrade(opts UpgradeOptions) *UpgradeResult {
 	if manifestURL == "" {
 		manifestURL = meta.ManifestURL
 	}
-	result, err := CheckForUpdateContext(ctx, opts.CurrentVersion, manifestURL)
+	result, manifest, err := checkForUpdateWithManifest(ctx, opts.CurrentVersion, manifestURL)
 	if err != nil {
 		return &UpgradeResult{
 			Success: false,
@@ -126,15 +131,8 @@ func PerformUpgrade(opts UpgradeOptions) *UpgradeResult {
 		return result
 	}
 
-	// 2. 加载 manifest
+	// 2. 使用检查更新时已加载的 manifest
 	updateStatus(i18n.T("upgrade.status.fetching_release"))
-	manifest, err := LoadManifestFromURLContext(ctx, manifestURL)
-	if err != nil {
-		result.Success = false
-		result.Error = err
-		result.Message = i18n.T("upgrade.result.release_failed", map[string]any{"Cause": err})
-		return result
-	}
 
 	// 3. 获取当前平台的二进制文件信息
 	goos := runtime.GOOS

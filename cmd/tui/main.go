@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"context"
 	"os"
 	"sort"
 	"strings"
@@ -21,6 +22,7 @@ import (
 )
 
 type mainModel struct {
+	ctx           context.Context
 	baseDomain    string
 	step          mainStep
 	loggedIn      bool
@@ -103,10 +105,17 @@ type mainModel struct {
 }
 
 func newMainModel() mainModel {
-	return newMainModelWithBaseDomain(meta.DefaultBaseDomain)
+	return newMainModelWithContext(context.Background(), meta.DefaultBaseDomain)
 }
 
 func newMainModelWithBaseDomain(baseDomain string) mainModel {
+	return newMainModelWithContext(context.Background(), baseDomain)
+}
+
+func newMainModelWithContext(ctx context.Context, baseDomain string) mainModel {
+	if ctx == nil {
+		ctx = context.Background()
+	}
 	mItems := []list.Item{
 		menuEntry{listItem{title: i18n.T("tui.menu.upload", nil), desc: i18n.T("tui.menu.upload_desc", nil)}, actionUpload},
 		menuEntry{listItem{title: i18n.T("tui.menu.models", nil), desc: i18n.T("tui.menu.models_desc", nil)}, actionLsModel},
@@ -233,6 +242,7 @@ func newMainModelWithBaseDomain(baseDomain string) mainModel {
 	pr := progress.New(progress.WithDefaultGradient())
 
 	m := mainModel{
+		ctx:              ctx,
 		baseDomain:       baseDomain,
 		step:             mainStepHome,
 		menu:             menuList,
@@ -384,7 +394,7 @@ func (m mainModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					return m, nil
 				}
 				m.running = true
-				return m, loginCmd(m.baseDomain, api)
+				return m, loginCmd(m.ctx, m.baseDomain, api)
 			case mainStepMenu:
 				if it, ok := m.menu.SelectedItem().(menuEntry); ok {
 					m.currentAction = it.key
@@ -402,7 +412,7 @@ func (m mainModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 						// 如果还没有加载基础模型类型，则开始加载
 						if len(m.baseModelTypes) == 0 && !m.loadingBaseModelTypes {
 							m.loadingBaseModelTypes = true
-							return m, loadBaseModelTypes(m.baseDomain, m.apiKey)
+							return m, loadBaseModelTypes(m.ctx, m.baseDomain, m.apiKey)
 						}
 
 						return m, nil
@@ -774,7 +784,15 @@ func openMyModelsInBrowser(baseDomain string) tea.Cmd {
 
 // 入口
 func MainTUI(c *cli.Context) error {
-	p := tea.NewProgram(newMainModelWithBaseDomain(c.String("base_domain")), tea.WithAltScreen())
+	ctx := c.Context
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	p := tea.NewProgram(
+		newMainModelWithContext(ctx, c.String("base_domain")),
+		tea.WithAltScreen(),
+		tea.WithContext(ctx),
+	)
 	model, err := p.Run()
 	if err != nil {
 		return err

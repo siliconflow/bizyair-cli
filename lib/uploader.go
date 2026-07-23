@@ -52,7 +52,6 @@ func UnifiedUpload(opts UploadOptions) (string, error) {
 	logs.Debugf("[%s] file hash: %s\n", opts.FileIndex, sha256sum)
 
 	// 3. 尝试加载断点续传信息
-	resumed := false
 	checkpointFile, _ := GetCheckpointFile(sha256sum)
 	checkpoint, _ := LoadCheckpoint(checkpointFile)
 
@@ -126,10 +125,5 @@ func UnifiedUpload(opts UploadOptions) (string, error) {
 	}
 
 	logs.Debugf("[%s] upload succeeded: %s\n", opts.FileIndex, objectKey)
-	resumed = true // 标记为成功
-
-	if resumed {
-		return commitKey, nil
-	}
-	return objectKey, nil
+	return commitKey, nil
 }

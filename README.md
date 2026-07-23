@@ -153,12 +153,11 @@ The precedence is:
 Without `--lang`, Simplified and Traditional Chinese system locales both use the Simplified Chinese interface. All other, empty, or unrecognized system languages use English.
 
 ```bash
-# Global options must appear before the subcommand
 bizyair --lang en upload --help
-bizyair --lang zh-CN upgrade --check
+bizyair upgrade --lang zh-CN --check
 ```
 
-`--lang` accepts only `en` and `zh-CN`. System locales such as `zh-CN`, `zh-Hans`, `zh-TW`, and `zh-Hant` are detected automatically and all select the Simplified Chinese interface. An unsupported explicit value returns an error listing the supported values.
+`--lang` may appear before or after the subcommand and accepts only `en` and `zh-CN`. System locales such as `zh-CN`, `zh-Hans`, `zh-TW`, and `zh-Hant` are detected automatically and all select the Simplified Chinese interface. An unsupported explicit value returns an error listing the supported values.
 
 ## Usage modes
 

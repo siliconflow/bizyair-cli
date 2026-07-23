@@ -11,12 +11,13 @@ import (
 	"github.com/cloudwego/hertz/cmd/hz/util/logs"
 	"github.com/siliconflow/bizyair-cli/cmd"
 	"github.com/siliconflow/bizyair-cli/internal/i18n"
+	"github.com/siliconflow/bizyair-cli/lib"
 	urfavecli "github.com/urfave/cli/v2"
 )
 
 func main() {
 	if err := Run(); err != nil {
-		fmt.Fprintln(os.Stderr, err)
+		fmt.Fprintln(os.Stderr, lib.FormatError(err, cmd.Verbose()))
 		os.Exit(exitCode(err))
 	}
 }
@@ -36,11 +37,13 @@ func runContext(ctx context.Context, args []string) error {
 	if ctx == nil {
 		ctx = context.Background()
 	}
+	programName := "bizyair"
 	languageArgs := args
-	if len(languageArgs) > 0 {
-		languageArgs = languageArgs[1:]
+	if len(args) > 0 {
+		programName = args[0]
+		languageArgs = args[1:]
 	}
-	language, err := i18n.Resolve(languageArgs, os.LookupEnv)
+	language, commandArgs, err := i18n.ResolveArgs(languageArgs, os.LookupEnv)
 	if err != nil {
 		return err
 	}
@@ -52,7 +55,7 @@ func runContext(ctx context.Context, args []string) error {
 	// Keep process termination in main so every returned error, including
 	// localized usage errors, receives a reliable non-zero exit code.
 	app.ExitErrHandler = func(*urfavecli.Context, error) {}
-	return app.RunContext(ctx, args)
+	return app.RunContext(ctx, append([]string{programName}, commandArgs...))
 }
 
 func exitCode(err error) int {

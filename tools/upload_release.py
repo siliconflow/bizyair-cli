@@ -14,6 +14,7 @@ import os
 import sys
 import json
 import requests
+from ipaddress import ip_address
 from urllib.parse import urlparse, urlunparse
 from datetime import datetime
 from pathlib import Path
@@ -22,22 +23,41 @@ import alibabacloud_oss_v2 as oss
 
 def resolve_service_domains(base_domain):
     """Resolve api/storage origins from a single BizyAir root domain."""
-    parsed = urlparse(base_domain.rstrip("/"))
+    parsed = urlparse(base_domain.strip())
     if parsed.scheme not in ("http", "https") or not parsed.hostname:
         raise ValueError("BASE_DOMAIN must be an absolute HTTP(S) URL")
 
-    if parsed.port or parsed.hostname in ("localhost", "127.0.0.1", "::1") or parsed.path not in ("", "/"):
-        origin = base_domain.rstrip("/")
+    hostname = parsed.hostname.lower()
+    try:
+        port = parsed.port
+    except ValueError as exc:
+        raise ValueError("BASE_DOMAIN contains an invalid port") from exc
+
+    def host_port(host, value):
+        if ":" in host:
+            host = f"[{host}]"
+        return f"{host}:{value}" if value else host
+
+    def is_ip_address(host):
+        try:
+            ip_address(host)
+            return True
+        except ValueError:
+            return False
+
+    normalized_path = parsed.path.rstrip("/")
+    if port or hostname == "localhost" or is_ip_address(hostname) or normalized_path:
+        origin = urlunparse((parsed.scheme, host_port(hostname, port), normalized_path, "", "", ""))
         return origin, origin
 
-    root_host = parsed.hostname.lower()
+    root_host = hostname
     for prefix in ("api.", "meta.", "storage.", "www."):
         if root_host.startswith(prefix):
             root_host = root_host[len(prefix):]
             break
 
     def origin(host):
-        return urlunparse((parsed.scheme, host, "", "", "", ""))
+        return urlunparse((parsed.scheme, host_port(host, None), "", "", "", ""))
 
     return origin(f"api.{root_host}"), origin(f"storage.{root_host}")
 

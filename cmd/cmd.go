@@ -163,6 +163,11 @@ func setLogVerbose(verbose bool) {
 	}
 }
 
+// Verbose reports whether the current invocation enabled verbose diagnostics.
+func Verbose() bool {
+	return globalArgs != nil && globalArgs.Verbose
+}
+
 func logArguments(args *config.Argument) {
 	if args == nil {
 		return

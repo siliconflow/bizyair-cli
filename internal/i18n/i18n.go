@@ -129,12 +129,28 @@ func firstData(all []map[string]any) map[string]any {
 // Resolve applies the language precedence used by the CLI:
 // --lang > system language > English.
 func Resolve(args []string, lookupEnv LookupEnv) (Language, error) {
-	if value, found, err := languageFlag(args); err != nil {
-		return English, err
-	} else if found {
-		return parseExplicitLanguage(value)
+	language, _, err := ResolveArgs(args, lookupEnv)
+	return language, err
+}
+
+// ResolveArgs resolves the interface language and removes every recognized
+// --lang option before the remaining arguments are handed to urfave/cli. This
+// keeps language selection in one parser while allowing the global option on
+// either side of a subcommand.
+func ResolveArgs(args []string, lookupEnv LookupEnv) (Language, []string, error) {
+	value, found, remaining, err := extractLanguageFlag(args)
+	if err != nil {
+		return English, nil, err
+	}
+	if found {
+		resolved, resolveErr := parseExplicitLanguage(value)
+		if resolveErr != nil {
+			return English, nil, resolveErr
+		}
+		return resolved, remaining, nil
 	}
 
+	resolved := English
 	// These variables are implementation details of system-language detection
 	// on Unix-like systems, not additional BizyAir configuration knobs.
 	for _, name := range []string{"LC_ALL", "LC_MESSAGES", "LANG"} {
@@ -142,10 +158,39 @@ func Resolve(args []string, lookupEnv LookupEnv) (Language, error) {
 			break
 		}
 		if value, ok := lookupEnv(name); ok && strings.TrimSpace(value) != "" {
-			return detectSystemLocale(value), nil
+			resolved = detectSystemLocale(value)
+			break
 		}
 	}
-	return English, nil
+	return resolved, remaining, nil
+}
+
+func extractLanguageFlag(args []string) (value string, found bool, remaining []string, err error) {
+	remaining = make([]string, 0, len(args))
+	for i := 0; i < len(args); i++ {
+		arg := args[i]
+		if arg == "--" {
+			remaining = append(remaining, args[i:]...)
+			break
+		}
+		if arg == "--lang" {
+			if i+1 >= len(args) || strings.HasPrefix(args[i+1], "-") {
+				return "", false, nil, fmt.Errorf("--lang requires a value (en or zh-CN)")
+			}
+			value, found = args[i+1], true
+			i++
+			continue
+		}
+		if strings.HasPrefix(arg, "--lang=") {
+			value, found = strings.TrimPrefix(arg, "--lang="), true
+			if strings.TrimSpace(value) == "" {
+				return "", false, nil, fmt.Errorf("--lang requires a value (en or zh-CN)")
+			}
+			continue
+		}
+		remaining = append(remaining, arg)
+	}
+	return value, found, remaining, nil
 }
 
 // parseExplicitLanguage validates --lang. Unlike automatic system detection,
@@ -181,28 +226,4 @@ func normalizeLocale(value string) string {
 		value = value[:i]
 	}
 	return strings.ReplaceAll(value, "_", "-")
-}
-
-func languageFlag(args []string) (value string, found bool, err error) {
-	for i := 0; i < len(args); i++ {
-		arg := args[i]
-		if arg == "--" {
-			break
-		}
-		if arg == "--lang" {
-			if i+1 >= len(args) || strings.HasPrefix(args[i+1], "-") {
-				return "", false, fmt.Errorf("--lang requires a value (en or zh-CN)")
-			}
-			value, found = args[i+1], true
-			i++
-			continue
-		}
-		if strings.HasPrefix(arg, "--lang=") {
-			value, found = strings.TrimPrefix(arg, "--lang="), true
-			if strings.TrimSpace(value) == "" {
-				return "", false, fmt.Errorf("--lang requires a value (en or zh-CN)")
-			}
-		}
-	}
-	return value, found, nil
 }

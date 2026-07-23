@@ -31,6 +31,15 @@ type CheckpointInfo struct {
 	Endpoint string `json:"endpoint,omitempty"`
 }
 
+func cloneCheckpoint(info *CheckpointInfo) *CheckpointInfo {
+	if info == nil {
+		return nil
+	}
+	clone := *info
+	clone.UploadedParts = append([]oss.UploadPart(nil), info.UploadedParts...)
+	return &clone
+}
+
 // GetCheckpointDir 获取checkpoint目录路径 (~/.bizyair/uploads/)
 func GetCheckpointDir() (string, error) {
 	var homeDir string

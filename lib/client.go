@@ -355,6 +355,9 @@ func (c *Client) do(ctx context.Context, method, urlStr string, queryParams, dat
 			if fieldName == "-" {
 				continue
 			}
+			if field.IsZero() {
+				continue
+			}
 
 			if field.Kind() == reflect.Slice {
 				for j := 0; j < field.Len(); j++ {
@@ -365,9 +368,7 @@ func (c *Client) do(ctx context.Context, method, urlStr string, queryParams, dat
 				}
 			} else {
 				fieldValue := fmt.Sprintf("%v", field.Interface())
-				if fieldValue != "" && fieldValue != "0" && fieldValue != "false" && fieldValue != "[]" {
-					query.Add(fieldName, fieldValue)
-				}
+				query.Add(fieldName, fieldValue)
 			}
 		}
 		parsedURL.RawQuery = query.Encode()

@@ -1,6 +1,7 @@
 package lib
 
 import (
+	"errors"
 	"fmt"
 
 	"github.com/siliconflow/bizyair-cli/internal/i18n"
@@ -43,19 +44,24 @@ func (e *APIError) DebugString() string {
 	return fmt.Sprintf("HTTP status=%d code=%d message=%q", e.HTTPStatus, e.Code, e.RawMessage)
 }
 
-// Format keeps normal user output localized while exposing preserved server
-// details to verbose diagnostics through the conventional %+v format.
-func (e *APIError) Format(state fmt.State, verb rune) {
-	if e == nil {
-		return
+// FormatError keeps normal output localized and appends preserved server
+// diagnostics only when verbose output was explicitly requested.
+func FormatError(err error, verbose bool) string {
+	if err == nil {
+		return ""
 	}
-	if verb == 'v' && state.Flag('+') {
-		_, _ = fmt.Fprint(state, e.DebugString())
-		return
+	message := err.Error()
+	if !verbose {
+		return message
 	}
-	if verb == 'q' {
-		_, _ = fmt.Fprintf(state, "%q", e.Error())
-		return
+
+	var apiErr *APIError
+	if !errors.As(err, &apiErr) {
+		return message
 	}
-	_, _ = fmt.Fprint(state, e.Error())
+	detail := apiErr.DebugString()
+	if detail == "" || detail == message {
+		return message
+	}
+	return message + "\n" + detail
 }
