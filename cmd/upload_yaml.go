@@ -18,13 +18,31 @@ type modelUploadResult struct {
 	ModelName      string
 	ModelType      string
 	Success        bool
+	CanceledByUser bool
 	Error          error
 	VersionSuccess int
 	VersionTotal   int
 }
 
+type yamlModelUploadFunc func(
+	context.Context,
+	string,
+	string,
+	string,
+	string,
+	[]config.YamlVersion,
+	bool,
+) modelUploadResult
+
 // uploadFromYaml 从 YAML 配置文件批量上传模型
 func uploadFromYaml(ctx context.Context, yamlPath string, args *config.Argument) error {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+
 	// 1. 加载 YAML 配置
 	fmt.Fprintln(os.Stdout, i18n.T("cli.batch.loading", map[string]any{"Path": yamlPath}))
 	cfg, err := config.LoadYamlConfig(yamlPath)
@@ -42,6 +60,9 @@ func uploadFromYaml(ctx context.Context, yamlPath string, args *config.Argument)
 	if err := config.ValidateYamlConfig(cfg); err != nil {
 		return i18n.NewError("cli.batch.validation_failed", nil, err)
 	}
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 
 	// 4. 获取 API Key
 	apiKey := args.ApiKey
@@ -52,16 +73,50 @@ func uploadFromYaml(ctx context.Context, yamlPath string, args *config.Argument)
 		}
 	}
 
-	// 5. 开始批量上传
-	totalModels := len(cfg.Models)
+	results, err := uploadYamlModels(ctx, cfg.Models, args, apiKey, processModelUpload)
+	if err != nil {
+		return err
+	}
+
+	// 5. 显示汇总结果
+	displayBatchUploadSummary(results)
+
+	// 6. 根据结果决定退出码
+	successCount := 0
+	for _, r := range results {
+		if r.Success {
+			successCount++
+		}
+	}
+
+	if successCount == 0 {
+		return i18n.NewError("cli.batch.all_failed", nil, nil)
+	}
+
+	return nil
+}
+
+func uploadYamlModels(
+	ctx context.Context,
+	models []config.YamlModel,
+	args *config.Argument,
+	apiKey string,
+	uploadModel yamlModelUploadFunc,
+) ([]modelUploadResult, error) {
+	// 开始批量上传
+	totalModels := len(models)
 	fmt.Fprintf(os.Stdout, "\n%s\n", i18n.TN("cli.batch.start", totalModels, map[string]any{"Count": totalModels}))
 	fmt.Fprintln(os.Stdout, strings.Repeat("=", 40))
 
 	// 记录所有模型的上传结果
 	results := make([]modelUploadResult, 0, totalModels)
 
-	// 6. 串行上传每个模型（避免过多并发）
-	for i, model := range cfg.Models {
+	// 串行上传每个模型（避免过多并发）
+	for i, model := range models {
+		if err := ctx.Err(); err != nil {
+			return results, err
+		}
+
 		fmt.Fprintf(os.Stdout, "\n%s\n", i18n.T("cli.batch.uploading_model", map[string]any{
 			"Current": i + 1, "Total": totalModels, "Name": model.Name, "Type": model.Type,
 		}))
@@ -71,8 +126,14 @@ func uploadFromYaml(ctx context.Context, yamlPath string, args *config.Argument)
 		versions := config.AutoIncrementVersionNames(model.Versions)
 
 		// 转换为 VersionInput 并执行上传
-		result := processModelUpload(ctx, apiKey, args.BaseDomain, model.Name, model.Type, versions, args.Overwrite)
+		result := uploadModel(ctx, apiKey, args.BaseDomain, model.Name, model.Type, versions, args.Overwrite)
 		results = append(results, result)
+		if result.CanceledByUser {
+			return results, context.Canceled
+		}
+		if err := ctx.Err(); err != nil {
+			return results, err
+		}
 
 		// 显示结果
 		if result.Success {
@@ -86,22 +147,11 @@ func uploadFromYaml(ctx context.Context, yamlPath string, args *config.Argument)
 		}
 	}
 
-	// 7. 显示汇总结果
-	displayBatchUploadSummary(results)
-
-	// 8. 根据结果决定退出码
-	successCount := 0
-	for _, r := range results {
-		if r.Success {
-			successCount++
-		}
+	if err := ctx.Err(); err != nil {
+		return results, err
 	}
 
-	if successCount == 0 {
-		return i18n.NewError("cli.batch.all_failed", nil, nil)
-	}
-
-	return nil
+	return results, nil
 }
 
 // processModelUpload 处理单个模型的上传（包括转换和上传）
@@ -198,6 +248,7 @@ func uploadSingleModelFromYaml(
 		ModelName:      modelName,
 		ModelType:      modelType,
 		Success:        uploadResult.Success,
+		CanceledByUser: uploadResult.CanceledByUser,
 		Error:          combineErrors(uploadResult.Errors),
 		VersionSuccess: uploadResult.SuccessCount,
 		VersionTotal:   uploadResult.TotalCount,

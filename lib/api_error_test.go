@@ -2,7 +2,6 @@ package lib
 
 import (
 	"errors"
-	"fmt"
 	"net/http"
 	"strings"
 	"testing"
@@ -20,7 +19,7 @@ func TestKnownAPIErrorIsLocalizedAndStructured(t *testing.T) {
 	if apiErr.HTTPStatus != http.StatusUnauthorized || apiErr.Code != 20004 || apiErr.RawMessage != "raw invalid key" {
 		t.Fatalf("structured details were not preserved: %#v", apiErr)
 	}
-	if debug := fmt.Sprintf("%+v", apiErr); !strings.Contains(debug, "status=401") || !strings.Contains(debug, `message="raw invalid key"`) {
+	if debug := FormatError(err, true); !strings.Contains(debug, "status=401") || !strings.Contains(debug, `message="raw invalid key"`) {
 		t.Fatalf("verbose diagnostics do not contain the raw response details: %q", debug)
 	}
 

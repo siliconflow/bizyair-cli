@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"strings"
@@ -16,6 +17,8 @@ import (
 	"github.com/urfave/cli/v2"
 )
 
+const interruptedExitCode = 130
+
 func Upload(c *cli.Context) error {
 	args := parseArgument(c, meta.CmdUpload)
 	setLogVerbose(args.Verbose)
@@ -25,6 +28,9 @@ func Upload(c *cli.Context) error {
 	if args.FilePath != "" {
 		// 使用 YAML 配置文件
 		if err := uploadFromYaml(c.Context, args.FilePath, args); err != nil {
+			if errors.Is(err, context.Canceled) {
+				return canceledUploadExitError()
+			}
 			return cli.Exit(err, meta.LoadError)
 		}
 		return nil
@@ -113,13 +119,13 @@ func Upload(c *cli.Context) error {
 	// 处理结果
 	if !result.Success {
 		if result.CanceledByUser {
-			fmt.Fprintf(os.Stdout, "\n%s\n", i18n.T("cli.upload.canceled"))
 			folder, _ := lib.GetCheckpointDir()
 			if folder != "" {
+				fmt.Fprintln(os.Stdout)
 				fmt.Fprintln(os.Stdout, i18n.T("cli.upload.checkpoint_saved"))
 				fmt.Fprintln(os.Stdout, i18n.T("cli.upload.checkpoint_location", map[string]any{"Path": folder}))
 			}
-			return nil
+			return canceledUploadExitError()
 		}
 
 		fmt.Fprintf(os.Stderr, "\n%s\n", i18n.T("cli.upload.failure_list"))
@@ -143,6 +149,10 @@ func Upload(c *cli.Context) error {
 	// 全部成功时，显示模型详情
 	displayUploadedModelDetail(c.Context, apiKey, args.BaseDomain, result.ModelName, result.ModelType)
 	return nil
+}
+
+func canceledUploadExitError() error {
+	return cli.Exit(i18n.T("cli.upload.canceled"), interruptedExitCode)
 }
 
 // displayUploadedModelDetail 显示刚上传的模型详情
