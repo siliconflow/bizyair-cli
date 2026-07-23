@@ -17,12 +17,14 @@ import (
 	"github.com/urfave/cli/v2"
 )
 
-const interruptedExitCode = 130
-
 func Upload(c *cli.Context) error {
 	args := parseArgument(c, meta.CmdUpload)
 	setLogVerbose(args.Verbose)
 	logArguments(args)
+
+	if errors.Is(c.Context.Err(), context.Canceled) {
+		return canceledUploadExitError()
+	}
 
 	// 检查是否使用 YAML 配置文件批量上传
 	if args.FilePath != "" {
@@ -99,6 +101,9 @@ func Upload(c *cli.Context) error {
 	client := lib.NewClient(args.BaseDomain, apiKey)
 	resp, err := client.GetBaseModelTypesContext(c.Context)
 	if err != nil {
+		if errors.Is(err, context.Canceled) || errors.Is(c.Context.Err(), context.Canceled) {
+			return canceledUploadExitError()
+		}
 		return cli.Exit(i18n.NewError("error.base_models.fetch_failed", nil, err), meta.ServerError)
 	}
 
@@ -118,7 +123,7 @@ func Upload(c *cli.Context) error {
 
 	// 处理结果
 	if !result.Success {
-		if result.CanceledByUser {
+		if result.CanceledByUser || errors.Is(c.Context.Err(), context.Canceled) {
 			folder, _ := lib.GetCheckpointDir()
 			if folder != "" {
 				fmt.Fprintln(os.Stdout)
@@ -152,7 +157,10 @@ func Upload(c *cli.Context) error {
 }
 
 func canceledUploadExitError() error {
-	return cli.Exit(i18n.T("cli.upload.canceled"), interruptedExitCode)
+	return cli.Exit(
+		i18n.NewError("cli.upload.canceled", nil, context.Canceled),
+		meta.InterruptedExitCode,
+	)
 }
 
 // displayUploadedModelDetail 显示刚上传的模型详情

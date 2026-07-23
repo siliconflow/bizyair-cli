@@ -17,6 +17,11 @@ func ExecuteUpload(api lib.BizyAPI, input UploadInput, callback UploadCallback) 
 	if ctx == nil {
 		ctx = context.Background()
 	}
+	total := len(input.Versions)
+
+	if errors.Is(ctx.Err(), context.Canceled) {
+		return canceledUploadResult(total, 0)
+	}
 
 	if input.ApiKey == "" {
 		return UploadResult{
@@ -35,6 +40,9 @@ func ExecuteUpload(api lib.BizyAPI, input UploadInput, callback UploadCallback) 
 	if !input.Overwrite {
 		exists, err := api.CheckModelExistsContext(ctx, input.ModelName, input.ModelType)
 		if err != nil {
+			if uploadWasCanceled(ctx, err) {
+				return canceledUploadResult(total, 0)
+			}
 			return UploadResult{
 				Success: false,
 				Errors:  []error{lib.WithStep(i18n.T("step.check_model"), err)},
@@ -115,6 +123,16 @@ func uploadVersionsConcurrently(
 	var uploadErrors []error
 	var canceled bool
 
+	recordContextError := func(err error) {
+		mu.Lock()
+		defer mu.Unlock()
+		if errors.Is(err, context.Canceled) {
+			canceled = true
+			return
+		}
+		uploadErrors = append(uploadErrors, lib.WithStep(i18n.T("step.upload"), err))
+	}
+
 	for i, ver := range input.Versions {
 		wg.Add(1)
 		idx := i
@@ -123,8 +141,18 @@ func uploadVersionsConcurrently(
 		go func() {
 			defer wg.Done()
 
-			semaphore <- struct{}{}
+			select {
+			case semaphore <- struct{}{}:
+			case <-ctx.Done():
+				recordContextError(ctx.Err())
+				return
+			}
 			defer func() { <-semaphore }()
+
+			if err := ctx.Err(); err != nil {
+				recordContextError(err)
+				return
+			}
 
 			if callback != nil {
 				callback.OnVersionStart(idx, total, filepath.Base(version.Path))
@@ -164,18 +192,26 @@ func uploadVersionsConcurrently(
 
 	wg.Wait()
 
-	if canceled {
-		return UploadResult{
-			Success:        false,
-			CanceledByUser: true,
-			TotalCount:     total,
-		}
-	}
-
 	successVersions := make([]*lib.ModelVersion, 0, total)
 	for _, mv := range versionList {
 		if mv != nil {
 			successVersions = append(successVersions, mv)
+		}
+	}
+
+	if canceled || errors.Is(ctx.Err(), context.Canceled) {
+		return canceledUploadResult(total, len(successVersions))
+	}
+
+	if err := ctx.Err(); err != nil {
+		if len(uploadErrors) == 0 {
+			uploadErrors = append(uploadErrors, lib.WithStep(i18n.T("step.upload"), err))
+		}
+		return UploadResult{
+			Success:      false,
+			TotalCount:   total,
+			SuccessCount: len(successVersions),
+			Errors:       uploadErrors,
 		}
 	}
 
@@ -190,9 +226,14 @@ func uploadVersionsConcurrently(
 
 	_, err := api.CommitModelV2Context(ctx, input.ModelName, input.ModelType, successVersions)
 	if err != nil {
+		if uploadWasCanceled(ctx, err) {
+			return canceledUploadResult(total, len(successVersions))
+		}
 		return UploadResult{
-			Success: false,
-			Errors:  []error{lib.WithStep(i18n.T("step.commit_model"), err)},
+			Success:      false,
+			SuccessCount: len(successVersions),
+			TotalCount:   total,
+			Errors:       []error{lib.WithStep(i18n.T("step.commit_model"), err)},
 		}
 	}
 
@@ -203,6 +244,20 @@ func uploadVersionsConcurrently(
 		Errors:       uploadErrors,
 		ModelName:    input.ModelName,
 		ModelType:    input.ModelType,
+	}
+}
+
+func uploadWasCanceled(ctx context.Context, err error) bool {
+	return errors.Is(err, context.Canceled) ||
+		(ctx != nil && errors.Is(ctx.Err(), context.Canceled))
+}
+
+func canceledUploadResult(total, success int) UploadResult {
+	return UploadResult{
+		Success:        false,
+		SuccessCount:   success,
+		TotalCount:     total,
+		CanceledByUser: true,
 	}
 }
 

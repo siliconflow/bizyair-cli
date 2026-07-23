@@ -27,7 +27,7 @@ func localizedHelpCommand() *cli.Command {
 			}
 			arguments := append([]string{c.App.Name}, c.Args().Slice()...)
 			arguments = append(arguments, "--help")
-			return c.App.Run(arguments)
+			return c.App.RunContext(c.Context, arguments)
 		},
 	}
 }

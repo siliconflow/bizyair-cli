@@ -20,11 +20,11 @@ const (
 
 const (
 	// DefaultServiceHost is the only Go default that needs to change for a
-	// future BizyAir domain migration (for example, .vip -> .ai).
+	// future BizyAir API domain migration.
 	DefaultServiceHost = "bizyair.vip"
 
-	// DefaultBaseDomain is the single configurable root used to derive all
-	// BizyAir service domains (api, meta, web, and storage).
+	// DefaultBaseDomain is the configurable root used to derive BizyAir API,
+	// metadata, web, and general storage service domains.
 	DefaultBaseDomain = "https://" + DefaultServiceHost
 
 	// Deprecated: use DefaultBaseDomain. Kept for source compatibility.
@@ -33,9 +33,10 @@ const (
 )
 
 const (
-	LoadError   = 1
-	ServerError = 2
-	HttpError   = 3
+	LoadError           = 1
+	ServerError         = 2
+	HttpError           = 3
+	InterruptedExitCode = 130
 )
 
 const (
@@ -45,8 +46,9 @@ const (
 	MultipartThreshold = 100 * 1024 * 1024 // 超过100MB使用分片上传
 	CheckpointFolder   = "uploads"         // checkpoint文件夹名称
 
-	// 升级相关配置
-	ManifestURL         = StorageDomain + "/cli/releases/manifest.json"
+	// ManifestURL intentionally does not follow DefaultBaseDomain. CLI
+	// releases are published to the fixed .ai storage domain.
+	ManifestURL         = "https://storage.bizyair.ai/cli/releases/manifest.json"
 	UpgradeBackupSuffix = ".backup"
 	UpgradeMaxRetries   = 3
 )

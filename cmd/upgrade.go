@@ -1,6 +1,8 @@
 package cmd
 
 import (
+	"context"
+	"errors"
 	"fmt"
 	"os"
 
@@ -14,12 +16,12 @@ import (
 func Upgrade(c *cli.Context) error {
 	setLogVerbose(globalArgs.Verbose)
 
+	if errors.Is(c.Context.Err(), context.Canceled) {
+		return canceledUpgradeExitError()
+	}
+
 	checkOnly := c.Bool("check")
 	force := c.Bool("force")
-	endpoints, err := lib.ResolveServiceEndpoints(globalArgs.BaseDomain)
-	if err != nil {
-		return cli.Exit(err, meta.LoadError)
-	}
 
 	fmt.Println(i18n.T("cli.upgrade.title"))
 	fmt.Println(i18n.T("cli.upgrade.current_version", map[string]any{"Version": meta.Version}))
@@ -31,7 +33,7 @@ func Upgrade(c *cli.Context) error {
 		Force:          force,
 		CurrentVersion: meta.Version,
 		Context:        c.Context,
-		ManifestURL:    endpoints.ManifestURL(),
+		ManifestURL:    meta.ManifestURL,
 		StatusFunc: func(status string) {
 			fmt.Printf("%s\n", status)
 		},
@@ -56,6 +58,9 @@ func Upgrade(c *cli.Context) error {
 	fmt.Printf("==================\n")
 
 	if !result.Success {
+		if errors.Is(result.Error, context.Canceled) || errors.Is(c.Context.Err(), context.Canceled) {
+			return canceledUpgradeExitError()
+		}
 		fmt.Fprintf(os.Stderr, "❌ %s\n", result.Message)
 		if result.Error != nil {
 			fmt.Fprintln(os.Stderr, i18n.T("cli.upgrade.error_detail", map[string]any{"Cause": result.Error}))
@@ -70,6 +75,13 @@ func Upgrade(c *cli.Context) error {
 	}
 
 	return nil
+}
+
+func canceledUpgradeExitError() error {
+	return cli.Exit(
+		i18n.NewError("cli.upgrade.canceled", nil, context.Canceled),
+		meta.InterruptedExitCode,
+	)
 }
 
 // formatBytes 格式化字节数

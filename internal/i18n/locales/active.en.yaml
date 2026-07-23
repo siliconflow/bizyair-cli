@@ -295,6 +295,7 @@ cli:
     current_version: "Current version: {{.Version}}"
     download_progress: "Download progress: {{.Percentage}}% ({{.Downloaded}} / {{.Total}})"
     error_detail: "Error details: {{.Cause}}"
+    canceled: "Upgrade canceled."
     failed: "Upgrade failed"
     restart_hint: "Restart the command to use the new version."
   upload:

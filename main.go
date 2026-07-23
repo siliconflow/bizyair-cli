@@ -12,6 +12,7 @@ import (
 	"github.com/siliconflow/bizyair-cli/cmd"
 	"github.com/siliconflow/bizyair-cli/internal/i18n"
 	"github.com/siliconflow/bizyair-cli/lib"
+	"github.com/siliconflow/bizyair-cli/meta"
 	urfavecli "github.com/urfave/cli/v2"
 )
 
@@ -29,7 +30,7 @@ func Run() error {
 	return runContext(ctx, os.Args)
 }
 
-func runContext(ctx context.Context, args []string) error {
+func runContext(ctx context.Context, args []string) (err error) {
 	defer func() {
 		logs.Flush()
 	}()
@@ -37,6 +38,10 @@ func runContext(ctx context.Context, args []string) error {
 	if ctx == nil {
 		ctx = context.Background()
 	}
+	defer func() {
+		err = preserveContextCancellation(ctx, err)
+	}()
+
 	programName := "bizyair"
 	languageArgs := args
 	if len(args) > 0 {
@@ -58,9 +63,25 @@ func runContext(ctx context.Context, args []string) error {
 	return app.RunContext(ctx, append([]string{programName}, commandArgs...))
 }
 
+func preserveContextCancellation(ctx context.Context, err error) error {
+	if ctx == nil || !errors.Is(ctx.Err(), context.Canceled) {
+		return err
+	}
+	if err == nil {
+		return context.Canceled
+	}
+	if errors.Is(err, context.Canceled) {
+		return err
+	}
+	return errors.Join(err, context.Canceled)
+}
+
 func exitCode(err error) int {
 	if err == nil {
 		return 0
+	}
+	if errors.Is(err, context.Canceled) {
+		return meta.InterruptedExitCode
 	}
 	var exitCoder urfavecli.ExitCoder
 	if errors.As(err, &exitCoder) && exitCoder.ExitCode() != 0 {

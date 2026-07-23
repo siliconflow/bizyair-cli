@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -211,10 +212,11 @@ func uploadSingleModelFromYaml(
 	resp, err := client.GetBaseModelTypesContext(ctx)
 	if err != nil {
 		return modelUploadResult{
-			ModelName: modelName,
-			ModelType: modelType,
-			Success:   false,
-			Error:     i18n.NewError("error.base_models.fetch_failed", nil, err),
+			ModelName:      modelName,
+			ModelType:      modelType,
+			Success:        false,
+			CanceledByUser: errors.Is(err, context.Canceled) || errors.Is(ctx.Err(), context.Canceled),
+			Error:          i18n.NewError("error.base_models.fetch_failed", nil, err),
 		}
 	}
 	if resp.Data != nil {

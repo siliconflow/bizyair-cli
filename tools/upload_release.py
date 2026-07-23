@@ -182,7 +182,7 @@ def main():
     # 从环境变量获取配置
     version = os.getenv("VERSION")
     api_key = os.getenv("API_KEY")
-    base_domain = os.getenv("BASE_DOMAIN", "https://bizyair.vip")
+    base_domain = os.getenv("BASE_DOMAIN", "https://bizyair.ai")
     
     if not version or not api_key:
         print("❌ 错误: 缺少必要的环境变量 VERSION 或 API_KEY")

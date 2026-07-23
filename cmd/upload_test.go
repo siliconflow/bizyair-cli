@@ -7,6 +7,7 @@ import (
 
 	"github.com/siliconflow/bizyair-cli/config"
 	"github.com/siliconflow/bizyair-cli/internal/i18n"
+	"github.com/siliconflow/bizyair-cli/meta"
 	"github.com/urfave/cli/v2"
 )
 
@@ -20,8 +21,11 @@ func TestCanceledUploadReturnsInterruptedExitCode(t *testing.T) {
 	if !errors.As(err, &exitCoder) {
 		t.Fatalf("canceled upload error type = %T, want cli.ExitCoder", err)
 	}
-	if got := exitCoder.ExitCode(); got != interruptedExitCode {
-		t.Fatalf("canceled upload exit code = %d, want %d", got, interruptedExitCode)
+	if got := exitCoder.ExitCode(); got != meta.InterruptedExitCode {
+		t.Fatalf("canceled upload exit code = %d, want %d", got, meta.InterruptedExitCode)
+	}
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("canceled upload error = %v, want wrapped context.Canceled", err)
 	}
 }
 
@@ -87,7 +91,10 @@ func TestCanceledYamlUploadReturnsInterruptedExitCode(t *testing.T) {
 	if !errors.As(err, &exitCoder) {
 		t.Fatalf("canceled YAML upload error type = %T, want cli.ExitCoder", err)
 	}
-	if got := exitCoder.ExitCode(); got != interruptedExitCode {
-		t.Fatalf("canceled YAML upload exit code = %d, want %d", got, interruptedExitCode)
+	if got := exitCoder.ExitCode(); got != meta.InterruptedExitCode {
+		t.Fatalf("canceled YAML upload exit code = %d, want %d", got, meta.InterruptedExitCode)
+	}
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("canceled YAML upload error = %v, want wrapped context.Canceled", err)
 	}
 }

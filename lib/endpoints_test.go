@@ -66,13 +66,11 @@ func TestServiceEndpointURLs(t *testing.T) {
 		"base models":  endpoints.BaseModelTypesURL(),
 		"my models":    endpoints.MyModelsURL(),
 		"model detail": endpoints.ModelDetailURL(42),
-		"manifest":     endpoints.ManifestURL(),
 	}
 	wants := map[string]string{
 		"base models":  "https://bizyair.vip/api/special/community/base_model_types",
 		"my models":    "https://bizyair.vip/community?path=my",
 		"model detail": "https://bizyair.vip/community/models/my/42",
-		"manifest":     "https://storage.bizyair.vip/cli/releases/manifest.json",
 	}
 	for name, got := range tests {
 		if got != wants[name] {

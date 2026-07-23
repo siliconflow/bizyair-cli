@@ -101,7 +101,3 @@ func (e ServiceEndpoints) MyModelsURL() string {
 func (e ServiceEndpoints) ModelDetailURL(modelID int64) string {
 	return joinEndpoint(e.Web, fmt.Sprintf("/community/models/my/%d", modelID))
 }
-
-func (e ServiceEndpoints) ManifestURL() string {
-	return joinEndpoint(e.Storage, "/cli/releases/manifest.json")
-}
