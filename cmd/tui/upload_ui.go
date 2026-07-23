@@ -44,7 +44,7 @@ func (m *mainModel) updatePathCompletion(typedPath string) tea.Cmd {
 		m.act.pathMatchCount = len(matches)
 
 		// 更新 filepicker 过滤（提取最后的文件名部分）
-		m.filepicker.FilterPrefix = prefix
+		m.filepicker.SetFilterPrefix(prefix)
 
 		// 如果目录改变，重新读取
 		if dir != m.filepicker.CurrentDirectory {
@@ -54,7 +54,7 @@ func (m *mainModel) updatePathCompletion(typedPath string) tea.Cmd {
 	} else {
 		m.act.pathCompletionSuggestion = ""
 		m.act.pathMatchCount = 0
-		m.filepicker.FilterPrefix = ""
+		m.filepicker.SetFilterPrefix("")
 	}
 
 	return nil
@@ -86,7 +86,7 @@ func (m *mainModel) applyPathCompletion() tea.Cmd {
 
 		// 更新 filepicker 到这个目录
 		m.filepicker.CurrentDirectory = suggestion
-		m.filepicker.FilterPrefix = ""
+		m.filepicker.SetFilterPrefix("")
 
 		// 重新计算补全建议（清空，因为我们已经进入了目录）
 		m.act.pathCompletionSuggestion = ""
@@ -177,7 +177,7 @@ func (m *mainModel) resetUploadState() {
 	m.act.introPathInputFocused = false
 	m.act.pathCompletionSuggestion = ""
 	m.act.pathMatchCount = 0
-	m.filepicker.FilterPrefix = ""
+	m.filepicker.SetFilterPrefix("")
 	m.coverStatus = ""
 	m.coverStatusWarning = false
 }
@@ -462,7 +462,7 @@ func (m *mainModel) updateUploadInputs(msg tea.Msg) tea.Cmd {
 						// 清除补全状态
 						m.act.pathCompletionSuggestion = ""
 						m.act.pathMatchCount = 0
-						m.filepicker.FilterPrefix = ""
+						m.filepicker.SetFilterPrefix("")
 						m.upStep = stepCover
 						return tea.Batch(m.inpPath.Focus(), m.filepicker.Init())
 					}
@@ -484,7 +484,7 @@ func (m *mainModel) updateUploadInputs(msg tea.Msg) tea.Cmd {
 				// 清除补全状态
 				m.act.pathCompletionSuggestion = ""
 				m.act.pathMatchCount = 0
-				m.filepicker.FilterPrefix = ""
+				m.filepicker.SetFilterPrefix("")
 				m.upStep = stepCoverMethod
 				return nil
 			}
@@ -575,7 +575,7 @@ func (m *mainModel) updateUploadInputs(msg tea.Msg) tea.Cmd {
 						}
 						if info.IsDir() {
 							m.filepicker.CurrentDirectory = p
-							m.filepicker.FilterPrefix = ""
+							m.filepicker.SetFilterPrefix("")
 							m.act.pathCompletionSuggestion = ""
 							m.act.pathMatchCount = 0
 							return m.filepicker.Init()
@@ -590,7 +590,7 @@ func (m *mainModel) updateUploadInputs(msg tea.Msg) tea.Cmd {
 						// 清除补全状态
 						m.act.pathCompletionSuggestion = ""
 						m.act.pathMatchCount = 0
-						m.filepicker.FilterPrefix = ""
+						m.filepicker.SetFilterPrefix("")
 						m.upStep = stepIntroMethod
 						return nil
 					}
@@ -617,7 +617,7 @@ func (m *mainModel) updateUploadInputs(msg tea.Msg) tea.Cmd {
 					keyStr := km.String()
 					if (keyStr == "h" || keyStr == "backspace" || keyStr == "left") && m.filepicker.FilterPrefix != "" {
 						// 清除过滤，显示当前目录的所有文件
-						m.filepicker.FilterPrefix = ""
+						m.filepicker.SetFilterPrefix("")
 						m.act.pathCompletionSuggestion = ""
 						m.act.pathMatchCount = 0
 						m.inpPath.SetValue(ensureTrailingSep(m.filepicker.CurrentDirectory))
@@ -636,7 +636,7 @@ func (m *mainModel) updateUploadInputs(msg tea.Msg) tea.Cmd {
 					// 目录改变时清除补全和过滤
 					m.act.pathCompletionSuggestion = ""
 					m.act.pathMatchCount = 0
-					m.filepicker.FilterPrefix = ""
+					m.filepicker.SetFilterPrefix("")
 				}
 				if did, p := m.filepicker.DidSelectFile(msg); did {
 					if info, err := os.Stat(p); err == nil && !info.IsDir() {
@@ -650,7 +650,7 @@ func (m *mainModel) updateUploadInputs(msg tea.Msg) tea.Cmd {
 						// 清除补全状态
 						m.act.pathCompletionSuggestion = ""
 						m.act.pathMatchCount = 0
-						m.filepicker.FilterPrefix = ""
+						m.filepicker.SetFilterPrefix("")
 						m.upStep = stepIntroMethod
 						return nil
 					}
@@ -684,7 +684,7 @@ func (m *mainModel) updateUploadInputs(msg tea.Msg) tea.Cmd {
 						// 清除补全状态
 						m.act.pathCompletionSuggestion = ""
 						m.act.pathMatchCount = 0
-						m.filepicker.FilterPrefix = ""
+						m.filepicker.SetFilterPrefix("")
 						m.upStep = stepIntro
 						return tea.Batch(m.inpPath.Focus(), m.filepicker.Init())
 					} else {
@@ -722,7 +722,7 @@ func (m *mainModel) updateUploadInputs(msg tea.Msg) tea.Cmd {
 					m.act.introPathInputFocused = false
 					m.act.filePickerErr = nil
 					m.filepicker.Path = ""
-					m.filepicker.FilterPrefix = ""
+					m.filepicker.SetFilterPrefix("")
 					m.act.pathCompletionSuggestion = ""
 					m.act.pathMatchCount = 0
 					m.taIntro.SetValue("")
@@ -765,7 +765,7 @@ func (m *mainModel) updateUploadInputs(msg tea.Msg) tea.Cmd {
 						}
 						if info.IsDir() {
 							m.filepicker.CurrentDirectory = p
-							m.filepicker.FilterPrefix = ""
+							m.filepicker.SetFilterPrefix("")
 							m.act.pathCompletionSuggestion = ""
 							m.act.pathMatchCount = 0
 							return m.filepicker.Init()
@@ -812,7 +812,7 @@ func (m *mainModel) updateUploadInputs(msg tea.Msg) tea.Cmd {
 					keyStr := km.String()
 					if (keyStr == "h" || keyStr == "backspace" || keyStr == "left") && m.filepicker.FilterPrefix != "" {
 						// 清除过滤，显示当前目录的所有文件
-						m.filepicker.FilterPrefix = ""
+						m.filepicker.SetFilterPrefix("")
 						m.act.pathCompletionSuggestion = ""
 						m.act.pathMatchCount = 0
 						m.inpPath.SetValue(ensureTrailingSep(m.filepicker.CurrentDirectory))
@@ -831,7 +831,7 @@ func (m *mainModel) updateUploadInputs(msg tea.Msg) tea.Cmd {
 					// 目录改变时清除补全和过滤
 					m.act.pathCompletionSuggestion = ""
 					m.act.pathMatchCount = 0
-					m.filepicker.FilterPrefix = ""
+					m.filepicker.SetFilterPrefix("")
 				}
 				if did, p := m.filepicker.DidSelectFile(msg); did {
 					if info, err := os.Stat(p); err == nil && !info.IsDir() {
@@ -889,7 +889,7 @@ func (m *mainModel) updateUploadInputs(msg tea.Msg) tea.Cmd {
 					// 清除补全状态
 					m.act.pathCompletionSuggestion = ""
 					m.act.pathMatchCount = 0
-					m.filepicker.FilterPrefix = ""
+					m.filepicker.SetFilterPrefix("")
 					m.upStep = stepPath
 					return tea.Batch(m.inpPath.Focus(), m.filepicker.Init())
 				case "esc":
@@ -908,7 +908,7 @@ func (m *mainModel) updateUploadInputs(msg tea.Msg) tea.Cmd {
 				m.act.pathInputFocused = false
 				m.act.filePickerErr = nil
 				m.filepicker.Path = ""
-				m.filepicker.FilterPrefix = ""
+				m.filepicker.SetFilterPrefix("")
 				m.act.pathCompletionSuggestion = ""
 				m.act.pathMatchCount = 0
 				m.upStep = stepIntro
@@ -976,7 +976,7 @@ func (m *mainModel) updateUploadInputs(msg tea.Msg) tea.Cmd {
 					}
 					if info.IsDir() {
 						m.filepicker.CurrentDirectory = path
-						m.filepicker.FilterPrefix = ""
+						m.filepicker.SetFilterPrefix("")
 						m.act.pathCompletionSuggestion = ""
 						m.act.pathMatchCount = 0
 						return m.filepicker.Init()
@@ -1012,7 +1012,7 @@ func (m *mainModel) updateUploadInputs(msg tea.Msg) tea.Cmd {
 				keyStr := km.String()
 				if (keyStr == "h" || keyStr == "backspace" || keyStr == "left") && m.filepicker.FilterPrefix != "" {
 					// 清除过滤，显示当前目录的所有文件
-					m.filepicker.FilterPrefix = ""
+					m.filepicker.SetFilterPrefix("")
 					m.act.pathCompletionSuggestion = ""
 					m.act.pathMatchCount = 0
 					m.inpPath.SetValue(ensureTrailingSep(m.filepicker.CurrentDirectory))
@@ -1031,7 +1031,7 @@ func (m *mainModel) updateUploadInputs(msg tea.Msg) tea.Cmd {
 				// 目录改变时清除补全和过滤
 				m.act.pathCompletionSuggestion = ""
 				m.act.pathMatchCount = 0
-				m.filepicker.FilterPrefix = ""
+				m.filepicker.SetFilterPrefix("")
 			}
 			if didSelect, path := m.filepicker.DidSelectFile(msg); didSelect {
 				if info, err := os.Stat(path); err == nil && !info.IsDir() {

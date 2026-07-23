@@ -347,11 +347,11 @@ func (m mainModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 			}
 		}
-		if innerH > 15 {
-			m.filepicker.SetHeight(innerH - 19)
-		} else {
-			m.filepicker.SetHeight(5)
+		pickerHeight := innerH - 19
+		if pickerHeight < 5 {
+			pickerHeight = 5
 		}
+		m.filepicker.SetHeight(pickerHeight)
 
 		return m, nil
 	case tea.KeyMsg:
