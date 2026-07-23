@@ -181,8 +181,14 @@ func PerformUpgrade(opts UpgradeOptions) *UpgradeResult {
 	defer os.Remove(tempFile) // 清理临时文件
 
 	// 6. 校验文件完整性
+	if markUpgradeCanceled(result, ctx) {
+		return result
+	}
 	updateStatus(i18n.T("upgrade.status.verifying"))
-	if err := verifyChecksum(tempFile, binary.Checksum); err != nil {
+	if markUpgradeCanceled(result, ctx) {
+		return result
+	}
+	if err := verifyChecksumContext(ctx, tempFile, binary.Checksum); err != nil {
 		result.Success = false
 		result.Error = err
 		result.Message = i18n.T("upgrade.result.verify_failed", map[string]any{"Cause": err})
@@ -190,9 +196,15 @@ func PerformUpgrade(opts UpgradeOptions) *UpgradeResult {
 	}
 
 	// 7. 备份当前版本
+	if markUpgradeCanceled(result, ctx) {
+		return result
+	}
 	updateStatus(i18n.T("upgrade.status.backing_up"))
+	if markUpgradeCanceled(result, ctx) {
+		return result
+	}
 	backupPath := execPath + meta.UpgradeBackupSuffix
-	if err := copyFile(execPath, backupPath); err != nil {
+	if err := copyFileContext(ctx, execPath, backupPath); err != nil {
 		result.Success = false
 		result.Error = err
 		result.Message = i18n.T("upgrade.result.backup_failed", map[string]any{"Cause": err})
@@ -200,7 +212,15 @@ func PerformUpgrade(opts UpgradeOptions) *UpgradeResult {
 	}
 
 	// 8. 替换可执行文件
+	if markUpgradeCanceled(result, ctx) {
+		_ = os.Remove(backupPath)
+		return result
+	}
 	updateStatus(i18n.T("upgrade.status.installing"))
+	if markUpgradeCanceled(result, ctx) {
+		_ = os.Remove(backupPath)
+		return result
+	}
 	if err := replaceExecutable(tempFile, execPath); err != nil {
 		// 替换失败，尝试回滚
 		logs.Errorf("Installation failed; rolling back: %v", err)
@@ -224,8 +244,29 @@ func PerformUpgrade(opts UpgradeOptions) *UpgradeResult {
 	return result
 }
 
+func markUpgradeCanceled(result *UpgradeResult, ctx context.Context) bool {
+	if err := ctx.Err(); err != nil {
+		result.Success = false
+		result.Error = err
+		result.Message = i18n.T("cli.upgrade.canceled")
+		return true
+	}
+	return false
+}
+
 // verifyChecksum 校验文件 SHA256
 func verifyChecksum(filePath, expectedChecksum string) error {
+	return verifyChecksumContext(context.Background(), filePath, expectedChecksum)
+}
+
+func verifyChecksumContext(ctx context.Context, filePath, expectedChecksum string) error {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+
 	// 移除 "sha256:" 前缀（如果有）
 	expectedChecksum = strings.TrimPrefix(expectedChecksum, "sha256:")
 
@@ -236,8 +277,11 @@ func verifyChecksum(filePath, expectedChecksum string) error {
 	defer file.Close()
 
 	hash := sha256.New()
-	if _, err := io.Copy(hash, file); err != nil {
+	if _, err := io.Copy(hash, &upgradeContextReader{ctx: ctx, reader: file}); err != nil {
 		return i18n.NewError("error.io.hash_failed", map[string]any{"Path": filePath}, err)
+	}
+	if err := ctx.Err(); err != nil {
+		return err
 	}
 
 	actualChecksum := hex.EncodeToString(hash.Sum(nil))
@@ -250,6 +294,17 @@ func verifyChecksum(filePath, expectedChecksum string) error {
 
 // copyFile 复制文件
 func copyFile(src, dst string) error {
+	return copyFileContext(context.Background(), src, dst)
+}
+
+func copyFileContext(ctx context.Context, src, dst string) (retErr error) {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+
 	sourceFile, err := os.Open(src)
 	if err != nil {
 		return err
@@ -266,10 +321,32 @@ func copyFile(src, dst string) error {
 	if err != nil {
 		return err
 	}
-	defer destFile.Close()
+	defer func() {
+		if closeErr := destFile.Close(); retErr == nil && closeErr != nil {
+			retErr = closeErr
+		}
+		if retErr != nil {
+			_ = os.Remove(dst)
+		}
+	}()
 
-	_, err = io.Copy(destFile, sourceFile)
-	return err
+	_, retErr = io.Copy(destFile, &upgradeContextReader{ctx: ctx, reader: sourceFile})
+	if retErr == nil {
+		retErr = ctx.Err()
+	}
+	return retErr
+}
+
+type upgradeContextReader struct {
+	ctx    context.Context
+	reader io.Reader
+}
+
+func (r *upgradeContextReader) Read(p []byte) (int, error) {
+	if err := r.ctx.Err(); err != nil {
+		return 0, err
+	}
+	return r.reader.Read(p)
 }
 
 // replaceExecutable 替换可执行文件

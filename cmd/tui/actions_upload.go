@@ -48,6 +48,7 @@ func runUploadActionMulti(parentCtx context.Context, baseDomain string, u upload
 		ctx, cancel := context.WithCancel(parentCtx)
 
 		go func() {
+			defer cancel()
 			defer close(ch)
 
 			// 获取API Key

@@ -137,6 +137,9 @@ func (m *mainModel) resetUploadState() {
 	m.running = false
 	m.uploadCh = nil
 	m.uploadProg = uploadProgMsg{}
+	if m.cancelFn != nil {
+		m.cancelFn()
+	}
 	m.cancelFn = nil
 	iw, _ := m.innerSize()
 	m.progress.Width = iw - 6

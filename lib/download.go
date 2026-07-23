@@ -20,7 +20,7 @@ type DownloadFileOptions struct {
 }
 
 // DownloadFile 下载文件到指定路径
-func DownloadFile(opts DownloadFileOptions) error {
+func DownloadFile(opts DownloadFileOptions) (retErr error) {
 	ctx := opts.Context
 	if ctx == nil {
 		ctx = context.Background()
@@ -51,7 +51,14 @@ func DownloadFile(opts DownloadFileOptions) error {
 	if err != nil {
 		return i18n.NewError("error.io.create_file_failed", map[string]any{"Path": opts.DestPath}, err)
 	}
-	defer out.Close()
+	defer func() {
+		if closeErr := out.Close(); retErr == nil && closeErr != nil {
+			retErr = i18n.NewError("error.io.write_failed", map[string]any{"Path": opts.DestPath}, closeErr)
+		}
+		if retErr != nil {
+			_ = os.Remove(opts.DestPath)
+		}
+	}()
 
 	// 获取文件总大小
 	totalSize := resp.ContentLength
