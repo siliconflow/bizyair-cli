@@ -91,7 +91,7 @@ func TestValidateBaseModel(t *testing.T) {
 		input   string
 		wantErr bool
 	}{
-		{"Flux.1 D", "Flux.1 D", false},
+		{"FLUX.1 D", "FLUX.1 D", false},
 		{"SDXL", "SDXL", false},
 		{"SD 1.5", "SD 1.5", false},
 		{"Other", "Other", false},
@@ -101,7 +101,7 @@ func TestValidateBaseModel(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			allowedModels := []string{"Flux.1 D", "SDXL", "SD 1.5", "Other"}
+			allowedModels := []string{"FLUX.1 D", "SDXL", "SD 1.5", "Other"}
 			err := ValidateBaseModel(tt.input, allowedModels)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("ValidateBaseModel(%q) error = %v, wantErr %v", tt.input, err, tt.wantErr)

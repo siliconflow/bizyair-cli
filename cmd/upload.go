@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 
@@ -36,6 +37,11 @@ func Upload(c *cli.Context) error {
 			return cli.Exit(err, meta.LoadError)
 		}
 		return nil
+	}
+
+	versionPublic, err := parseVersionPublic(args.VersionPublic)
+	if err != nil {
+		return cli.Exit(err, meta.LoadError)
 	}
 
 	// 获取 API Key
@@ -83,7 +89,7 @@ func Upload(c *cli.Context) error {
 			BaseModel:    getStringAt(args.BaseModel, i, ""),
 			Introduction: intro,
 			CoverUrl:     getStringAt(args.CoverUrls, i, ""),
-			Public:       getBoolAt(args.VersionPublic, i, false),
+			Public:       getBoolAt(versionPublic, i, false),
 		}
 	}
 
@@ -94,7 +100,6 @@ func Upload(c *cli.Context) error {
 		ModelType:  args.Type,
 		ModelName:  args.Name,
 		Versions:   versions,
-		Overwrite:  args.Overwrite,
 		Context:    c.Context,
 	}
 
@@ -314,9 +319,24 @@ func getStringAt(slice []string, index int, defaultValue string) string {
 	return defaultValue
 }
 
-func getBoolAt(slice []string, index int, defaultValue bool) bool {
+func parseVersionPublic(values []string) ([]bool, error) {
+	parsed := make([]bool, len(values))
+	for i, value := range values {
+		public, err := strconv.ParseBool(value)
+		if err != nil {
+			return nil, i18n.NewError("validation.version_public_invalid", map[string]any{
+				"Version": i + 1,
+				"Value":   value,
+			}, err)
+		}
+		parsed[i] = public
+	}
+	return parsed, nil
+}
+
+func getBoolAt(slice []bool, index int, defaultValue bool) bool {
 	if index < len(slice) {
-		return slice[index] == "true" || slice[index] == "True" || slice[index] == "1"
+		return slice[index]
 	}
 	return defaultValue
 }

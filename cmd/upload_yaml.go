@@ -32,7 +32,6 @@ type yamlModelUploadFunc func(
 	string,
 	string,
 	[]config.YamlVersion,
-	bool,
 ) modelUploadResult
 
 // uploadFromYaml 从 YAML 配置文件批量上传模型
@@ -127,7 +126,7 @@ func uploadYamlModels(
 		versions := config.AutoIncrementVersionNames(model.Versions)
 
 		// 转换为 VersionInput 并执行上传
-		result := uploadModel(ctx, apiKey, args.BaseDomain, model.Name, model.Type, versions, args.Overwrite)
+		result := uploadModel(ctx, apiKey, args.BaseDomain, model.Name, model.Type, versions)
 		results = append(results, result)
 		if result.CanceledByUser {
 			return results, context.Canceled
@@ -163,7 +162,6 @@ func processModelUpload(
 	modelName string,
 	modelType string,
 	versions []config.YamlVersion,
-	overwrite bool,
 ) modelUploadResult {
 	// 转换为 VersionInput
 	versionInputs := make([]actions.VersionInput, len(versions))
@@ -191,7 +189,7 @@ func processModelUpload(
 	}
 
 	// 执行上传
-	return uploadSingleModelFromYaml(ctx, apiKey, baseDomain, modelName, modelType, versionInputs, overwrite)
+	return uploadSingleModelFromYaml(ctx, apiKey, baseDomain, modelName, modelType, versionInputs)
 }
 
 // uploadSingleModelFromYaml 上传单个模型（从 YAML 配置）
@@ -202,7 +200,6 @@ func uploadSingleModelFromYaml(
 	modelName string,
 	modelType string,
 	versions []actions.VersionInput,
-	overwrite bool,
 ) modelUploadResult {
 	// 创建客户端
 	client := lib.NewClient(baseDomain, apiKey)
@@ -233,7 +230,6 @@ func uploadSingleModelFromYaml(
 		ModelType:         modelType,
 		ModelName:         modelName,
 		Versions:          versions,
-		Overwrite:         overwrite,
 		AllowedBaseModels: allowedModels, // 传入从API获取的列表
 	}
 

@@ -12,7 +12,6 @@ type Argument struct {
 	ShowFiles  bool
 	FilePath   string
 	FormatTree bool
-	Overwrite  bool
 
 	ModelVersion  []string
 	VersionPublic []string

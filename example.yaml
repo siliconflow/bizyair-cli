@@ -19,14 +19,14 @@ models:
     type: "LoRA"
     versions:
       - name: "v1.0"  # 可选，默认 v1.0
-        base_model: "Flux.1 D"
+        base_model: "FLUX.1 D"
         model_path: "models/anime_v1.safetensors"
         cover_path: "covers/anime_v1.jpg"  # 本地文件路径
         intro: "第一版动漫风格模型"  # 直接文本
         public: true  # 可选，默认 false
         
       - name: "v2.0"  # 可选，默认 v2.0
-        base_model: "Flux.1 D"
+        base_model: "FLUX.1 D"
         model_path: "models/anime_v2.safetensors"
         cover_url: "https://example.com/cover.jpg"  # 网络URL
         intro_path: "descriptions/v2_intro.txt"  # 从文件读取

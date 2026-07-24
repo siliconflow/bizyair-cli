@@ -177,7 +177,7 @@ Pass a subcommand and options for scripting or automation:
 
 ```bash
 bizyair upload -n mymodel -t LoRA -p /path/to/model.safetensors \
-  -b "Flux.1 D" --cover /path/to/cover.jpg --intro "Model introduction"
+  -b "FLUX.1 D" --cover /path/to/cover.jpg --intro "Model introduction"
 ```
 
 CLI mode supports YAML batches, environment variables, and CI/CD integration.
@@ -226,7 +226,7 @@ Single version:
 ```bash
 bizyair upload -n mymodel -t LoRA \
   -p /local/path/model.safetensors \
-  -b "Flux.1 D" \
+  -b "FLUX.1 D" \
   --cover "/path/to/cover.jpg" \
   --intro "An anime-style LoRA model"
 ```
@@ -244,12 +244,12 @@ Core options:
 - `-n, --name`: model name (required)
 - `-t, --type`: model type, such as `LoRA`, `Checkpoint`, or `Controlnet` (required)
 - `-p, --path`: model file; repeat for multiple versions (required)
-- `-b, --base`: Base Model, such as `Flux.1 D`, `SDXL`, or `SD 1.5` (required)
+- `-b, --base`: Base Model, such as `FLUX.1 D`, `SDXL`, or `SD 1.5` (required)
 - `--cover`: local cover file or URL (required)
 - `-i, --intro`: introduction text (required unless `--intro-path` is used)
 - `--intro-path`: `.txt` or `.md` introduction file
 - `-v, --version`: version name (optional; defaults to `v1.0`)
-- `--public`: whether the corresponding version is public (optional; defaults to `false`)
+- `--public`: whether the corresponding version is public (standard boolean syntax such as `true`/`false` or `1`/`0`; defaults to `false`). Invalid values fail before upload.
 
 #### 3. Cover uploads
 
@@ -257,11 +257,11 @@ Covers are required and may be local files or URLs. Images are converted to WebP
 
 ```bash
 # Local cover
-bizyair upload -n mymodel -t LoRA -p model.safetensors -b "Flux.1 D" \
+bizyair upload -n mymodel -t LoRA -p model.safetensors -b "FLUX.1 D" \
   --cover "/path/to/cover.jpg" --intro "Introduction"
 
 # Remote cover
-bizyair upload -n mymodel -t LoRA -p model.safetensors -b "Flux.1 D" \
+bizyair upload -n mymodel -t LoRA -p model.safetensors -b "FLUX.1 D" \
   --cover "https://example.com/cover.jpg" --intro "Introduction"
 ```
 
@@ -278,11 +278,11 @@ Introductions may contain up to 5,000 characters:
 
 ```bash
 # Direct text
-bizyair upload -n mymodel -t LoRA -p model.safetensors -b "Flux.1 D" \
+bizyair upload -n mymodel -t LoRA -p model.safetensors -b "FLUX.1 D" \
   --cover cover.jpg --intro "A detailed model introduction..."
 
 # Import from .txt or .md
-bizyair upload -n mymodel -t LoRA -p model.safetensors -b "Flux.1 D" \
+bizyair upload -n mymodel -t LoRA -p model.safetensors -b "FLUX.1 D" \
   --cover cover.jpg --intro-path intro.md
 ```
 
@@ -300,14 +300,14 @@ models:
     type: "LoRA"
     versions:
       - name: "v1.0"
-        base_model: "Flux.1 D"
+        base_model: "FLUX.1 D"
         model_path: "models/anime_v1.safetensors"
         cover_path: "covers/anime_v1.jpg"
         intro: "First anime-style model release"
         public: true
 
       - name: "v2.0"
-        base_model: "Flux.1 D"
+        base_model: "FLUX.1 D"
         model_path: "models/anime_v2.safetensors"
         cover_url: "https://example.com/cover.jpg"
         intro_path: "descriptions/v2_intro.txt"
@@ -380,16 +380,19 @@ bizyair logout
 
 ### Common Base Models
 
-- `Flux.1 D`
-- `Flux.1 Kontext`
+- `FLUX.1 D`
+- `FLUX.1 Kontext`
+- `FLUX.2 D`
+- `FLUX.2 Klein`
 - `SDXL`
 - `SD 1.5`
 - `SD 3.5`
 - `Pony`
 - `Kolors`
-- `Hunyuan 1`
-- `WAN Video`
+- `Hunyuan Video`
+- `Wan Video`
 - `Qwen-Image`
+- `Seedream`
 - `Other`
 
 The CLI retrieves the authoritative Base Model list from the API and uses its built-in list only as a fallback.

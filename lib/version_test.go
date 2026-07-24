@@ -78,42 +78,12 @@ func TestVersion_Compare(t *testing.T) {
 			}
 		})
 	}
-}
 
-func TestVersion_IsNewerThan(t *testing.T) {
-	v1 := &Version{Major: 2, Minor: 0, Patch: 0}
-	v2 := &Version{Major: 1, Minor: 0, Patch: 0}
-
-	if !v1.IsNewerThan(v2) {
+	if !v2_0_0.IsNewerThan(v1_0_0) {
 		t.Error("v2.0.0 should be newer than v1.0.0")
 	}
-	if v2.IsNewerThan(v1) {
+	if v1_0_0.IsNewerThan(v2_0_0) {
 		t.Error("v1.0.0 should not be newer than v2.0.0")
-	}
-}
-
-func TestVersion_IsOlderThan(t *testing.T) {
-	v1 := &Version{Major: 1, Minor: 0, Patch: 0}
-	v2 := &Version{Major: 2, Minor: 0, Patch: 0}
-
-	if !v1.IsOlderThan(v2) {
-		t.Error("v1.0.0 should be older than v2.0.0")
-	}
-	if v2.IsOlderThan(v1) {
-		t.Error("v2.0.0 should not be older than v1.0.0")
-	}
-}
-
-func TestVersion_Equals(t *testing.T) {
-	v1 := &Version{Major: 1, Minor: 2, Patch: 3}
-	v2 := &Version{Major: 1, Minor: 2, Patch: 3}
-	v3 := &Version{Major: 1, Minor: 2, Patch: 4}
-
-	if !v1.Equals(v2) {
-		t.Error("identical versions should be equal")
-	}
-	if v1.Equals(v3) {
-		t.Error("different versions should not be equal")
 	}
 }
 

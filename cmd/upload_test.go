@@ -3,6 +3,7 @@ package cmd
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
 
 	"github.com/siliconflow/bizyair-cli/config"
@@ -52,7 +53,6 @@ func TestUploadYamlModelsStopsAfterCancellation(t *testing.T) {
 			string,
 			string,
 			[]config.YamlVersion,
-			bool,
 		) modelUploadResult {
 			calls++
 			cancel()
@@ -72,6 +72,72 @@ func TestUploadYamlModelsStopsAfterCancellation(t *testing.T) {
 	}
 	if len(results) != 1 || !results[0].Success {
 		t.Fatalf("partial results = %#v, want the completed first model only", results)
+	}
+}
+
+func TestParseVersionPublic(t *testing.T) {
+	tests := []struct {
+		name    string
+		values  []string
+		want    []bool
+		wantErr bool
+	}{
+		{name: "empty", values: nil, want: []bool{}},
+		{name: "standard values", values: []string{"true", "false"}, want: []bool{true, false}},
+		{name: "strconv compatible values", values: []string{"TRUE", "0", "1"}, want: []bool{true, false, true}},
+		{name: "invalid", values: []string{"maybe"}, wantErr: true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := parseVersionPublic(tt.values)
+			if (err != nil) != tt.wantErr {
+				t.Fatalf("parseVersionPublic(%v) error = %v, wantErr %v", tt.values, err, tt.wantErr)
+			}
+			if tt.wantErr {
+				return
+			}
+			if len(got) != len(tt.want) {
+				t.Fatalf("parseVersionPublic(%v) = %v, want %v", tt.values, got, tt.want)
+			}
+			for i := range got {
+				if got[i] != tt.want[i] {
+					t.Fatalf("parseVersionPublic(%v) = %v, want %v", tt.values, got, tt.want)
+				}
+			}
+		})
+	}
+}
+
+func TestInvalidPublicValueFailsBeforeUploadSetup(t *testing.T) {
+	if err := i18n.Configure(i18n.English); err != nil {
+		t.Fatal(err)
+	}
+
+	app := Init()
+	app.ExitErrHandler = func(*cli.Context, error) {}
+	err := app.Run([]string{"bizyair", "upload", "--pub", "maybe"})
+	if err == nil {
+		t.Fatal("invalid --pub value unexpectedly succeeded")
+	}
+	if !strings.Contains(err.Error(), "invalid public value") {
+		t.Fatalf("invalid --pub error = %q", err)
+	}
+}
+
+func TestOverwriteFlagIsNotAccepted(t *testing.T) {
+	if err := i18n.Configure(i18n.English); err != nil {
+		t.Fatal(err)
+	}
+
+	app := Init()
+	app.ExitErrHandler = func(*cli.Context, error) {}
+	err := app.Run([]string{"bizyair", "upload", "--overwrite"})
+	if err == nil {
+		t.Fatal("removed --overwrite flag unexpectedly succeeded")
+	}
+	if !strings.Contains(err.Error(), "overwrite") {
+		t.Fatalf("removed --overwrite error = %q", err)
 	}
 }
 

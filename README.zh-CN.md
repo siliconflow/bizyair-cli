@@ -207,7 +207,7 @@ TUI 模式特点：
 使用命令行参数直接执行操作：
 
 ```bash
-bizyair upload -n mymodel -t LoRA -p /path/to/model.safetensors -b "Flux.1 D" -cover /path/to/cover.jpg
+bizyair upload -n mymodel -t LoRA -p /path/to/model.safetensors -b "FLUX.1 D" -cover /path/to/cover.jpg
 ```
 
 CLI 模式特点：
@@ -282,7 +282,7 @@ bizyair login -k $SF_API_KEY
 ```bash
 bizyair upload -n mymodel -t LoRA \
   -p /local/path/model.safetensors \
-  -b "Flux.1 D" \
+  -b "FLUX.1 D" \
   -cover "/path/to/cover.jpg" \
   --intro "这是一个动漫风格的 LoRA 模型"
 ```
@@ -300,12 +300,12 @@ bizyair upload -n mymodel -t Checkpoint \
 - `-n, --name`: 模型名称（必填）
 - `-t, --type`: 模型类型（必填，如 LoRA、Checkpoint、Controlnet 等）
 - `-p, --path`: 模型文件路径（必填，可多次指定）
-- `-b, --base`: 基础模型（必填，如 "Flux.1 D"、SDXL、"SD 1.5" 等）
+- `-b, --base`: 基础模型（必填，如 "FLUX.1 D"、SDXL、"SD 1.5" 等）
 - `-cover`: 封面文件或 URL（必填）
 - `-i, --intro`: 模型介绍文本（必填）
 - `--intro-path`: 从文件导入介绍（与 `-i` 二选一）
 - `-v, --version`: 版本名称（可选，默认 v1.0）
-- `--public`: 是否公开版本（可选，默认 false）
+- `--public`: 是否公开版本（支持 `true`/`false`、`1`/`0` 等标准布尔格式，默认 false）；非法值会在上传前报错。
 
 #### 3. 封面上传（必填）
 
@@ -313,11 +313,11 @@ bizyair upload -n mymodel -t Checkpoint \
 
 ```bash
 # 使用本地文件
-bizyair upload -n mymodel -t LoRA -p model.safetensors -b "Flux.1 D" \
+bizyair upload -n mymodel -t LoRA -p model.safetensors -b "FLUX.1 D" \
   -cover "/path/to/cover.jpg" --intro "介绍文本"
 
 # 使用 URL
-bizyair upload -n mymodel -t LoRA -p model.safetensors -b "Flux.1 D" \
+bizyair upload -n mymodel -t LoRA -p model.safetensors -b "FLUX.1 D" \
   -cover "https://example.com/cover.jpg" --intro "介绍文本"
 ```
 
@@ -334,11 +334,11 @@ bizyair upload -n mymodel -t LoRA -p model.safetensors -b "Flux.1 D" \
 
 ```bash
 # 方式1：直接输入文本
-bizyair upload -n mymodel -t LoRA -p model.safetensors -b "Flux.1 D" \
+bizyair upload -n mymodel -t LoRA -p model.safetensors -b "FLUX.1 D" \
   -cover cover.jpg --intro "这是模型的详细介绍..."
 
 # 方式2：从文件导入（支持 .txt 和 .md）
-bizyair upload -n mymodel -t LoRA -p model.safetensors -b "Flux.1 D" \
+bizyair upload -n mymodel -t LoRA -p model.safetensors -b "FLUX.1 D" \
   -cover cover.jpg --intro-path intro.md
 ```
 
@@ -358,14 +358,14 @@ models:
     type: "LoRA"
     versions:
       - name: "v1.0"
-        base_model: "Flux.1 D"
+        base_model: "FLUX.1 D"
         model_path: "models/anime_v1.safetensors"
         cover_path: "covers/anime_v1.jpg"
         intro: "第一版动漫风格模型"
         public: true
 
       - name: "v2.0"
-        base_model: "Flux.1 D"
+        base_model: "FLUX.1 D"
         model_path: "models/anime_v2.safetensors"
         cover_url: "https://example.com/cover.jpg"
         intro_path: "descriptions/v2_intro.txt"
@@ -442,16 +442,19 @@ bizyair logout
 
 ### 基础模型
 
-- `Flux.1 D` - Flux.1 D 模型
-- `Flux.1 Kontext` - Flux.1 Kontext 模型
+- `FLUX.1 D` - FLUX.1 D 模型
+- `FLUX.1 Kontext` - FLUX.1 Kontext 模型
+- `FLUX.2 D` - FLUX.2 D 模型
+- `FLUX.2 Klein` - FLUX.2 Klein 模型
 - `SDXL` - Stable Diffusion XL
 - `SD 1.5` - Stable Diffusion 1.5
 - `SD 3.5` - Stable Diffusion 3.5
 - `Pony` - Pony Diffusion
 - `Kolors` - Kolors 模型
-- `Hunyuan 1` - 混元 1
-- `WAN Video` - WAN Video 模型
+- `Hunyuan Video` - 混元视频模型
+- `Wan Video` - Wan Video 模型
 - `Qwen-Image` - Qwen 图像模型
+- `Seedream` - Seedream 图像模型
 - `Other` - 其他基础模型
 
 ---

@@ -271,7 +271,6 @@ cli:
     type: "Specify the model type. Supported: {{.Types}}"
     path: "Specify a file path to upload. May be repeated."
     name: "Specify the model name."
-    overwrite: "Overwrite an existing model"
     model_version: "Specify the model version. May be repeated."
     public: "Set each model version public (true/false). May be repeated."
     intro: "Introduction for a model version. May be repeated."
@@ -480,7 +479,7 @@ validation:
   file_is_directory: "A file is required, but the path is a directory: {{.Path}}"
   intro_format_unsupported: "Unsupported introduction format; only .txt and .md are supported."
   file_read_failed: "Could not read {{.Path}}: {{.Cause}}"
-  model_exists: "Model '{{.Name}}' already exists. Choose a different name or enable overwrite."
+  model_exists: "Model '{{.Name}}' already exists. Uploading new versions or replacing an existing model is not supported."
   model_type_invalid: "Invalid model type: {{.Cause}}"
   model_name_invalid: "Invalid model name: {{.Cause}}"
   version_required: "At least one version is required."
@@ -490,6 +489,7 @@ validation:
   version_cover_required: "Version {{.Version}}: cover is required."
   version_base_model_invalid: "Version {{.Version}}: invalid base model: {{.Cause}}"
   version_name_required: "Version {{.Version}}: version name is required."
+  version_public_invalid: "Version {{.Version}}: invalid public value '{{.Value}}'; expected a boolean such as true or false."
   file_upload_only: "Only files can be uploaded; directories are not supported: {{.Path}}"
 
 step:

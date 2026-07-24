@@ -97,7 +97,6 @@ func runUploadActionMulti(parentCtx context.Context, baseDomain string, u upload
 				ModelType:         u.typ,
 				ModelName:         u.name,
 				Versions:          actionVersions,
-				Overwrite:         false,
 				Context:           ctx,           // 传递可取消的context
 				AllowedBaseModels: allowedModels, // 传入从API获取的列表
 			}

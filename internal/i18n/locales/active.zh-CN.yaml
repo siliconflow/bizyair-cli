@@ -271,7 +271,6 @@ cli:
     type: "指定模型类型。支持：{{.Types}}"
     path: "指定要上传的文件路径，可重复指定。"
     name: "指定模型名称。"
-    overwrite: "覆盖已存在的模型"
     model_version: "指定模型版本，可重复指定。"
     public: "设置对应模型版本是否公开（true/false），可重复指定。"
     intro: "模型版本介绍，可重复指定。"
@@ -474,7 +473,7 @@ validation:
   file_is_directory: "路径是目录，需要提供文件：{{.Path}}"
   intro_format_unsupported: "不支持的介绍文件格式；仅支持 .txt 和 .md。"
   file_read_failed: "读取文件 {{.Path}} 失败：{{.Cause}}"
-  model_exists: "模型名“{{.Name}}”已存在；请使用其他名称或启用覆盖。"
+  model_exists: "模型“{{.Name}}”已存在；当前不支持追加版本或替换已有模型。"
   model_type_invalid: "模型类型无效：{{.Cause}}"
   model_name_invalid: "模型名称无效：{{.Cause}}"
   version_required: "至少需要一个版本。"
@@ -484,6 +483,7 @@ validation:
   version_cover_required: "版本 {{.Version}}：必须提供封面。"
   version_base_model_invalid: "版本 {{.Version}}：Base Model 无效：{{.Cause}}"
   version_name_required: "版本 {{.Version}}：版本名称不能为空。"
+  version_public_invalid: "版本 {{.Version}}：public 值“{{.Value}}”无效；应为布尔值，例如 true 或 false。"
   file_upload_only: "仅支持文件上传，不支持目录：{{.Path}}"
 
 step:

@@ -58,7 +58,6 @@ func TestExecuteUploadCancellationStages(t *testing.T) {
 
 	t.Run("model existence check", func(t *testing.T) {
 		input := validUploadInput(t, context.Background())
-		input.Overwrite = false
 		api := &cancellationUploadAPI{checkErr: fmt.Errorf("check failed: %w", context.Canceled)}
 
 		result := ExecuteUpload(api, input, nil)
@@ -89,6 +88,46 @@ func TestExecuteUploadCancellationStages(t *testing.T) {
 			t.Fatalf("SuccessCount = %d, want completed file count 1", result.SuccessCount)
 		}
 	})
+}
+
+type existingModelUploadAPI struct {
+	lib.BizyAPI
+	uploadCalled bool
+	commitCalled bool
+}
+
+func (a *existingModelUploadAPI) CheckModelExistsContext(context.Context, string, string) (bool, error) {
+	return true, nil
+}
+
+func (a *existingModelUploadAPI) OssSignContext(context.Context, string, string) (*lib.Response[lib.FilesResp], error) {
+	a.uploadCalled = true
+	return nil, errors.New("file upload must not start for an existing model")
+}
+
+func (a *existingModelUploadAPI) CommitModelV2Context(
+	context.Context,
+	string,
+	string,
+	[]*lib.ModelVersion,
+) (*lib.Response[lib.ModelCommitResp], error) {
+	a.commitCalled = true
+	return nil, errors.New("model commit must not run for an existing model")
+}
+
+func TestExecuteUploadRejectsExistingModelBeforeUploading(t *testing.T) {
+	api := &existingModelUploadAPI{}
+	result := ExecuteUpload(api, validUploadInput(t, context.Background()), nil)
+
+	if result.Success {
+		t.Fatal("upload of an existing model unexpectedly succeeded")
+	}
+	if len(result.Errors) != 1 {
+		t.Fatalf("errors = %v, want one model-exists error", result.Errors)
+	}
+	if api.uploadCalled || api.commitCalled {
+		t.Fatalf("existing model triggered upload=%v commit=%v", api.uploadCalled, api.commitCalled)
+	}
 }
 
 func TestExecuteUploadDeadlineIsNotUserCancellation(t *testing.T) {
@@ -164,7 +203,6 @@ func validUploadInput(t *testing.T, ctx context.Context) UploadInput {
 		ApiKey:    "api-key",
 		ModelType: string(meta.TypeCheckpoint),
 		ModelName: "test-model",
-		Overwrite: true,
 		Versions: []VersionInput{{
 			Version:      "v1.0",
 			Path:         path,

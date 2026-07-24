@@ -23,7 +23,6 @@ func Init() *cli.App {
 	typeFlag := cli.StringFlag{Name: "type", Aliases: []string{"t"}, Usage: i18n.T("cli.flag.type", map[string]any{"Types": meta.ModelTypesStr}), Destination: &globalArgs.Type}
 	pathFlag := cli.StringSliceFlag{Name: "path", Aliases: []string{"p"}, Usage: i18n.T("cli.flag.path"), Destination: &cli.StringSlice{}}
 	nameFlag := cli.StringFlag{Name: "name", Aliases: []string{"n"}, Usage: i18n.T("cli.flag.name"), Destination: &globalArgs.Name}
-	overwriteFlag := cli.BoolFlag{Name: "overwrite", Usage: i18n.T("cli.flag.overwrite"), Destination: &globalArgs.Overwrite, Value: false, Required: false}
 	// hostFlag := cli.StringFlag{Name: "host", Usage: fmt.Sprintf("Specify the request host, default: %s", meta.DefaultHost), Destination: &globalArgs.Host, Value: meta.DefaultHost}
 	// portFlag := cli.StringFlag{Name: "port", Usage: fmt.Sprintf("Specify the request port, default: %s", meta.DefaultPort), Destination: &globalArgs.Port, Value: meta.DefaultPort}
 	versionFlag := cli.StringSliceFlag{Name: "version", Aliases: []string{"v", "V"}, Usage: i18n.T("cli.flag.model_version"), Destination: &cli.StringSlice{}}
@@ -88,7 +87,6 @@ func Init() *cli.App {
 				&typeFlag,
 				&pathFlag,
 				&nameFlag,
-				&overwriteFlag,
 				&versionFlag,
 				&versionPublicFlag,
 				&introFlag,

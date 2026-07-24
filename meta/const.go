@@ -1,6 +1,7 @@
 package meta
 
 import (
+	"sort"
 	"strings"
 
 	"github.com/samber/lo"
@@ -113,34 +114,41 @@ var IgnoreUploadDirs = []string{
 	".idea",
 }
 
+// SupportedBaseModels is the offline fallback used by the TUI and upload help.
+// Keep it in sync with /api/special/community/base_model_types.
 var SupportedBaseModels = map[string]bool{
-	"Flux.1 D":       true,
-	"Flux.2 D":       true,
-	"Flux.1 Kontext": true,
-	"Flux.1 S":       true,
+	"FLUX.1 D":       true,
+	"FLUX.1 Kontext": true,
+	"FLUX.1 S":       true,
 	"SDXL":           true,
 	"SD 1.5":         true,
 	"SD 3.5":         true,
 	"Pony":           true,
 	"Illustrious":    true,
 	"NoobAI":         true,
+	"Anima":          true,
+	"FLUX.2 D":       true,
+	"FLUX.2 Klein":   true,
+	"ERNIE-Image":    true,
+	"Ideogram":       true,
 	"Kolors":         true,
-	"Hunyuan 1":      true,
 	"Hunyuan Video":  true,
 	"Wan Video":      true,
 	"Qwen-Image":     true,
 	"Qwen-Edit":      true,
-	"Z-image":        true,
+	"Z-Image":        true,
 	"Ovis":           true,
+	"LTX-2":          true,
 	"Nano Banana":    true,
-	"Seedream 4.0":   true,
-	"Seedream 4.5":   true,
+	"Seedream":       true,
 	"Seedance":       true,
-	"Sora":           true,
 	"Veo":            true,
 	"Kling":          true,
 	"Hailuo":         true,
 	"GPT-Image":      true,
+	"Vidu":           true,
+	"Grok":           true,
+	"Happy Horse":    true,
 	"Other":          true,
 }
 
@@ -151,5 +159,6 @@ func parseMapKey[T any](myMap map[string]T) string {
 	for k := range myMap {
 		strs = append(strs, k)
 	}
+	sort.Strings(strs)
 	return "'" + strings.Join(strs, "','") + "'"
 }

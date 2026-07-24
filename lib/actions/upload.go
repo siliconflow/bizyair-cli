@@ -37,25 +37,23 @@ func ExecuteUpload(api lib.BizyAPI, input UploadInput, callback UploadCallback) 
 		}
 	}
 
-	if !input.Overwrite {
-		exists, err := api.CheckModelExistsContext(ctx, input.ModelName, input.ModelType)
-		if err != nil {
-			if uploadWasCanceled(ctx, err) {
-				return canceledUploadResult(total, 0)
-			}
-			return UploadResult{
-				Success: false,
-				Errors:  []error{lib.WithStep(i18n.T("step.check_model"), err)},
-			}
+	exists, err := api.CheckModelExistsContext(ctx, input.ModelName, input.ModelType)
+	if err != nil {
+		if uploadWasCanceled(ctx, err) {
+			return canceledUploadResult(total, 0)
 		}
-		if exists {
-			return UploadResult{
-				Success: false,
-				Errors: []error{
-					lib.WithStep(i18n.T("step.check_model"),
-						i18n.NewError("validation.model_exists", map[string]any{"Name": input.ModelName}, nil)),
-				},
-			}
+		return UploadResult{
+			Success: false,
+			Errors:  []error{lib.WithStep(i18n.T("step.check_model"), err)},
+		}
+	}
+	if exists {
+		return UploadResult{
+			Success: false,
+			Errors: []error{
+				lib.WithStep(i18n.T("step.check_model"),
+					i18n.NewError("validation.model_exists", map[string]any{"Name": input.ModelName}, nil)),
+			},
 		}
 	}
 

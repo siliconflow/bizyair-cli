@@ -63,7 +63,6 @@ type UploadInput struct {
 	ModelType         string
 	ModelName         string
 	Versions          []VersionInput
-	Overwrite         bool
 	Context           context.Context // 用于取消操作
 	AllowedBaseModels []string        // 从API获取的允许的基础模型列表（必须提供）
 }
