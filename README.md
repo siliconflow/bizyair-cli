@@ -197,7 +197,7 @@ sudo bizyair upgrade
 ### Option 1: interactive TUI
 
 1. Run `bizyair`.
-2. On first use, enter an API key obtained from [BizyAir](https://bizyair.vip) and press Enter.
+2. On first use, enter an API key obtained from [BizyAir](https://bizyair.ai) and press Enter.
 3. Choose an action:
    - Upload model
    - My models
@@ -404,7 +404,7 @@ The CLI retrieves the authoritative Base Model list from the API and uses its bu
 
 ### How do I obtain an API key?
 
-Create an account at [BizyAir](https://bizyair.vip) and obtain a key from your account settings.
+Create an account at [BizyAir](https://bizyair.ai) and obtain a key from your account settings.
 
 ### What should I do when an upload fails?
 

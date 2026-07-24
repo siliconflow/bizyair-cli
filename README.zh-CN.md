@@ -245,7 +245,7 @@ bizyair
 
 2. **首次使用需要登录**
 
-   - 输入您的 API Key（从 [BizyAir](https://bizyair.vip) 获取）
+   - 输入您的 API Key（从 [BizyAir](https://bizyair.ai) 获取）
    - 按 Enter 确认
 
 3. **选择功能**
@@ -468,7 +468,7 @@ bizyair logout
 
 ### 如何获取 API Key？
 
-访问 [BizyAir](https://bizyair.vip) 注册并在个人设置中获取 API Key。
+访问 [BizyAir](https://bizyair.ai) 注册并在个人设置中获取 API Key。
 
 ### 上传失败怎么办？
 
