@@ -138,19 +138,22 @@ func Resolve(args []string, lookupEnv LookupEnv) (Language, error) {
 // keeps language selection in one parser while allowing the global option on
 // either side of a subcommand.
 func ResolveArgs(args []string, lookupEnv LookupEnv) (Language, []string, error) {
+	resolved := resolveSystemLanguage(lookupEnv)
 	value, found, remaining, err := extractLanguageFlag(args)
 	if err != nil {
-		return English, nil, err
+		return resolved, nil, err
 	}
 	if found {
-		resolved, resolveErr := parseExplicitLanguage(value)
+		explicit, resolveErr := parseExplicitLanguage(value)
 		if resolveErr != nil {
-			return English, nil, resolveErr
+			return resolved, nil, resolveErr
 		}
-		return resolved, remaining, nil
+		return explicit, remaining, nil
 	}
+	return resolved, remaining, nil
+}
 
-	resolved := English
+func resolveSystemLanguage(lookupEnv LookupEnv) Language {
 	// These variables are implementation details of system-language detection
 	// on Unix-like systems, not additional BizyAir configuration knobs.
 	for _, name := range []string{"LC_ALL", "LC_MESSAGES", "LANG"} {
@@ -158,11 +161,10 @@ func ResolveArgs(args []string, lookupEnv LookupEnv) (Language, []string, error)
 			break
 		}
 		if value, ok := lookupEnv(name); ok && strings.TrimSpace(value) != "" {
-			resolved = detectSystemLocale(value)
-			break
+			return detectSystemLocale(value)
 		}
 	}
-	return resolved, remaining, nil
+	return detectSystemLocale(systemLocale())
 }
 
 func extractLanguageFlag(args []string) (value string, found bool, remaining []string, err error) {
@@ -175,7 +177,7 @@ func extractLanguageFlag(args []string) (value string, found bool, remaining []s
 		}
 		if arg == "--lang" {
 			if i+1 >= len(args) || strings.HasPrefix(args[i+1], "-") {
-				return "", false, nil, fmt.Errorf("--lang requires a value (en or zh-CN)")
+				return "", false, nil, NewError("cli.error.flag_value_required", map[string]any{"Flag": "--lang"}, nil)
 			}
 			value, found = args[i+1], true
 			i++
@@ -184,7 +186,7 @@ func extractLanguageFlag(args []string) (value string, found bool, remaining []s
 		if strings.HasPrefix(arg, "--lang=") {
 			value, found = strings.TrimPrefix(arg, "--lang="), true
 			if strings.TrimSpace(value) == "" {
-				return "", false, nil, fmt.Errorf("--lang requires a value (en or zh-CN)")
+				return "", false, nil, NewError("cli.error.flag_value_required", map[string]any{"Flag": "--lang"}, nil)
 			}
 			continue
 		}
@@ -202,7 +204,7 @@ func parseExplicitLanguage(value string) (Language, error) {
 	case string(SimplifiedChinese):
 		return SimplifiedChinese, nil
 	default:
-		return English, fmt.Errorf("unsupported language %q; supported languages: en, zh-CN", value)
+		return English, NewError("cli.error.language_unsupported", map[string]any{"Language": value}, nil)
 	}
 }
 

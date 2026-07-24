@@ -21,10 +21,26 @@ type DownloadFileOptions struct {
 
 // DownloadFile 下载文件到指定路径
 func DownloadFile(opts DownloadFileOptions) (retErr error) {
+	out, err := os.Create(opts.DestPath)
+	if err != nil {
+		return i18n.NewError("error.io.create_file_failed", map[string]any{"Path": opts.DestPath}, err)
+	}
+	return downloadFileTo(opts, out)
+}
+
+func downloadFileTo(opts DownloadFileOptions, out *os.File) (retErr error) {
 	ctx := opts.Context
 	if ctx == nil {
 		ctx = context.Background()
 	}
+	defer func() {
+		if closeErr := out.Close(); retErr == nil && closeErr != nil {
+			retErr = i18n.NewError("error.io.write_failed", map[string]any{"Path": opts.DestPath}, closeErr)
+		}
+		if retErr != nil {
+			_ = os.Remove(opts.DestPath)
+		}
+	}()
 
 	// 创建 HTTP 请求
 	req, err := http.NewRequestWithContext(ctx, "GET", opts.URL, nil)
@@ -45,20 +61,6 @@ func DownloadFile(opts DownloadFileOptions) (retErr error) {
 	if resp.StatusCode != http.StatusOK {
 		return i18n.NewError("error.download.status", map[string]any{"Status": resp.Status, "URL": opts.URL}, nil)
 	}
-
-	// 创建目标文件
-	out, err := os.Create(opts.DestPath)
-	if err != nil {
-		return i18n.NewError("error.io.create_file_failed", map[string]any{"Path": opts.DestPath}, err)
-	}
-	defer func() {
-		if closeErr := out.Close(); retErr == nil && closeErr != nil {
-			retErr = i18n.NewError("error.io.write_failed", map[string]any{"Path": opts.DestPath}, closeErr)
-		}
-		if retErr != nil {
-			_ = os.Remove(opts.DestPath)
-		}
-	}()
 
 	// 获取文件总大小
 	totalSize := resp.ContentLength

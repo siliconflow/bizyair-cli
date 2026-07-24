@@ -16,30 +16,30 @@ func NewSfFolder() *SfFolder {
 	return &SfFolder{}
 }
 
-func (s *SfFolder) folderPath(filePath string) string {
-	currentOS := runtime.GOOS
-	// 判断是否为 Windows
-	if currentOS == meta.OSWindows {
-		homeDir := os.Getenv(meta.EnvUserProfile)
-		return filepath.Join(homeDir, meta.SfFolder, filePath)
+func (s *SfFolder) folderPath(filePath string) (string, error) {
+	homeDir, err := os.UserHomeDir()
+	if err != nil || homeDir == "" {
+		return "", i18n.NewError("error.io.home_directory_missing", nil, err)
 	}
-	return filepath.Join(os.Getenv(meta.EnvHome), meta.SfFolder, filePath)
+	return filepath.Join(homeDir, meta.SfFolder, filePath), nil
 }
 
 func (s *SfFolder) SaveKey(apikey string) error {
-	err := os.MkdirAll(s.folderPath(""), 0700)
+	folderPath, err := s.folderPath("")
 	if err != nil {
-		return i18n.NewError("error.io.create_directory_failed", map[string]any{"Path": s.folderPath("")}, err)
+		return err
+	}
+	if err := os.MkdirAll(folderPath, 0700); err != nil {
+		return i18n.NewError("error.io.create_directory_failed", map[string]any{"Path": folderPath}, err)
 	}
 
 	if runtime.GOOS != meta.OSWindows {
-		err = os.Chmod(s.folderPath(""), 0700)
-		if err != nil {
-			return i18n.NewError("error.io.permissions_failed", map[string]any{"Path": s.folderPath("")}, err)
+		if err := os.Chmod(folderPath, 0700); err != nil {
+			return i18n.NewError("error.io.permissions_failed", map[string]any{"Path": folderPath}, err)
 		}
 	}
 
-	keyFilePath := s.folderPath(meta.SfApiKey)
+	keyFilePath := filepath.Join(folderPath, meta.SfApiKey)
 	file, err := os.OpenFile(keyFilePath, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0600)
 	if err != nil {
 		return i18n.NewError("error.auth.key_open_failed", map[string]any{"Path": keyFilePath}, err)
@@ -59,8 +59,11 @@ func (s *SfFolder) SaveKey(apikey string) error {
 }
 
 func (s *SfFolder) RemoveKey() error {
-	keyFilePath := s.folderPath(meta.SfApiKey)
-	_, err := os.Stat(keyFilePath)
+	keyFilePath, err := s.folderPath(meta.SfApiKey)
+	if err != nil {
+		return err
+	}
+	_, err = os.Stat(keyFilePath)
 	if os.IsNotExist(err) {
 		return i18n.NewError("error.auth.not_logged_in_simple", nil, err)
 	}
@@ -72,8 +75,11 @@ func (s *SfFolder) RemoveKey() error {
 }
 
 func (s *SfFolder) GetKey() (string, error) {
-	keyFilePath := s.folderPath(meta.SfApiKey)
-	_, err := os.Stat(keyFilePath)
+	keyFilePath, err := s.folderPath(meta.SfApiKey)
+	if err != nil {
+		return "", err
+	}
+	_, err = os.Stat(keyFilePath)
 	if os.IsNotExist(err) {
 		return "", i18n.NewError("error.auth.not_logged_in_simple", nil, err)
 	}

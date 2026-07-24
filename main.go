@@ -48,12 +48,12 @@ func runContext(ctx context.Context, args []string) (err error) {
 		programName = args[0]
 		languageArgs = args[1:]
 	}
-	language, commandArgs, err := i18n.ResolveArgs(languageArgs, os.LookupEnv)
-	if err != nil {
-		return err
-	}
+	language, commandArgs, resolveErr := i18n.ResolveArgs(languageArgs, os.LookupEnv)
 	if err := i18n.Configure(language); err != nil {
 		return err
+	}
+	if resolveErr != nil {
+		return resolveErr
 	}
 
 	app := cmd.Init()

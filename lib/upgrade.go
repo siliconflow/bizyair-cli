@@ -163,23 +163,28 @@ func PerformUpgrade(opts UpgradeOptions) *UpgradeResult {
 
 	// 5. 下载新版本到临时文件
 	updateStatus(i18n.T("upgrade.status.downloading", map[string]any{"Version": result.LatestVersion}))
-	tempDir := os.TempDir()
-	tempFile := filepath.Join(tempDir, binary.Filename+".tmp")
-
-	err = DownloadFile(DownloadFileOptions{
-		URL:          binary.URL,
-		DestPath:     tempFile,
-		ProgressFunc: opts.ProgressFunc,
-		Context:      ctx,
-	})
+	temporary, err := os.CreateTemp("", "bizyair-upgrade-*")
 	if err != nil {
 		result.Success = false
 		result.Error = err
 		result.Message = i18n.T("upgrade.result.download_failed", map[string]any{"Cause": err})
 		return result
 	}
-	defer os.Remove(tempFile) // 清理临时文件
+	tempFile := temporary.Name()
+	defer os.Remove(tempFile)
 
+	err = downloadFileTo(DownloadFileOptions{
+		URL:          binary.URL,
+		DestPath:     tempFile,
+		ProgressFunc: opts.ProgressFunc,
+		Context:      ctx,
+	}, temporary)
+	if err != nil {
+		result.Success = false
+		result.Error = err
+		result.Message = i18n.T("upgrade.result.download_failed", map[string]any{"Cause": err})
+		return result
+	}
 	// 6. 校验文件完整性
 	if markUpgradeCanceled(result, ctx) {
 		return result
@@ -221,13 +226,17 @@ func PerformUpgrade(opts UpgradeOptions) *UpgradeResult {
 		_ = os.Remove(backupPath)
 		return result
 	}
-	if err := replaceExecutable(tempFile, execPath); err != nil {
+	if err := replaceExecutableContext(ctx, tempFile, execPath); err != nil {
 		// 替换失败，尝试回滚
 		logs.Errorf("Installation failed; rolling back: %v", err)
 		if rollbackErr := copyFile(backupPath, execPath); rollbackErr != nil {
 			result.Success = false
 			result.Error = i18n.NewError("error.upgrade.install_and_rollback_failed", map[string]any{"Rollback": rollbackErr}, err)
 			result.Message = i18n.T("upgrade.result.manual_recovery")
+			return result
+		}
+		if ctx.Err() != nil {
+			markUpgradeCanceled(result, ctx)
 			return result
 		}
 		result.Success = false
@@ -334,6 +343,9 @@ func copyFileContext(ctx context.Context, src, dst string) (retErr error) {
 	if retErr == nil {
 		retErr = ctx.Err()
 	}
+	if retErr == nil {
+		retErr = destFile.Chmod(sourceInfo.Mode())
+	}
 	return retErr
 }
 
@@ -351,10 +363,25 @@ func (r *upgradeContextReader) Read(p []byte) (int, error) {
 
 // replaceExecutable 替换可执行文件
 func replaceExecutable(newFile, targetPath string) error {
+	return replaceExecutableContext(context.Background(), newFile, targetPath)
+}
+
+func replaceExecutableContext(ctx context.Context, newFile, targetPath string) error {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+
 	// 读取目标文件的权限
 	targetInfo, err := os.Stat(targetPath)
 	if err != nil {
 		return i18n.NewError("error.io.stat_failed", map[string]any{"Path": targetPath}, err)
+	}
+
+	if err := ctx.Err(); err != nil {
+		return err
 	}
 
 	// 删除旧文件
@@ -363,8 +390,12 @@ func replaceExecutable(newFile, targetPath string) error {
 	}
 
 	// 复制新文件
-	if err := copyFile(newFile, targetPath); err != nil {
+	if err := copyFileContext(ctx, newFile, targetPath); err != nil {
 		return i18n.NewError("error.io.copy_failed", map[string]any{"Source": newFile, "Destination": targetPath}, err)
+	}
+
+	if err := ctx.Err(); err != nil {
+		return err
 	}
 
 	// 恢复执行权限

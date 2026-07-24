@@ -254,6 +254,7 @@ cli:
     unknown_command: "Unknown command: {{.Command}}"
     flag_unknown: "Unknown option: {{.Flag}}"
     flag_value_required: "Option {{.Flag}} requires a value."
+    language_unsupported: "Unsupported language {{.Language}}; supported languages: en, zh-CN."
     incorrect_usage: "Incorrect usage: {{.Detail}}"
   command:
     login: "Log in to BizyAir"
@@ -403,6 +404,12 @@ error:
     copy_failed: "Could not copy {{.Source}} to {{.Destination}}: {{.Cause}}"
   cover:
     convert_failed: "Could not convert {{.Path}} to WebP: {{.Cause}}"
+    webp_platform_unsupported: "cwebp is unavailable for {{.OS}}/{{.Arch}}."
+    webp_download_failed: "Could not download cwebp: {{.Status}}"
+    webp_archive_too_large: "The cwebp archive exceeds {{.Limit}} bytes."
+    webp_checksum_mismatch: "The cwebp archive checksum does not match (expected: {{.Expected}}, actual: {{.Actual}})."
+    webp_executable_missing: "{{.Name}} was not found in the cwebp archive."
+    webp_executable_too_large: "The cwebp executable exceeds {{.Limit}} bytes."
     download_failed: "Could not download cover {{.Input}}: {{.Cause}}"
     credentials_failed: "Could not obtain upload credentials for cover {{.Input}}: {{.Cause}}"
     oss_client_failed: "Could not create the OSS client for cover {{.Input}}: {{.Cause}}"

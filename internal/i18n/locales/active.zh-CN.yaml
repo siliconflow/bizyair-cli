@@ -254,6 +254,7 @@ cli:
     unknown_command: "未知命令：{{.Command}}"
     flag_unknown: "未知参数：{{.Flag}}"
     flag_value_required: "参数 {{.Flag}} 需要提供值。"
+    language_unsupported: "不支持语言 {{.Language}}；支持的语言：en、zh-CN。"
     incorrect_usage: "参数使用错误：{{.Detail}}"
   command:
     login: "登录到 BizyAir"
@@ -397,6 +398,12 @@ error:
     copy_failed: "无法将 {{.Source}} 复制到 {{.Destination}}：{{.Cause}}"
   cover:
     convert_failed: "无法将 {{.Path}} 转换为 WebP：{{.Cause}}"
+    webp_platform_unsupported: "{{.OS}}/{{.Arch}} 平台不支持 cwebp。"
+    webp_download_failed: "下载 cwebp 失败：{{.Status}}"
+    webp_archive_too_large: "cwebp 归档超过 {{.Limit}} 字节。"
+    webp_checksum_mismatch: "cwebp 归档校验和不匹配（期望：{{.Expected}}，实际：{{.Actual}}）。"
+    webp_executable_missing: "cwebp 归档中未找到 {{.Name}}。"
+    webp_executable_too_large: "cwebp 可执行文件超过 {{.Limit}} 字节。"
     download_failed: "下载封面 {{.Input}} 失败：{{.Cause}}"
     credentials_failed: "获取封面 {{.Input}} 的上传凭据失败：{{.Cause}}"
     oss_client_failed: "创建封面 {{.Input}} 的 OSS 客户端失败：{{.Cause}}"
