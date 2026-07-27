@@ -451,6 +451,7 @@ error:
     parts_failed: "{{.Object}} 的一个或多个分片上传失败：{{.Cause}}"
     multipart_complete_failed: "完成 {{.Object}} 的分片上传失败：{{.Cause}}"
     part_failed: "分片 {{.Part}} 上传失败：{{.Cause}}"
+    part_short_read: "在偏移量 {{.Offset}} 处发生短读：应读取 {{.Expected}} 字节，实际读取 {{.Read}} 字节：{{.Cause}}"
     part_retries_exhausted: "分片 {{.Part}} 重试 {{.Attempts}} 次后仍然失败：{{.Cause}}"
 
 validation:

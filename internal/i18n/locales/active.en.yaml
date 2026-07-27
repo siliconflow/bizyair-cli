@@ -457,6 +457,7 @@ error:
     parts_failed: "One or more parts failed for {{.Object}}: {{.Cause}}"
     multipart_complete_failed: "Could not complete multipart upload for {{.Object}}: {{.Cause}}"
     part_failed: "Part {{.Part}} failed: {{.Cause}}"
+    part_short_read: "Short read at offset {{.Offset}}: read {{.Read}} of {{.Expected}} bytes: {{.Cause}}"
     part_retries_exhausted: "Part {{.Part}} failed after {{.Attempts}} attempts: {{.Cause}}"
 
 validation:

@@ -422,7 +422,7 @@ func (a *AliOssStorageClient) uploadParts(
 
 	// 使用信号量控制并发数
 	sem := make(chan struct{}, meta.MultipartParallel)
-	errChan := make(chan error, partCount)
+	errChan := make(chan error, meta.MultipartParallel)
 	var wg sync.WaitGroup
 	var stateMu sync.Mutex
 	var progressMu sync.Mutex
@@ -599,8 +599,19 @@ func (a *AliOssStorageClient) uploadPartWithRetry(
 
 		// 读取分片数据
 		buffer := make([]byte, size)
-		_, err := file.ReadAt(buffer, offset)
-		if err != nil && err != io.EOF {
+		n, err := file.ReadAt(buffer, offset)
+		if n != len(buffer) {
+			if err == nil {
+				err = io.ErrUnexpectedEOF
+			}
+			lastErr = i18n.NewError("error.oss.part_short_read", map[string]any{
+				"Offset":   offset,
+				"Read":     n,
+				"Expected": len(buffer),
+			}, err)
+			continue
+		}
+		if err != nil && !errors.Is(err, io.EOF) {
 			lastErr = err
 			continue
 		}
