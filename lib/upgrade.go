@@ -4,7 +4,6 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
-	"fmt"
 	"io"
 	"os"
 	"path/filepath"
@@ -12,6 +11,7 @@ import (
 	"strings"
 
 	"github.com/cloudwego/hertz/cmd/hz/util/logs"
+	"github.com/siliconflow/bizyair-cli/internal/i18n"
 	"github.com/siliconflow/bizyair-cli/meta"
 )
 
@@ -23,6 +23,7 @@ type UpgradeOptions struct {
 	ProgressFunc   func(downloaded, total int64) // 下载进度回调
 	StatusFunc     func(status string)           // 状态更新回调
 	Context        context.Context
+	ManifestURL    string
 }
 
 // UpgradeResult 升级结果
@@ -37,25 +38,37 @@ type UpgradeResult struct {
 
 // CheckForUpdate 检查更新
 func CheckForUpdate(currentVersion string) (*UpgradeResult, error) {
+	return CheckForUpdateContext(context.Background(), currentVersion, meta.ManifestURL)
+}
+
+func CheckForUpdateContext(ctx context.Context, currentVersion, manifestURL string) (*UpgradeResult, error) {
+	result, _, err := checkForUpdateWithManifest(ctx, currentVersion, manifestURL)
+	return result, err
+}
+
+func checkForUpdateWithManifest(ctx context.Context, currentVersion, manifestURL string) (*UpgradeResult, *Manifest, error) {
+	if manifestURL == "" {
+		manifestURL = meta.ManifestURL
+	}
 	// 加载 manifest
-	manifest, err := LoadManifestFromURL(meta.ManifestURL)
+	manifest, err := LoadManifestFromURLContext(ctx, manifestURL)
 	if err != nil {
-		return nil, fmt.Errorf("无法检查更新: %v", err)
+		return nil, nil, i18n.NewError("error.upgrade.check_failed", nil, err)
 	}
 
 	if manifest.LatestVersion == "" {
-		return nil, fmt.Errorf("manifest 中未找到最新版本")
+		return nil, nil, i18n.NewError("error.manifest.latest_missing", nil, nil)
 	}
 
 	// 解析版本
 	current, err := ParseVersion(currentVersion)
 	if err != nil {
-		return nil, fmt.Errorf("无效的当前版本号: %v", err)
+		return nil, nil, i18n.NewError("error.upgrade.current_version_invalid", map[string]any{"Version": currentVersion}, err)
 	}
 
 	latest, err := ParseVersion(manifest.LatestVersion)
 	if err != nil {
-		return nil, fmt.Errorf("无效的最新版本号: %v", err)
+		return nil, nil, i18n.NewError("error.upgrade.latest_version_invalid", map[string]any{"Version": manifest.LatestVersion}, err)
 	}
 
 	// 比较版本
@@ -66,7 +79,7 @@ func CheckForUpdate(currentVersion string) (*UpgradeResult, error) {
 		CurrentVersion: current.String(),
 		LatestVersion:  latest.String(),
 		Success:        true,
-	}, nil
+	}, manifest, nil
 }
 
 // PerformUpgrade 执行升级
@@ -84,13 +97,17 @@ func PerformUpgrade(opts UpgradeOptions) *UpgradeResult {
 	}
 
 	// 1. 检查更新
-	updateStatus("正在检查更新...")
-	result, err := CheckForUpdate(opts.CurrentVersion)
+	updateStatus(i18n.T("upgrade.status.checking"))
+	manifestURL := opts.ManifestURL
+	if manifestURL == "" {
+		manifestURL = meta.ManifestURL
+	}
+	result, manifest, err := checkForUpdateWithManifest(ctx, opts.CurrentVersion, manifestURL)
 	if err != nil {
 		return &UpgradeResult{
 			Success: false,
 			Error:   err,
-			Message: fmt.Sprintf("检查更新失败: %v", err),
+			Message: i18n.T("upgrade.result.check_failed", map[string]any{"Cause": err}),
 		}
 	}
 
@@ -99,9 +116,9 @@ func PerformUpgrade(opts UpgradeOptions) *UpgradeResult {
 	// 仅检查模式
 	if opts.CheckOnly {
 		if result.NeedUpgrade {
-			result.Message = fmt.Sprintf("发现新版本: %s (当前版本: %s)", result.LatestVersion, result.CurrentVersion)
+			result.Message = i18n.T("upgrade.result.available", map[string]any{"Latest": result.LatestVersion, "Current": result.CurrentVersion})
 		} else {
-			result.Message = fmt.Sprintf("已是最新版本: %s", result.CurrentVersion)
+			result.Message = i18n.T("upgrade.result.current", map[string]any{"Version": result.CurrentVersion})
 		}
 		result.Success = true
 		return result
@@ -109,20 +126,13 @@ func PerformUpgrade(opts UpgradeOptions) *UpgradeResult {
 
 	// 检查是否需要升级
 	if !result.NeedUpgrade && !opts.Force {
-		result.Message = fmt.Sprintf("已是最新版本: %s", result.CurrentVersion)
+		result.Message = i18n.T("upgrade.result.current", map[string]any{"Version": result.CurrentVersion})
 		result.Success = true
 		return result
 	}
 
-	// 2. 加载 manifest
-	updateStatus("正在获取版本信息...")
-	manifest, err := LoadManifestFromURL(meta.ManifestURL)
-	if err != nil {
-		result.Success = false
-		result.Error = err
-		result.Message = fmt.Sprintf("获取版本信息失败: %v", err)
-		return result
-	}
+	// 2. 使用检查更新时已加载的 manifest
+	updateStatus(i18n.T("upgrade.status.fetching_release"))
 
 	// 3. 获取当前平台的二进制文件信息
 	goos := runtime.GOOS
@@ -131,7 +141,7 @@ func PerformUpgrade(opts UpgradeOptions) *UpgradeResult {
 	if err != nil {
 		result.Success = false
 		result.Error = err
-		result.Message = fmt.Sprintf("获取平台信息失败: %v", err)
+		result.Message = i18n.T("upgrade.result.platform_failed", map[string]any{"Cause": err})
 		return result
 	}
 
@@ -140,69 +150,98 @@ func PerformUpgrade(opts UpgradeOptions) *UpgradeResult {
 	if err != nil {
 		result.Success = false
 		result.Error = err
-		result.Message = fmt.Sprintf("获取可执行文件路径失败: %v", err)
+		result.Message = i18n.T("upgrade.result.executable_failed", map[string]any{"Cause": err})
 		return result
 	}
 	execPath, err = filepath.EvalSymlinks(execPath)
 	if err != nil {
 		result.Success = false
 		result.Error = err
-		result.Message = fmt.Sprintf("解析可执行文件路径失败: %v", err)
+		result.Message = i18n.T("upgrade.result.executable_resolve_failed", map[string]any{"Cause": err})
 		return result
 	}
 
 	// 5. 下载新版本到临时文件
-	updateStatus(fmt.Sprintf("正在下载新版本 %s...", result.LatestVersion))
-	tempDir := os.TempDir()
-	tempFile := filepath.Join(tempDir, binary.Filename+".tmp")
+	updateStatus(i18n.T("upgrade.status.downloading", map[string]any{"Version": result.LatestVersion}))
+	temporary, err := os.CreateTemp("", "bizyair-upgrade-*")
+	if err != nil {
+		result.Success = false
+		result.Error = err
+		result.Message = i18n.T("upgrade.result.download_failed", map[string]any{"Cause": err})
+		return result
+	}
+	tempFile := temporary.Name()
+	defer os.Remove(tempFile)
 
-	err = DownloadFile(DownloadFileOptions{
+	err = downloadFileTo(DownloadFileOptions{
 		URL:          binary.URL,
 		DestPath:     tempFile,
 		ProgressFunc: opts.ProgressFunc,
 		Context:      ctx,
-	})
+	}, temporary)
 	if err != nil {
 		result.Success = false
 		result.Error = err
-		result.Message = fmt.Sprintf("下载失败: %v", err)
+		result.Message = i18n.T("upgrade.result.download_failed", map[string]any{"Cause": err})
 		return result
 	}
-	defer os.Remove(tempFile) // 清理临时文件
-
 	// 6. 校验文件完整性
-	updateStatus("正在校验文件完整性...")
-	if err := verifyChecksum(tempFile, binary.Checksum); err != nil {
+	if markUpgradeCanceled(result, ctx) {
+		return result
+	}
+	updateStatus(i18n.T("upgrade.status.verifying"))
+	if markUpgradeCanceled(result, ctx) {
+		return result
+	}
+	if err := verifyChecksumContext(ctx, tempFile, binary.Checksum); err != nil {
 		result.Success = false
 		result.Error = err
-		result.Message = fmt.Sprintf("文件校验失败: %v", err)
+		result.Message = i18n.T("upgrade.result.verify_failed", map[string]any{"Cause": err})
 		return result
 	}
 
 	// 7. 备份当前版本
-	updateStatus("正在备份当前版本...")
+	if markUpgradeCanceled(result, ctx) {
+		return result
+	}
+	updateStatus(i18n.T("upgrade.status.backing_up"))
+	if markUpgradeCanceled(result, ctx) {
+		return result
+	}
 	backupPath := execPath + meta.UpgradeBackupSuffix
-	if err := copyFile(execPath, backupPath); err != nil {
+	if err := copyFileContext(ctx, execPath, backupPath); err != nil {
 		result.Success = false
 		result.Error = err
-		result.Message = fmt.Sprintf("备份失败: %v", err)
+		result.Message = i18n.T("upgrade.result.backup_failed", map[string]any{"Cause": err})
 		return result
 	}
 
 	// 8. 替换可执行文件
-	updateStatus("正在安装新版本...")
-	if err := replaceExecutable(tempFile, execPath); err != nil {
+	if markUpgradeCanceled(result, ctx) {
+		_ = os.Remove(backupPath)
+		return result
+	}
+	updateStatus(i18n.T("upgrade.status.installing"))
+	if markUpgradeCanceled(result, ctx) {
+		_ = os.Remove(backupPath)
+		return result
+	}
+	if err := replaceExecutableContext(ctx, tempFile, execPath); err != nil {
 		// 替换失败，尝试回滚
-		logs.Errorf("安装失败，正在回滚: %v", err)
+		logs.Errorf("Installation failed; rolling back: %v", err)
 		if rollbackErr := copyFile(backupPath, execPath); rollbackErr != nil {
 			result.Success = false
-			result.Error = fmt.Errorf("安装失败且回滚失败: %v, 回滚错误: %v", err, rollbackErr)
-			result.Message = "升级失败，请手动恢复"
+			result.Error = i18n.NewError("error.upgrade.install_and_rollback_failed", map[string]any{"Rollback": rollbackErr}, err)
+			result.Message = i18n.T("upgrade.result.manual_recovery")
+			return result
+		}
+		if ctx.Err() != nil {
+			markUpgradeCanceled(result, ctx)
 			return result
 		}
 		result.Success = false
 		result.Error = err
-		result.Message = fmt.Sprintf("安装失败，已回滚: %v", err)
+		result.Message = i18n.T("upgrade.result.install_rolled_back", map[string]any{"Cause": err})
 		return result
 	}
 
@@ -210,29 +249,53 @@ func PerformUpgrade(opts UpgradeOptions) *UpgradeResult {
 	_ = os.Remove(backupPath)
 
 	result.Success = true
-	result.Message = fmt.Sprintf("✅ 升级成功！版本: %s -> %s", result.CurrentVersion, result.LatestVersion)
+	result.Message = i18n.T("upgrade.result.success", map[string]any{"Current": result.CurrentVersion, "Latest": result.LatestVersion})
 	return result
+}
+
+func markUpgradeCanceled(result *UpgradeResult, ctx context.Context) bool {
+	if err := ctx.Err(); err != nil {
+		result.Success = false
+		result.Error = err
+		result.Message = i18n.T("cli.upgrade.canceled")
+		return true
+	}
+	return false
 }
 
 // verifyChecksum 校验文件 SHA256
 func verifyChecksum(filePath, expectedChecksum string) error {
+	return verifyChecksumContext(context.Background(), filePath, expectedChecksum)
+}
+
+func verifyChecksumContext(ctx context.Context, filePath, expectedChecksum string) error {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+
 	// 移除 "sha256:" 前缀（如果有）
 	expectedChecksum = strings.TrimPrefix(expectedChecksum, "sha256:")
 
 	file, err := os.Open(filePath)
 	if err != nil {
-		return fmt.Errorf("无法打开文件: %v", err)
+		return i18n.NewError("error.io.open_file_failed", map[string]any{"Path": filePath}, err)
 	}
 	defer file.Close()
 
 	hash := sha256.New()
-	if _, err := io.Copy(hash, file); err != nil {
-		return fmt.Errorf("计算哈希失败: %v", err)
+	if _, err := io.Copy(hash, &upgradeContextReader{ctx: ctx, reader: file}); err != nil {
+		return i18n.NewError("error.io.hash_failed", map[string]any{"Path": filePath}, err)
+	}
+	if err := ctx.Err(); err != nil {
+		return err
 	}
 
 	actualChecksum := hex.EncodeToString(hash.Sum(nil))
 	if actualChecksum != expectedChecksum {
-		return fmt.Errorf("校验和不匹配 (期望: %s, 实际: %s)", expectedChecksum, actualChecksum)
+		return i18n.NewError("error.upgrade.checksum_mismatch", map[string]any{"Expected": expectedChecksum, "Actual": actualChecksum}, nil)
 	}
 
 	return nil
@@ -240,6 +303,17 @@ func verifyChecksum(filePath, expectedChecksum string) error {
 
 // copyFile 复制文件
 func copyFile(src, dst string) error {
+	return copyFileContext(context.Background(), src, dst)
+}
+
+func copyFileContext(ctx context.Context, src, dst string) (retErr error) {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+
 	sourceFile, err := os.Open(src)
 	if err != nil {
 		return err
@@ -256,33 +330,77 @@ func copyFile(src, dst string) error {
 	if err != nil {
 		return err
 	}
-	defer destFile.Close()
+	defer func() {
+		if closeErr := destFile.Close(); retErr == nil && closeErr != nil {
+			retErr = closeErr
+		}
+		if retErr != nil {
+			_ = os.Remove(dst)
+		}
+	}()
 
-	_, err = io.Copy(destFile, sourceFile)
-	return err
+	_, retErr = io.Copy(destFile, &upgradeContextReader{ctx: ctx, reader: sourceFile})
+	if retErr == nil {
+		retErr = ctx.Err()
+	}
+	if retErr == nil {
+		retErr = destFile.Chmod(sourceInfo.Mode())
+	}
+	return retErr
+}
+
+type upgradeContextReader struct {
+	ctx    context.Context
+	reader io.Reader
+}
+
+func (r *upgradeContextReader) Read(p []byte) (int, error) {
+	if err := r.ctx.Err(); err != nil {
+		return 0, err
+	}
+	return r.reader.Read(p)
 }
 
 // replaceExecutable 替换可执行文件
 func replaceExecutable(newFile, targetPath string) error {
+	return replaceExecutableContext(context.Background(), newFile, targetPath)
+}
+
+func replaceExecutableContext(ctx context.Context, newFile, targetPath string) error {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+
 	// 读取目标文件的权限
 	targetInfo, err := os.Stat(targetPath)
 	if err != nil {
-		return fmt.Errorf("无法读取目标文件信息: %v", err)
+		return i18n.NewError("error.io.stat_failed", map[string]any{"Path": targetPath}, err)
+	}
+
+	if err := ctx.Err(); err != nil {
+		return err
 	}
 
 	// 删除旧文件
 	if err := os.Remove(targetPath); err != nil {
-		return fmt.Errorf("无法删除旧文件: %v", err)
+		return i18n.NewError("error.io.delete_failed", map[string]any{"Path": targetPath}, err)
 	}
 
 	// 复制新文件
-	if err := copyFile(newFile, targetPath); err != nil {
-		return fmt.Errorf("无法复制新文件: %v", err)
+	if err := copyFileContext(ctx, newFile, targetPath); err != nil {
+		return i18n.NewError("error.io.copy_failed", map[string]any{"Source": newFile, "Destination": targetPath}, err)
+	}
+
+	if err := ctx.Err(); err != nil {
+		return err
 	}
 
 	// 恢复执行权限
 	if err := os.Chmod(targetPath, targetInfo.Mode()); err != nil {
-		return fmt.Errorf("无法设置执行权限: %v", err)
+		return i18n.NewError("error.io.permissions_failed", map[string]any{"Path": targetPath}, err)
 	}
 
 	return nil

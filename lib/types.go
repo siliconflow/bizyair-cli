@@ -60,9 +60,11 @@ type ModelFile struct {
 }
 
 type ModelVersion struct {
-	Version      string   `json:"version,omitempty" form:"version" query:"version"`
-	BaseModel    string   `json:"base_model,omitempty" form:"base_model" query:"base_model"`
-	Introduction string   `json:"intro,omitempty" form:"intro" query:"intro"`
+	Version   string `json:"version,omitempty" form:"version" query:"version"`
+	BaseModel string `json:"base_model,omitempty" form:"base_model" query:"base_model"`
+	// Introduction is the user-facing model introduction. The current API
+	// contract names this version-level field "description".
+	Introduction string   `json:"description,omitempty" form:"description" query:"description"`
 	Public       bool     `json:"public,omitempty" form:"public" query:"public"`
 	Sign         string   `json:"sign,omitempty" form:"sign" query:"sign"`
 	Path         string   `json:"path,omitempty" form:"path" query:"path"`
@@ -73,20 +75,7 @@ type OssSignReq struct {
 	Type string `json:"type,omitempty" form:"type" query:"type"`
 }
 
-type ModelFileInfo struct {
-	Path      string `json:"path,omitempty" form:"path" query:"path"`
-	LabelPath string `json:"label_path,omitempty" form:"label_path" query:"label_path"`
-	RealPath  string `json:"real_path,omitempty" form:"real_path" query:"real_path"`
-	Available bool   `json:"available,omitempty" form:"available" query:"available"`
-	Sign      string `json:"sign,omitempty" form:"sign" query:"sign"`
-}
-
 type ModelCommitResp struct {
-}
-
-type ModelDeleteReq struct {
-	Name string `json:"name,omitempty" form:"name" query:"name"`
-	Type string `json:"type,omitempty" form:"type" query:"type"`
 }
 
 type ModelQueryReq struct {
@@ -163,36 +152,10 @@ type BizyModelListResp struct {
 	PageSize int              `json:"page_size,omitempty"`
 }
 
-type ModelListFilesReq struct {
-	Type    string `json:"type,omitempty" form:"type" query:"type"`
-	Name    string `json:"name,omitempty" path:"name"`
-	ExtName string `json:"ext_name,omitempty" path:"ext_name"`
-	Public  bool   `json:"public,omitempty" form:"public" query:"public"`
-}
-
-type ModelListFilesResp struct {
-	Files []*ModelFileInfo `json:"files,omitempty" form:"files" query:"files"`
-}
-
-type ModelDeleteResp struct {
-}
-
-type CheckModelResp struct {
-	Exists bool `json:"exists,omitempty" form:"exists" query:"exists"`
-}
-
 // Upload Token（inputs）
 type UploadTokenReq struct {
 	FileName string `json:"file_name,omitempty" form:"file_name" query:"file_name"`
 	FileType string `json:"file_type,omitempty" form:"file_type" query:"file_type"`
-}
-
-// CLI Upload Token (for release files)
-type CLIUploadTokenReq struct {
-	FileName      string `json:"file_name,omitempty" form:"file_name" query:"file_name"`
-	FileType      string `json:"file_type,omitempty" form:"file_type" query:"file_type"`
-	IgnoreDate    bool   `json:"ignore_date,omitempty" form:"ignore_date" query:"ignore_date"`
-	FinalFileName bool   `json:"final_file_name,omitempty" form:"final_file_name" query:"final_file_name"`
 }
 
 // Input Resource Commit
@@ -210,9 +173,11 @@ type InputResourceCommitResp struct {
 
 // 详情页：模型版本（与列表版本字段略有不同，按接口保持独立定义）
 type BizyModelDetailVersion struct {
-	Id          int64        `json:"id,omitempty"`
-	Version     string       `json:"version,omitempty"`
-	BaseModel   string       `json:"base_model,omitempty"`
+	Id          int64  `json:"id,omitempty"`
+	Version     string `json:"version,omitempty"`
+	BaseModel   string `json:"base_model,omitempty"`
+	Description string `json:"description,omitempty"`
+	// Intro is retained for compatibility with older responses.
 	Intro       string       `json:"intro,omitempty"`
 	Sign        string       `json:"sign,omitempty"`
 	Path        string       `json:"path,omitempty"`

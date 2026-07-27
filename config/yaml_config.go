@@ -8,6 +8,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/siliconflow/bizyair-cli/internal/i18n"
 	"github.com/siliconflow/bizyair-cli/lib"
 	"gopkg.in/yaml.v3"
 )
@@ -40,12 +41,12 @@ type YamlVersion struct {
 func LoadYamlConfig(filepath string) (*YamlConfig, error) {
 	data, err := os.ReadFile(filepath)
 	if err != nil {
-		return nil, fmt.Errorf("读取 YAML 文件失败: %w", err)
+		return nil, i18n.NewError("config.yaml.read_failed", map[string]any{"Path": filepath}, err)
 	}
 
 	var config YamlConfig
 	if err := yaml.Unmarshal(data, &config); err != nil {
-		return nil, fmt.Errorf("解析 YAML 文件失败: %w", err)
+		return nil, i18n.NewError("config.yaml.parse_failed", map[string]any{"Path": filepath}, err)
 	}
 
 	return &config, nil
@@ -54,23 +55,23 @@ func LoadYamlConfig(filepath string) (*YamlConfig, error) {
 // ValidateYamlConfig 验证 YAML 配置的合法性
 func ValidateYamlConfig(config *YamlConfig) error {
 	if len(config.Models) == 0 {
-		return fmt.Errorf("配置文件中至少需要一个模型")
+		return i18n.NewError("config.yaml.model_required", nil, nil)
 	}
 
 	for i, model := range config.Models {
 		// 验证模型名称
 		if err := lib.ValidateModelName(model.Name); err != nil {
-			return fmt.Errorf("模型 %d (%s): 名称无效: %w", i+1, model.Name, err)
+			return i18n.NewError("config.yaml.model_name_invalid", map[string]any{"Index": i + 1, "Name": model.Name}, err)
 		}
 
 		// 验证模型类型
 		if err := lib.ValidateModelType(model.Type); err != nil {
-			return fmt.Errorf("模型 %d (%s): 类型无效: %w", i+1, model.Name, err)
+			return i18n.NewError("config.yaml.model_type_invalid", map[string]any{"Index": i + 1, "Name": model.Name}, err)
 		}
 
 		// 验证至少有一个版本
 		if len(model.Versions) == 0 {
-			return fmt.Errorf("模型 %d (%s): 至少需要一个版本", i+1, model.Name)
+			return i18n.NewError("config.yaml.version_required", map[string]any{"Index": i + 1, "Name": model.Name}, nil)
 		}
 
 		// 验证每个版本
@@ -86,34 +87,34 @@ func ValidateYamlConfig(config *YamlConfig) error {
 
 // validateYamlVersion 验证单个版本的配置
 func validateYamlVersion(version YamlVersion, modelName string, versionIndex int) error {
-	prefix := fmt.Sprintf("模型 %s, 版本 %d", modelName, versionIndex)
+	data := map[string]any{"Model": modelName, "Version": versionIndex}
 
 	// 验证 model_path 必填且文件存在
 	if version.ModelPath == "" {
-		return fmt.Errorf("%s: model_path 不能为空", prefix)
+		return i18n.NewError("config.yaml.model_path_required", data, nil)
 	}
 	if err := lib.ValidatePath(version.ModelPath); err != nil {
-		return fmt.Errorf("%s: model_path 无效: %w", prefix, err)
+		return i18n.NewError("config.yaml.model_path_invalid", data, err)
 	}
 
 	// 验证 cover_path 和 cover_url 二选一（必须有且只有一个）
 	hasCoverPath := version.CoverPath != ""
 	hasCoverUrl := version.CoverUrl != ""
 	if !hasCoverPath && !hasCoverUrl {
-		return fmt.Errorf("%s: 必须指定 cover_path 或 cover_url 其中之一", prefix)
+		return i18n.NewError("config.yaml.cover_required", data, nil)
 	}
 	if hasCoverPath && hasCoverUrl {
-		return fmt.Errorf("%s: cover_path 和 cover_url 不能同时指定", prefix)
+		return i18n.NewError("config.yaml.cover_conflict", data, nil)
 	}
 
 	// 如果是 cover_path，验证文件存在
 	if hasCoverPath {
 		if err := lib.ValidatePath(version.CoverPath); err != nil {
-			return fmt.Errorf("%s: cover_path 无效: %w", prefix, err)
+			return i18n.NewError("config.yaml.cover_path_invalid", data, err)
 		}
 		// 验证封面文件格式
 		if err := lib.ValidateCoverFile(version.CoverPath); err != nil {
-			return fmt.Errorf("%s: cover_path 格式无效: %w", prefix, err)
+			return i18n.NewError("config.yaml.cover_format_invalid", data, err)
 		}
 	}
 
@@ -121,18 +122,18 @@ func validateYamlVersion(version YamlVersion, modelName string, versionIndex int
 	hasIntro := version.Intro != ""
 	hasIntroPath := version.IntroPath != ""
 	if hasIntro && hasIntroPath {
-		return fmt.Errorf("%s: intro 和 intro_path 不能同时指定", prefix)
+		return i18n.NewError("config.yaml.intro_conflict", data, nil)
 	}
 
 	// 验证 intro 必填（至少要有一个）
 	if !hasIntro && !hasIntroPath {
-		return fmt.Errorf("%s: 模型介绍（intro）是必填项，请提供介绍文本或通过 intro_path 指定介绍文件", prefix)
+		return i18n.NewError("config.yaml.intro_required", data, nil)
 	}
 
 	// 如果是 intro_path，验证文件存在
 	if hasIntroPath {
 		if err := lib.ValidateIntroFile(version.IntroPath); err != nil {
-			return fmt.Errorf("%s: intro_path 无效: %w", prefix, err)
+			return i18n.NewError("config.yaml.intro_path_invalid", data, err)
 		}
 	}
 
@@ -210,15 +211,15 @@ func (v *YamlVersion) GetIntroduction() (string, error) {
 		// 从文件读取
 		content, err := lib.ReadIntroFile(v.IntroPath)
 		if err != nil {
-			return "", fmt.Errorf("读取 intro 文件失败: %w", err)
+			return "", i18n.NewError("config.yaml.intro_read_failed", map[string]any{"Path": v.IntroPath}, err)
 		}
 		if strings.TrimSpace(content) == "" {
-			return "", fmt.Errorf("模型介绍（intro）是必填项，文件内容不能为空")
+			return "", i18n.NewError("config.yaml.intro_file_empty", map[string]any{"Path": v.IntroPath}, nil)
 		}
 		return content, nil
 	}
 	if strings.TrimSpace(v.Intro) == "" {
-		return "", fmt.Errorf("模型介绍（intro）是必填项，请提供介绍文本")
+		return "", i18n.NewError("config.yaml.intro_text_required", nil, nil)
 	}
 	return v.Intro, nil
 }

@@ -1,12 +1,16 @@
 package cmd
 
 import (
+	"context"
+	"errors"
 	"fmt"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 
 	"github.com/cloudwego/hertz/cmd/hz/util/logs"
+	"github.com/siliconflow/bizyair-cli/internal/i18n"
 	"github.com/siliconflow/bizyair-cli/lib"
 	"github.com/siliconflow/bizyair-cli/lib/actions"
 	"github.com/siliconflow/bizyair-cli/lib/format"
@@ -17,15 +21,27 @@ import (
 func Upload(c *cli.Context) error {
 	args := parseArgument(c, meta.CmdUpload)
 	setLogVerbose(args.Verbose)
-	logs.Debugf("args: %#v\n", args)
+	logArguments(args)
+
+	if errors.Is(c.Context.Err(), context.Canceled) {
+		return canceledUploadExitError()
+	}
 
 	// 检查是否使用 YAML 配置文件批量上传
 	if args.FilePath != "" {
 		// 使用 YAML 配置文件
-		if err := uploadFromYaml(args.FilePath, args); err != nil {
+		if err := uploadFromYaml(c.Context, args.FilePath, args); err != nil {
+			if errors.Is(err, context.Canceled) {
+				return canceledUploadExitError()
+			}
 			return cli.Exit(err, meta.LoadError)
 		}
 		return nil
+	}
+
+	versionPublic, err := parseVersionPublic(args.VersionPublic)
+	if err != nil {
+		return cli.Exit(err, meta.LoadError)
 	}
 
 	// 获取 API Key
@@ -47,14 +63,16 @@ func Upload(c *cli.Context) error {
 		if introPath != "" {
 			// 从文件读取
 			if err := lib.ValidateIntroFile(introPath); err != nil {
-				return cli.Exit(fmt.Errorf("intro 文件验证失败 [版本 %d]: %w", i+1, err), meta.LoadError)
+				return cli.Exit(i18n.NewError("cli.upload.intro_validation_failed", map[string]any{"Version": i + 1}, err), meta.LoadError)
 			}
 			content, err := lib.ReadIntroFile(introPath)
 			if err != nil {
-				return cli.Exit(fmt.Errorf("读取 intro 文件失败 [版本 %d]: %w", i+1, err), meta.LoadError)
+				return cli.Exit(i18n.NewError("cli.upload.intro_read_failed", map[string]any{"Version": i + 1}, err), meta.LoadError)
 			}
 			intro = content
-			fmt.Fprintf(os.Stdout, "已从文件读取 intro (版本 %d/%d): %s\n", i+1, len(args.Path), introPath)
+			fmt.Fprintln(os.Stdout, i18n.T("cli.upload.intro_loaded", map[string]any{
+				"Current": i + 1, "Total": len(args.Path), "Path": introPath,
+			}))
 		} else {
 			// 使用直接提供的 intro
 			intro = getStringAt(args.Intro, i, "")
@@ -62,7 +80,7 @@ func Upload(c *cli.Context) error {
 
 		// 验证 intro 不能为空
 		if strings.TrimSpace(intro) == "" {
-			return cli.Exit(fmt.Errorf("模型介绍（intro）是必填项，请提供介绍文本或通过 intro_path 指定介绍文件 [版本 %d]", i+1), meta.LoadError)
+			return cli.Exit(i18n.NewError("cli.upload.intro_required", map[string]any{"Version": i + 1}, nil), meta.LoadError)
 		}
 
 		versions[i] = actions.VersionInput{
@@ -71,7 +89,7 @@ func Upload(c *cli.Context) error {
 			BaseModel:    getStringAt(args.BaseModel, i, ""),
 			Introduction: intro,
 			CoverUrl:     getStringAt(args.CoverUrls, i, ""),
-			Public:       getBoolAt(args.VersionPublic, i, false),
+			Public:       getBoolAt(versionPublic, i, false),
 		}
 	}
 
@@ -82,13 +100,16 @@ func Upload(c *cli.Context) error {
 		ModelType:  args.Type,
 		ModelName:  args.Name,
 		Versions:   versions,
-		Overwrite:  args.Overwrite,
+		Context:    c.Context,
 	}
 
 	client := lib.NewClient(args.BaseDomain, apiKey)
-	resp, err := client.GetBaseModelTypes()
+	resp, err := client.GetBaseModelTypesContext(c.Context)
 	if err != nil {
-		return cli.Exit(fmt.Errorf("获取基础模型列表失败: %w", err), meta.ServerError)
+		if errors.Is(err, context.Canceled) || errors.Is(c.Context.Err(), context.Canceled) {
+			return canceledUploadExitError()
+		}
+		return cli.Exit(i18n.NewError("error.base_models.fetch_failed", nil, err), meta.ServerError)
 	}
 
 	if resp.Data != nil {
@@ -101,33 +122,34 @@ func Upload(c *cli.Context) error {
 	callback := &cliUploadCallback{}
 
 	// 执行上传
-	fmt.Fprintf(os.Stdout, "开始上传 %d 个文件（并发数：3）\n", len(versions))
+	fmt.Fprintln(os.Stdout, i18n.TN("cli.upload.start", len(versions), map[string]any{"Count": len(versions), "Concurrency": 3}))
 
 	result := actions.ExecuteUpload(client, input, callback)
 
 	// 处理结果
 	if !result.Success {
-		if result.CanceledByUser {
-			fmt.Fprintln(os.Stdout, "\n上传已取消")
+		if result.CanceledByUser || errors.Is(c.Context.Err(), context.Canceled) {
 			folder, _ := lib.GetCheckpointDir()
 			if folder != "" {
-				fmt.Fprintf(os.Stdout, "已上传的部分已保存checkpoint，下次上传相同文件时会自动续传。\n")
-				fmt.Fprintf(os.Stdout, "Checkpoint文件位置: %s\n", folder)
+				fmt.Fprintln(os.Stdout)
+				fmt.Fprintln(os.Stdout, i18n.T("cli.upload.checkpoint_saved"))
+				fmt.Fprintln(os.Stdout, i18n.T("cli.upload.checkpoint_location", map[string]any{"Path": folder}))
 			}
-			return nil
+			return canceledUploadExitError()
 		}
 
-		fmt.Fprintf(os.Stderr, "\n上传失败，错误列表：\n")
+		fmt.Fprintf(os.Stderr, "\n%s\n", i18n.T("cli.upload.failure_list"))
 		for _, err := range result.Errors {
 			fmt.Fprintf(os.Stderr, "  - %v\n", err)
 		}
-		return cli.Exit("上传失败", meta.ServerError)
+		return cli.Exit(i18n.T("cli.upload.failed"), meta.ServerError)
 	}
 
-	fmt.Fprintf(os.Stdout, "\n✓ 上传成功！\n")
+	fmt.Fprintf(os.Stdout, "\n✓ %s\n", i18n.T("cli.upload.success"))
 	if result.SuccessCount < result.TotalCount {
-		fmt.Fprintf(os.Stdout, "部分版本失败：成功 %d/%d\n",
-			result.SuccessCount, result.TotalCount)
+		fmt.Fprintln(os.Stdout, i18n.T("cli.upload.partial", map[string]any{
+			"Success": result.SuccessCount, "Total": result.TotalCount,
+		}))
 		for _, err := range result.Errors {
 			fmt.Fprintf(os.Stderr, "  - %v\n", err)
 		}
@@ -135,17 +157,32 @@ func Upload(c *cli.Context) error {
 	}
 
 	// 全部成功时，显示模型详情
-	displayUploadedModelDetail(apiKey, args.BaseDomain, result.ModelName, result.ModelType)
+	displayUploadedModelDetail(c.Context, apiKey, args.BaseDomain, result.ModelName, result.ModelType)
 	return nil
 }
 
+func canceledUploadExitError() error {
+	return cli.Exit(
+		i18n.NewError("cli.upload.canceled", nil, context.Canceled),
+		meta.InterruptedExitCode,
+	)
+}
+
 // displayUploadedModelDetail 显示刚上传的模型详情
-func displayUploadedModelDetail(apiKey, baseDomain, modelName, modelType string) {
+func displayUploadedModelDetail(ctx context.Context, apiKey, baseDomain, modelName, modelType string) {
+	if ctx == nil {
+		ctx = context.Background()
+	}
 	// 后端需要时间处理，先等待1秒
-	time.Sleep(time.Second)
+	select {
+	case <-time.After(time.Second):
+	case <-ctx.Done():
+		return
+	}
 
 	// 查询模型列表，带重试逻辑
 	listInput := actions.ListModelsInput{
+		Context:    ctx,
 		ApiKey:     apiKey,
 		BaseDomain: baseDomain,
 		ModelType:  modelType,
@@ -164,12 +201,16 @@ func displayUploadedModelDetail(apiKey, baseDomain, modelName, modelType string)
 	for i := 0; i < maxRetries; i++ {
 		if i > 0 {
 			// 后续重试等待
-			time.Sleep(retryDelay)
+			select {
+			case <-time.After(retryDelay):
+			case <-ctx.Done():
+				return
+			}
 		}
 
 		listResult := actions.ListModels(client, listInput)
 		if listResult.Error != nil {
-			fmt.Fprintf(os.Stderr, "\n获取模型ID失败: %v\n", listResult.Error)
+			fmt.Fprintf(os.Stderr, "\n%s\n", i18n.T("cli.upload.model_id_failed", map[string]any{"Cause": listResult.Error}))
 			return
 		}
 
@@ -187,27 +228,32 @@ func displayUploadedModelDetail(apiKey, baseDomain, modelName, modelType string)
 
 		// 如果不是最后一次重试，显示等待信息
 		if i < maxRetries-1 {
-			logs.Debugf("未找到模型，%d秒后重试...\n", retryDelay/time.Second)
+			logs.Debugf("Model not found; retrying in %d second(s).\n", retryDelay/time.Second)
 		}
 	}
 
 	if targetModel == nil {
-		fmt.Fprintf(os.Stderr, "\n未找到刚上传的模型（已重试%d次），请稍后手动通过 TUI 或 API 查看\n", maxRetries)
+		fmt.Fprintf(os.Stderr, "\n%s\n", i18n.T("cli.upload.published_model_not_found", map[string]any{"Retries": maxRetries}))
 		return
 	}
 
 	// 构建模型详情页面 URL
-	modelURL := fmt.Sprintf("https://bizyair.cn/community/models/my/%d", targetModel.Id)
+	endpoints, err := lib.ResolveServiceEndpoints(baseDomain)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "\n%s\n", err)
+		return
+	}
+	modelURL := endpoints.ModelDetailURL(targetModel.Id)
 
 	// 显示成功提示和链接
-	fmt.Fprintf(os.Stdout, "\n模型发布成功！\n")
-	fmt.Fprintf(os.Stdout, "模型链接: %s\n", modelURL)
+	fmt.Fprintf(os.Stdout, "\n%s\n", i18n.T("cli.upload.published"))
+	fmt.Fprintln(os.Stdout, i18n.T("cli.upload.model_link", map[string]any{"URL": modelURL}))
 
 	// 尝试在浏览器中打开模型详情页面
 	msg, err := lib.OpenBrowser(modelURL)
 	if err != nil {
 		// 如果无法打开浏览器，只是提示，不影响整体流程
-		fmt.Fprintf(os.Stdout, "提示: 无法自动打开浏览器，请手动访问上述链接查看\n")
+		fmt.Fprintln(os.Stdout, i18n.T("cli.upload.browser_hint"))
 	} else {
 		fmt.Fprintf(os.Stdout, "%s\n", msg)
 	}
@@ -236,21 +282,25 @@ func (c *cliUploadCallback) OnProgress(progress actions.UploadProgress) {
 }
 
 func (c *cliUploadCallback) OnVersionStart(index, total int, fileName string) {
-	fmt.Printf("开始上传 (%d/%d): %s\n", index+1, total, fileName)
+	fmt.Println(i18n.T("cli.upload.version_start", map[string]any{"Current": index + 1, "Total": total, "File": fileName}))
 }
 
 func (c *cliUploadCallback) OnVersionComplete(index, total int, fileName string, err error) {
 	if err != nil {
-		fmt.Printf("✗ (%d/%d) %s 上传失败: %v\n", index+1, total, fileName, err)
+		fmt.Println(i18n.T("cli.upload.version_failed", map[string]any{
+			"Current": index + 1, "Total": total, "File": fileName, "Cause": err,
+		}))
 	} else {
-		fmt.Printf("✓ (%d/%d) %s 上传完成\n", index+1, total, fileName)
+		fmt.Println(i18n.T("cli.upload.version_complete", map[string]any{"Current": index + 1, "Total": total, "File": fileName}))
 	}
 }
 
 func (c *cliUploadCallback) OnCoverStatus(index, total int, status, message string) {
 	// CLI模式输出警告信息
 	if status == "fallback" {
-		fmt.Fprintf(os.Stderr, "⚠ 警告 - 版本 %d/%d: %s\n", index+1, total, message)
+		fmt.Fprintln(os.Stderr, i18n.T("cli.upload.cover_warning", map[string]any{
+			"Current": index + 1, "Total": total, "Message": message,
+		}))
 	}
 }
 
@@ -269,9 +319,24 @@ func getStringAt(slice []string, index int, defaultValue string) string {
 	return defaultValue
 }
 
-func getBoolAt(slice []string, index int, defaultValue bool) bool {
+func parseVersionPublic(values []string) ([]bool, error) {
+	parsed := make([]bool, len(values))
+	for i, value := range values {
+		public, err := strconv.ParseBool(value)
+		if err != nil {
+			return nil, i18n.NewError("validation.version_public_invalid", map[string]any{
+				"Version": i + 1,
+				"Value":   value,
+			}, err)
+		}
+		parsed[i] = public
+	}
+	return parsed, nil
+}
+
+func getBoolAt(slice []bool, index int, defaultValue bool) bool {
 	if index < len(slice) {
-		return slice[index] == "true" || slice[index] == "True" || slice[index] == "1"
+		return slice[index]
 	}
 	return defaultValue
 }

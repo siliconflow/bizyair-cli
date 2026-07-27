@@ -89,11 +89,3 @@ func TestGetStep(t *testing.T) {
 		})
 	}
 }
-
-func TestNewValidationError(t *testing.T) {
-	msg := "模型名称不能为空"
-	err := NewValidationError(msg)
-	if err.Error() != msg {
-		t.Errorf("NewValidationError(%q).Error() = %q, want %q", msg, err.Error(), msg)
-	}
-}

@@ -2,7 +2,6 @@ package lib
 
 import (
 	"encoding/json"
-	"fmt"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -10,6 +9,7 @@ import (
 
 	"github.com/aliyun/alibabacloud-oss-go-sdk-v2/oss"
 	"github.com/cloudwego/hertz/cmd/hz/util/logs"
+	"github.com/siliconflow/bizyair-cli/internal/i18n"
 	"github.com/siliconflow/bizyair-cli/meta"
 )
 
@@ -25,17 +25,22 @@ type CheckpointInfo struct {
 	UploadedParts []oss.UploadPart `json:"uploaded_parts"` // 已上传的分片列表
 	CreatedAt     time.Time        `json:"created_at"`     // 创建时间
 
-	// 用于恢复续传的凭证与存储信息
-	Bucket          string `json:"bucket,omitempty"`
-	Region          string `json:"region,omitempty"`
-	Endpoint        string `json:"endpoint,omitempty"`
-	AccessKeyId     string `json:"access_key_id,omitempty"`
-	AccessKeySecret string `json:"access_key_secret,omitempty"`
-	SecurityToken   string `json:"security_token,omitempty"`
-	Expiration      string `json:"expiration,omitempty"` // RFC3339 时间
+	// 用于恢复续传的非敏感存储信息。临时凭证每次从 API 刷新，不落盘。
+	Bucket   string `json:"bucket,omitempty"`
+	Region   string `json:"region,omitempty"`
+	Endpoint string `json:"endpoint,omitempty"`
 }
 
-// GetCheckpointDir 获取checkpoint目录路径 (~/.siliconflow/uploads/)
+func cloneCheckpoint(info *CheckpointInfo) *CheckpointInfo {
+	if info == nil {
+		return nil
+	}
+	clone := *info
+	clone.UploadedParts = append([]oss.UploadPart(nil), info.UploadedParts...)
+	return &clone
+}
+
+// GetCheckpointDir 获取checkpoint目录路径 (~/.bizyair/uploads/)
 func GetCheckpointDir() (string, error) {
 	var homeDir string
 	currentOS := runtime.GOOS
@@ -47,14 +52,19 @@ func GetCheckpointDir() (string, error) {
 	}
 
 	if homeDir == "" {
-		return "", fmt.Errorf("unable to determine home directory")
+		return "", i18n.NewError("error.io.home_directory_missing", nil, nil)
 	}
 
 	checkpointDir := filepath.Join(homeDir, meta.SfFolder, meta.CheckpointFolder)
 
 	// 确保目录存在
-	if err := os.MkdirAll(checkpointDir, 0770); err != nil {
-		return "", fmt.Errorf("failed to create checkpoint directory: %v", err)
+	if err := os.MkdirAll(checkpointDir, 0700); err != nil {
+		return "", i18n.NewError("error.checkpoint.directory_failed", map[string]any{"Path": checkpointDir}, err)
+	}
+	if runtime.GOOS != meta.OSWindows {
+		if err := os.Chmod(checkpointDir, 0700); err != nil {
+			return "", i18n.NewError("error.io.permissions_failed", map[string]any{"Path": checkpointDir}, err)
+		}
 	}
 
 	return checkpointDir, nil
@@ -75,23 +85,28 @@ func GetCheckpointFile(sha256sum string) (string, error) {
 // SaveCheckpoint 保存断点信息到JSON文件
 func SaveCheckpoint(info *CheckpointInfo) error {
 	if info.FileSignature == "" {
-		return fmt.Errorf("file signature is empty, cannot save checkpoint")
+		return i18n.NewError("error.checkpoint.signature_required", nil, nil)
 	}
 
 	checkpointFile, err := GetCheckpointFile(info.FileSignature)
 	if err != nil {
-		return fmt.Errorf("failed to get checkpoint file path: %v", err)
+		return i18n.NewError("error.checkpoint.path_failed", nil, err)
 	}
 
 	// 序列化为JSON
 	data, err := json.MarshalIndent(info, "", "  ")
 	if err != nil {
-		return fmt.Errorf("failed to marshal checkpoint info: %v", err)
+		return i18n.NewError("error.checkpoint.encode_failed", nil, err)
 	}
 
 	// 写入文件
-	if err := os.WriteFile(checkpointFile, data, 0644); err != nil {
-		return fmt.Errorf("failed to write checkpoint file: %v", err)
+	if err := os.WriteFile(checkpointFile, data, 0600); err != nil {
+		return i18n.NewError("error.checkpoint.write_failed", map[string]any{"Path": checkpointFile}, err)
+	}
+	if runtime.GOOS != meta.OSWindows {
+		if err := os.Chmod(checkpointFile, 0600); err != nil {
+			return i18n.NewError("error.io.permissions_failed", map[string]any{"Path": checkpointFile}, err)
+		}
 	}
 
 	logs.Debugf("checkpoint saved: %s\n", checkpointFile)
@@ -104,17 +119,22 @@ func LoadCheckpoint(checkpointFile string) (*CheckpointInfo, error) {
 	if _, err := os.Stat(checkpointFile); os.IsNotExist(err) {
 		return nil, nil // 文件不存在，返回nil但不报错
 	}
+	if runtime.GOOS != meta.OSWindows {
+		if err := os.Chmod(checkpointFile, 0600); err != nil {
+			return nil, i18n.NewError("error.io.permissions_failed", map[string]any{"Path": checkpointFile}, err)
+		}
+	}
 
 	// 读取文件
 	data, err := os.ReadFile(checkpointFile)
 	if err != nil {
-		return nil, fmt.Errorf("failed to read checkpoint file: %v", err)
+		return nil, i18n.NewError("error.checkpoint.read_failed", map[string]any{"Path": checkpointFile}, err)
 	}
 
 	// 反序列化
 	var info CheckpointInfo
 	if err := json.Unmarshal(data, &info); err != nil {
-		return nil, fmt.Errorf("failed to unmarshal checkpoint info: %v", err)
+		return nil, i18n.NewError("error.checkpoint.decode_failed", map[string]any{"Path": checkpointFile}, err)
 	}
 
 	logs.Debugf("checkpoint loaded: %s\n", checkpointFile)
@@ -128,25 +148,11 @@ func DeleteCheckpoint(checkpointFile string) error {
 	}
 
 	if err := os.Remove(checkpointFile); err != nil {
-		return fmt.Errorf("failed to delete checkpoint file: %v", err)
+		return i18n.NewError("error.checkpoint.delete_failed", map[string]any{"Path": checkpointFile}, err)
 	}
 
 	logs.Debugf("checkpoint deleted: %s\n", checkpointFile)
 	return nil
-}
-
-// IsCredentialExpired 检查凭证是否过期（提前5分钟判定为过期）
-func IsCredentialExpired(expiration string) bool {
-	if expiration == "" {
-		return true
-	}
-	exp, err := time.Parse(time.RFC3339, expiration)
-	if err != nil {
-		logs.Warnf("failed to parse expiration time: %v\n", err)
-		return true
-	}
-	// 提前5分钟判定为过期，避免边界情况
-	return time.Now().Add(5 * time.Minute).After(exp)
 }
 
 // ValidateCheckpoint 验证checkpoint是否有效（不比对 objectKey，仅校验文件与分片大小）

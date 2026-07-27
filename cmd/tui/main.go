@@ -1,7 +1,7 @@
 package tui
 
 import (
-	"fmt"
+	"context"
 	"os"
 	"sort"
 	"strings"
@@ -15,12 +15,15 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/siliconflow/bizyair-cli/cmd/tui/filepicker"
+	"github.com/siliconflow/bizyair-cli/internal/i18n"
 	"github.com/siliconflow/bizyair-cli/lib"
 	"github.com/siliconflow/bizyair-cli/meta"
 	"github.com/urfave/cli/v2"
 )
 
 type mainModel struct {
+	ctx           context.Context
+	baseDomain    string
 	step          mainStep
 	loggedIn      bool
 	apiKey        string
@@ -99,109 +102,126 @@ type mainModel struct {
 	// 封面状态追踪
 	coverStatus        string // 当前封面状态信息
 	coverStatusWarning bool   // 是否为警告状态（如转换失败回退）
-
-	// VPN检测相关
-	vpnCheckResult *lib.VPNDetectionResult
-	checkingVPN    bool
 }
 
 func newMainModel() mainModel {
+	return newMainModelWithContext(context.Background(), meta.DefaultBaseDomain)
+}
+
+func newMainModelWithBaseDomain(baseDomain string) mainModel {
+	return newMainModelWithContext(context.Background(), baseDomain)
+}
+
+func newMainModelWithContext(ctx context.Context, baseDomain string) mainModel {
+	if ctx == nil {
+		ctx = context.Background()
+	}
 	mItems := []list.Item{
-		menuEntry{listItem{title: "上传模型", desc: "交互式收集参数并上传"}, actionUpload},
-		menuEntry{listItem{title: "我的模型", desc: "在浏览器中查看我的模型"}, actionLsModel},
-		menuEntry{listItem{title: "退出登录", desc: "清除本地 API Key"}, actionLogout},
-		menuEntry{listItem{title: "退出程序", desc: "离开 BizyAir CLI"}, actionExit},
+		menuEntry{listItem{title: i18n.T("tui.menu.upload", nil), desc: i18n.T("tui.menu.upload_desc", nil)}, actionUpload},
+		menuEntry{listItem{title: i18n.T("tui.menu.models", nil), desc: i18n.T("tui.menu.models_desc", nil)}, actionLsModel},
+		menuEntry{listItem{title: i18n.T("tui.menu.logout", nil), desc: i18n.T("tui.menu.logout_desc", nil)}, actionLogout},
+		menuEntry{listItem{title: i18n.T("tui.menu.exit", nil), desc: i18n.T("tui.menu.exit_desc", nil)}, actionExit},
 	}
 	d := list.NewDefaultDelegate()
 	cSel := lipgloss.Color("#04B575")
 	d.Styles.SelectedTitle = d.Styles.SelectedTitle.Foreground(cSel).BorderLeftForeground(cSel)
 	d.Styles.SelectedDesc = d.Styles.SelectedDesc.Foreground(cSel)
 	menuList := list.New(mItems, d, 30, len(mItems)*8)
-	menuList.Title = "请选择功能"
+	menuList.Title = i18n.T("tui.menu.title", nil)
+	localizeList(&menuList)
 	menuList.SetShowStatusBar(false)
 	menuList.SetShowPagination(false)
 
 	// 模型类型描述映射
-	modelTypeDescriptions := map[meta.UploadFileType]string{
-		meta.TypeCheckpoint: "完整的扩散模型，包含所有组件",
-		meta.TypeVae:        "变分自编码器，用于图像编解码",
-		meta.TypeUNet:       "扩散模型的核心网络组件",
-		meta.TypeLora:       "低秩适应模型，用于微调和风格迁移",
-		meta.TypeControlNet: "条件控制模型，用于精确控制生成",
-		meta.TypeClip:       "文本编码器，用于理解提示词",
-		meta.TypeUpscale:    "图像放大模型，提升分辨率",
-		meta.TypeDetection:  "目标检测模型，识别图像中的对象",
-		meta.TypeOther:      "其他类型的模型",
+	modelTypeDescriptionIDs := map[meta.UploadFileType]string{
+		meta.TypeCheckpoint: "tui.model_type.checkpoint",
+		meta.TypeVae:        "tui.model_type.vae",
+		meta.TypeUNet:       "tui.model_type.unet",
+		meta.TypeLora:       "tui.model_type.lora",
+		meta.TypeControlNet: "tui.model_type.controlnet",
+		meta.TypeClip:       "tui.model_type.clip",
+		meta.TypeUpscale:    "tui.model_type.upscale",
+		meta.TypeDetection:  "tui.model_type.detection",
+		meta.TypeOther:      "tui.model_type.misc",
 	}
 
 	tItems := make([]list.Item, 0, len(meta.ModelTypes))
 	for _, t := range meta.ModelTypes {
 		s := string(t)
-		desc := modelTypeDescriptions[t]
+		desc := i18n.T(modelTypeDescriptionIDs[t], nil)
 		tItems = append(tItems, listItem{title: s, desc: desc})
 	}
 	tp := list.New(tItems, d, 30, len(tItems)*3)
-	tp.Title = "选择模型类型"
+	tp.Title = i18n.T("tui.model_type.title", nil)
+	localizeList(&tp)
 	tp.SetShowStatusBar(false)
 	tp.SetShowPagination(false)
 
 	// 初始化时创建空的基础模型列表，将在进入上传步骤时从后端加载
 	bl := list.New([]list.Item{}, d, 30, 12)
-	bl.Title = "选择 Base Model（必选）"
+	bl.Title = i18n.T("tui.choice.base_model", nil)
+	localizeList(&bl)
 
 	coverMethodItems := []list.Item{
-		listItem{title: "通过 URL 上传", desc: "输入图片或视频的网络链接"},
-		listItem{title: "从本地上传", desc: "从本地文件系统选择文件"},
+		listItem{title: i18n.T("tui.choice.cover_url", nil), desc: i18n.T("tui.choice.cover_url_desc", nil), value: "url"},
+		listItem{title: i18n.T("tui.choice.cover_local", nil), desc: i18n.T("tui.choice.cover_local_desc", nil), value: "local"},
 	}
 	cml := list.New(coverMethodItems, d, 30, 12)
-	cml.Title = "选择封面上传方式"
+	cml.Title = i18n.T("tui.choice.cover_method", nil)
+	localizeList(&cml)
 	cml.SetShowStatusBar(false)
 	cml.SetShowPagination(false)
 
 	introMethodItems := []list.Item{
-		listItem{title: "通过文件导入", desc: "从 .txt 或 .md 文件导入介绍内容"},
-		listItem{title: "直接输入", desc: "在文本编辑器中直接输入"},
+		listItem{title: i18n.T("tui.choice.intro_file", nil), desc: i18n.T("tui.choice.intro_file_desc", nil), value: "file"},
+		listItem{title: i18n.T("tui.choice.intro_direct", nil), desc: i18n.T("tui.choice.intro_direct_desc", nil), value: "direct"},
 	}
 	iml := list.New(introMethodItems, d, 30, 12)
-	iml.Title = "选择介绍输入方式"
+	iml.Title = i18n.T("tui.choice.intro_method", nil)
+	localizeList(&iml)
 	iml.SetShowStatusBar(false)
 	iml.SetShowPagination(false)
 
-	moreItems := []list.Item{listItem{title: "是，继续添加版本"}, listItem{title: "否，进入确认"}}
+	moreItems := []list.Item{
+		listItem{title: i18n.T("tui.choice.add_more", nil), value: "add"},
+		listItem{title: i18n.T("tui.choice.finish_versions", nil), value: "finish"},
+	}
 	ml := list.New(moreItems, d, 30, 12)
-	ml.Title = "是否继续添加版本？"
+	ml.Title = i18n.T("tui.choice.ask_more", nil)
+	localizeList(&ml)
 	ml.SetShowStatusBar(false)
 	ml.SetShowPagination(false)
 
 	publicItems := []list.Item{
-		listItem{title: "否，保持私有", desc: "该版本仅自己可见"},
-		listItem{title: "是，公开模型", desc: "该版本对所有用户公开"},
+		listItem{title: i18n.T("tui.choice.private", nil), desc: i18n.T("tui.choice.private_desc", nil), value: "private"},
+		listItem{title: i18n.T("tui.choice.public", nil), desc: i18n.T("tui.choice.public_desc", nil), value: "public"},
 	}
 	pl := list.New(publicItems, d, 30, 12)
-	pl.Title = "是否公开此版本？"
+	pl.Title = i18n.T("tui.choice.ask_public", nil)
+	localizeList(&pl)
 	pl.SetShowStatusBar(false)
 	pl.SetShowPagination(false)
 
 	inApi := textinput.New()
-	inApi.Placeholder = "请输入 API Key"
+	inApi.Placeholder = i18n.T("tui.input.api_key", nil)
 	inName := textinput.New()
-	inName.Placeholder = "请输入模型名称（字母/数字/下划线/短横线）"
+	inName.Placeholder = i18n.T("tui.input.model_name", nil)
 	inVer := textinput.New()
-	inVer.Placeholder = "请输入版本名称（默认: v1.0）"
+	inVer.Placeholder = i18n.T("tui.input.version", nil)
 	taIntro := textarea.New()
-	taIntro.Placeholder = "输入模型介绍（最多5000字，Ctrl+D 提交）"
+	taIntro.Placeholder = i18n.T("tui.input.intro", nil)
 	taIntro.CharLimit = 5000
 	taIntro.SetHeight(20)
 	taIntro.ShowLineNumbers = false
 	inPath := textinput.New()
-	inPath.Placeholder = "请输入文件路径（仅文件）"
+	inPath.Placeholder = i18n.T("tui.input.file_path", nil)
 	if homeDir, err := os.UserHomeDir(); err == nil {
 		inPath.SetValue(homeDir + "/")
 	}
 	inCover := textinput.New()
-	inCover.Placeholder = "可选，多地址以 ; 分隔"
+	inCover.Placeholder = i18n.T("tui.input.cover", nil)
 	inExt := textinput.New()
-	inExt.Placeholder = "可选，文件扩展名（如 .safetensors,.pth,.bin,.pt,.ckpt,.gguf,.sft）"
+	inExt.Placeholder = i18n.T("tui.input.extension", nil)
 
 	fp := filepicker.New()
 	homeDir, err := os.UserHomeDir()
@@ -214,13 +234,16 @@ func newMainModel() mainModel {
 	fp.FileAllowed = true
 	fp.SetHeight(10)
 	fp.AutoHeight = false
-	fp.Styles.EmptyDirectory = fp.Styles.EmptyDirectory.SetString("此目录为空。使用方向键导航到其他目录。注意文件路径输入框中的路径与下面文件选择器中的内容的同步")
+	fp.Styles.EmptyDirectory = fp.Styles.EmptyDirectory.SetString(i18n.T("tui.input.empty_directory", nil))
+	localizeFilePicker(&fp)
 
 	sp := spinner.New()
 	sp.Spinner = spinner.Dot
 	pr := progress.New(progress.WithDefaultGradient())
 
 	m := mainModel{
+		ctx:              ctx,
+		baseDomain:       baseDomain,
 		step:             mainStepHome,
 		menu:             menuList,
 		inpApi:           inApi,
@@ -286,8 +309,8 @@ func (m mainModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.width, m.height = msg.Width, msg.Height
 		innerW, innerH := m.computeInnerSizeFor(msg.Width, msg.Height)
 		lw := innerW - 6
-		if lw < 20 {
-			lw = 20
+		if lw < 10 {
+			lw = 10
 		}
 		m.menu.SetWidth(lw)
 		m.typeList.SetWidth(lw)
@@ -324,11 +347,11 @@ func (m mainModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 			}
 		}
-		if innerH > 15 {
-			m.filepicker.SetHeight(innerH - 19)
-		} else {
-			m.filepicker.SetHeight(5)
+		pickerHeight := innerH - 19
+		if pickerHeight < 5 {
+			pickerHeight = 5
 		}
+		m.filepicker.SetHeight(pickerHeight)
 
 		return m, nil
 	case tea.KeyMsg:
@@ -367,11 +390,11 @@ func (m mainModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			case mainStepLogin:
 				api := m.inpApi.Value()
 				if api == "" {
-					m.err = fmt.Errorf("API Key 不能为空")
+					m.err = i18n.NewError("tui.error.api_key_required", nil, nil)
 					return m, nil
 				}
 				m.running = true
-				return m, loginCmd(api)
+				return m, loginCmd(m.ctx, m.baseDomain, api)
 			case mainStepMenu:
 				if it, ok := m.menu.SelectedItem().(menuEntry); ok {
 					m.currentAction = it.key
@@ -382,26 +405,20 @@ func (m mainModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 						m.running = true
 						return m, runLogout()
 					case actionUpload:
-						m.checkingVPN = true
 						m.step = mainStepAction
 						m.act = actionInputs{}
 						m.upStep = stepType
 
-						var cmds []tea.Cmd
-
-						// 启动VPN检测
-						cmds = append(cmds, checkVPN())
-
 						// 如果还没有加载基础模型类型，则开始加载
 						if len(m.baseModelTypes) == 0 && !m.loadingBaseModelTypes {
 							m.loadingBaseModelTypes = true
-							cmds = append(cmds, loadBaseModelTypes(m.apiKey))
+							return m, loadBaseModelTypes(m.ctx, m.baseDomain, m.apiKey)
 						}
 
-						return m, tea.Batch(cmds...)
+						return m, nil
 					case actionLsModel:
 						m.running = true
-						return m, openMyModelsInBrowser()
+						return m, openMyModelsInBrowser(m.baseDomain)
 					}
 				}
 			case mainStepAction:
@@ -452,7 +469,7 @@ func (m mainModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if msg.err != nil {
 				m.err = msg.err
 			} else {
-				m.err = fmt.Errorf("登录失败")
+				m.err = i18n.NewError("tui.status.login_failed", nil, nil)
 			}
 			return m, nil
 		}
@@ -463,7 +480,7 @@ func (m mainModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case openBrowserDoneMsg:
 		m.running = false
 		if msg.err != nil {
-			m.output = fmt.Sprintf("无法打开浏览器，请在 %s 查看", msg.url)
+			m.output = i18n.T("tui.status.browser_failed", map[string]any{"URL": msg.url})
 		} else {
 			m.output = msg.msg
 		}
@@ -581,12 +598,6 @@ func (m mainModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		m.baseList.SetItems(bItems)
 		return m, nil
-	case vpnCheckMsg:
-		m.checkingVPN = false
-		if msg.err == nil && msg.result != nil {
-			m.vpnCheckResult = msg.result
-		}
-		return m, nil
 	case checkModelExistsDoneMsg:
 		m.running = false
 		if msg.err != nil {
@@ -595,7 +606,7 @@ func (m mainModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		if msg.exists {
 			// 模型名重复，显示错误并停留在 stepName
-			m.err = fmt.Errorf("模型名 '%s' 已存在，请换一个名字", m.act.u.name)
+			m.err = i18n.NewError("tui.error.model_exists", map[string]any{"Name": m.act.u.name}, nil)
 			m.inpName.SetValue("")
 			m.act.u.name = ""
 			return m, m.inpName.Focus()
@@ -652,8 +663,8 @@ func (m mainModel) View() string {
 		innerH = 5
 	}
 	panelW := innerW - 4
-	if panelW < 40 {
-		panelW = 40
+	if panelW < 12 {
+		panelW = 12
 	}
 	panel := m.panelStyle.Width(panelW)
 
@@ -661,23 +672,16 @@ func (m mainModel) View() string {
 	logoRendered := m.renderGradientLogo(m.smallLogo)
 	hint := m.renderStyledHint(m.getContextualHint())
 
-	// 如果检测到VPN且在上传流程中，添加VPN警告
-	var headerContent string
-	if m.step == mainStepAction && m.vpnCheckResult != nil && m.vpnCheckResult.IsUsingVPN {
-		vpnWarning := m.renderVPNWarning()
-		headerContent = lipgloss.JoinHorizontal(lipgloss.Top, logoRendered, "  ", hint, "  ", vpnWarning)
-	} else {
-		headerContent = lipgloss.JoinHorizontal(lipgloss.Top, logoRendered, "  ", hint)
-	}
+	headerContent := lipgloss.JoinHorizontal(lipgloss.Top, logoRendered, "  ", hint)
 	header := lipgloss.PlaceHorizontal(innerW, lipgloss.Left, headerContent)
 
 	// 退出确认界面优先级最高
 	if m.confirmingExit {
 		var b strings.Builder
-		b.WriteString(m.titleStyle.Render("确认退出"))
+		b.WriteString(m.titleStyle.Render(i18n.T("tui.status.confirm_exit_title", nil)))
 		b.WriteString("\n\n")
-		b.WriteString("确定要退出 BizyAir CLI 吗？\n\n")
-		b.WriteString(m.hintStyle.Render("确认退出：Enter，取消：Esc，再次按 Ctrl+C 也可退出"))
+		b.WriteString(i18n.T("tui.status.confirm_exit", nil) + "\n\n")
+		b.WriteString(m.hintStyle.Render(i18n.T("tui.status.confirm_exit_hint", nil)))
 		return m.renderFrame(header + "\n" + panel.Render(b.String()))
 	}
 
@@ -685,26 +689,26 @@ func (m mainModel) View() string {
 		defer func() { m.err = nil }()
 		var body strings.Builder
 		if step := errStep(m.err); step != "" {
-			body.WriteString(fmt.Sprintf("步骤: %s\n", step))
+			body.WriteString(i18n.T("tui.status.step", map[string]any{"Step": step}) + "\n")
 		}
-		body.WriteString(fmt.Sprintf("错误: %v", m.err))
-		return m.renderFrame(header + "\n" + panel.Render(m.titleStyle.Render("错误")+"\n"+body.String()+"\n\n"+m.hintStyle.Render("按任意键返回继续…")))
+		body.WriteString(i18n.T("tui.status.error", map[string]any{"Error": m.err}))
+		return m.renderFrame(header + "\n" + panel.Render(m.titleStyle.Render(i18n.T("tui.status.error_title", nil))+"\n"+body.String()+"\n\n"+m.hintStyle.Render(i18n.T("tui.hint.any_key", nil))))
 	}
 	if m.running {
 		if m.currentAction == actionUpload && m.step == mainStepAction {
 			// 如果是在 stepName 步骤，显示校验模型名的提示
 			if m.upStep == stepName {
 				spin := m.sp.View()
-				return m.renderFrame(header + "\n" + panel.Render(m.titleStyle.Render("上传 · Step 2/9 · 模型名称")+"\n\n"+m.inpName.View()+"\n\n"+spin+" 正在校验模型名是否重复…"))
+				return m.renderFrame(header + "\n" + panel.Render(m.titleStyle.Render(uploadTitle(2, "tui.upload.section.name"))+"\n\n"+m.inpName.View()+"\n\n"+spin+" "+i18n.T("tui.status.validating_name", nil)))
 			}
 			return m.renderFrame(header + "\n" + panel.Render(m.renderUploadRunningView()))
 		}
 		spin := m.sp.View()
-		return m.renderFrame(header + "\n" + panel.Render(m.titleStyle.Render("执行中")+"\n\n"+spin+" 正在等待 API 返回…"))
+		return m.renderFrame(header + "\n" + panel.Render(m.titleStyle.Render(i18n.T("tui.status.running", nil))+"\n\n"+spin+" "+i18n.T("tui.status.waiting_api", nil)))
 	}
 	switch m.step {
 	case mainStepLogin:
-		return m.renderFrame(header + "\n" + panel.Render(m.titleStyle.Render("登录 · 请输入 API Key")+"\n\n"+m.inpApi.View()+"\n"+m.hintStyle.Render("确认：Enter，返回：Esc，退出：Ctrl+C")))
+		return m.renderFrame(header + "\n" + panel.Render(m.titleStyle.Render(i18n.T("tui.status.login_title", nil))+"\n\n"+m.inpApi.View()+"\n"+m.hintStyle.Render(i18n.T("tui.hint.login", nil))))
 	case mainStepMenu:
 		logoStr := m.renderGradientLogo(m.logo)
 		menuTop := strings.Count(logoStr, "\n") + 2
@@ -713,7 +717,7 @@ func (m mainModel) View() string {
 			h = 6
 		}
 		m.menu.SetHeight(h)
-		return m.renderFrame(logoStr + "\n\n" + m.titleStyle.Render("功能选择") + "\n\n" + m.menu.View() + "\n" + m.hintStyle.Render("确认：Enter，返回：Esc，退出：Ctrl+C"))
+		return m.renderFrame(logoStr + "\n\n" + m.titleStyle.Render(i18n.T("tui.status.menu_title", nil)) + "\n\n" + m.menu.View() + "\n" + m.hintStyle.Render(i18n.T("tui.hint.menu_footer", nil)))
 	case mainStepAction:
 		return m.renderFrame(header + "\n" + panel.Render(m.renderActionView()))
 	case mainStepOutput:
@@ -723,16 +727,16 @@ func (m mainModel) View() string {
 				body += "\n"
 			}
 			if step := errStep(m.err); step != "" {
-				body += fmt.Sprintf("步骤: %s\n", step)
+				body += i18n.T("tui.status.step", map[string]any{"Step": step}) + "\n"
 			}
-			body += fmt.Sprintf("错误: %v", m.err)
-			return m.renderFrame(header + "\n" + panel.Render(m.titleStyle.Render("执行完成（含错误）")+"\n\n"+body+"\n\n"+m.hintStyle.Render("按 Enter 返回菜单")))
+			body += i18n.T("tui.status.error", map[string]any{"Error": m.err})
+			return m.renderFrame(header + "\n" + panel.Render(m.titleStyle.Render(i18n.T("tui.status.done_with_errors", nil))+"\n\n"+body+"\n\n"+m.hintStyle.Render(i18n.T("tui.hint.enter_menu", nil))))
 		}
-		return m.renderFrame(header + "\n" + panel.Render(m.titleStyle.Render("执行完成")+"\n\n"+m.output+"\n\n"+m.hintStyle.Render("按 Enter 返回菜单")))
+		return m.renderFrame(header + "\n" + panel.Render(m.titleStyle.Render(i18n.T("tui.status.done", nil))+"\n\n"+m.output+"\n\n"+m.hintStyle.Render(i18n.T("tui.hint.enter_menu", nil))))
 	default:
 		if m.running {
 			spin := m.sp.View()
-			return m.renderFrame(header + "\n" + panel.Render(m.titleStyle.Render("执行中")+"\n\n"+spin+" 正在等待 API 返回…"))
+			return m.renderFrame(header + "\n" + panel.Render(m.titleStyle.Render(i18n.T("tui.status.running", nil))+"\n\n"+spin+" "+i18n.T("tui.status.waiting_api", nil)))
 		}
 		return m.renderFrame(header)
 	}
@@ -762,12 +766,17 @@ func (m mainModel) renderGradientLogo(logoText string) string {
 }
 
 // openMyModelsInBrowser 在浏览器中打开我的模型页面
-func openMyModelsInBrowser() tea.Cmd {
+func openMyModelsInBrowser(baseDomain string) tea.Cmd {
 	return func() tea.Msg {
-		msg, err := lib.OpenBrowser(lib.MyModelsURL)
+		endpoints, resolveErr := lib.ResolveServiceEndpoints(baseDomain)
+		if resolveErr != nil {
+			return openBrowserDoneMsg{err: resolveErr}
+		}
+		url := endpoints.MyModelsURL()
+		msg, err := lib.OpenBrowser(url)
 		return openBrowserDoneMsg{
 			msg: msg,
-			url: lib.MyModelsURL,
+			url: url,
 			err: err,
 		}
 	}
@@ -775,7 +784,15 @@ func openMyModelsInBrowser() tea.Cmd {
 
 // 入口
 func MainTUI(c *cli.Context) error {
-	p := tea.NewProgram(newMainModel(), tea.WithAltScreen())
+	ctx := c.Context
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	p := tea.NewProgram(
+		newMainModelWithContext(ctx, c.String("base_domain")),
+		tea.WithAltScreen(),
+		tea.WithContext(ctx),
+	)
 	model, err := p.Run()
 	if err != nil {
 		return err

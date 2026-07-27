@@ -15,6 +15,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/dustin/go-humanize"
+	"github.com/siliconflow/bizyair-cli/internal/i18n"
 )
 
 var lastID int64
@@ -79,15 +80,15 @@ type KeyMap struct {
 // DefaultKeyMap defines the default keybindings.
 func DefaultKeyMap() KeyMap {
 	return KeyMap{
-		GoToTop:  key.NewBinding(key.WithKeys("g"), key.WithHelp("g", "first")),
-		GoToLast: key.NewBinding(key.WithKeys("G"), key.WithHelp("G", "last")),
-		Down:     key.NewBinding(key.WithKeys("j", "down", "ctrl+n"), key.WithHelp("j", "down")),
-		Up:       key.NewBinding(key.WithKeys("k", "up", "ctrl+p"), key.WithHelp("k", "up")),
-		PageUp:   key.NewBinding(key.WithKeys("K", "pgup"), key.WithHelp("pgup", "page up")),
-		PageDown: key.NewBinding(key.WithKeys("J", "pgdown"), key.WithHelp("pgdown", "page down")),
-		Back:     key.NewBinding(key.WithKeys("h", "backspace", "left", "esc"), key.WithHelp("h", "back")),
-		Open:     key.NewBinding(key.WithKeys("l", "right", "enter"), key.WithHelp("l", "open")),
-		Select:   key.NewBinding(key.WithKeys("enter"), key.WithHelp("enter", "select")),
+		GoToTop:  key.NewBinding(key.WithKeys("g"), key.WithHelp("g", i18n.T("tui.filepicker.first", nil))),
+		GoToLast: key.NewBinding(key.WithKeys("G"), key.WithHelp("G", i18n.T("tui.filepicker.last", nil))),
+		Down:     key.NewBinding(key.WithKeys("j", "down", "ctrl+n"), key.WithHelp("j", i18n.T("tui.filepicker.down", nil))),
+		Up:       key.NewBinding(key.WithKeys("k", "up", "ctrl+p"), key.WithHelp("k", i18n.T("tui.filepicker.up", nil))),
+		PageUp:   key.NewBinding(key.WithKeys("K", "pgup"), key.WithHelp("pgup", i18n.T("tui.filepicker.page_up", nil))),
+		PageDown: key.NewBinding(key.WithKeys("J", "pgdown"), key.WithHelp("pgdown", i18n.T("tui.filepicker.page_down", nil))),
+		Back:     key.NewBinding(key.WithKeys("h", "backspace", "left", "esc"), key.WithHelp("h", i18n.T("tui.filepicker.back", nil))),
+		Open:     key.NewBinding(key.WithKeys("l", "right", "enter"), key.WithHelp("l", i18n.T("tui.filepicker.open", nil))),
+		Select:   key.NewBinding(key.WithKeys("enter"), key.WithHelp("enter", i18n.T("tui.filepicker.select", nil))),
 	}
 }
 
@@ -125,7 +126,7 @@ func DefaultStylesWithRenderer(r *lipgloss.Renderer) Styles {
 		Permission:       r.NewStyle().Foreground(lipgloss.Color("244")),
 		Selected:         r.NewStyle().Foreground(lipgloss.Color("212")).Bold(true),
 		FileSize:         r.NewStyle().Foreground(lipgloss.Color("240")).Width(fileSizeWidth).Align(lipgloss.Right),
-		EmptyDirectory:   r.NewStyle().Foreground(lipgloss.Color("240")).PaddingLeft(paddingLeft).SetString("Bummer. No Files Found."),
+		EmptyDirectory:   r.NewStyle().Foreground(lipgloss.Color("240")).PaddingLeft(paddingLeft).SetString(i18n.T("tui.input.empty_directory", nil)),
 	}
 }
 
@@ -147,6 +148,7 @@ type Model struct {
 	FilterPrefix string
 
 	KeyMap          KeyMap
+	allFiles        []os.DirEntry
 	files           []os.DirEntry
 	ShowPermissions bool
 	ShowSize        bool
@@ -259,10 +261,71 @@ func (m Model) Init() tea.Cmd {
 
 // SetHeight sets the height of the filepicker.
 func (m *Model) SetHeight(height int) {
-	m.Height = height
-	if m.max > m.Height-1 {
-		m.max = m.min + m.Height - 1
+	if height < 1 {
+		height = 1
 	}
+	m.Height = height
+	m.ensureViewport()
+}
+
+// SetFilterPrefix updates the filename prefix filter and resets the viewport to
+// the first matching entry.
+func (m *Model) SetFilterPrefix(prefix string) {
+	if m.FilterPrefix == prefix {
+		return
+	}
+	m.FilterPrefix = prefix
+	m.rebuildFilteredFiles()
+	m.Path = ""
+	m.selected = 0
+	m.min = 0
+	m.ensureViewport()
+}
+
+func (m *Model) rebuildFilteredFiles() {
+	m.files = m.files[:0]
+	for _, entry := range m.allFiles {
+		if m.matchesFilter(entry.Name()) {
+			m.files = append(m.files, entry)
+		}
+	}
+}
+
+func (m *Model) ensureViewport() {
+	if m.Height < 1 {
+		m.Height = 1
+	}
+
+	if len(m.files) == 0 {
+		m.selected = 0
+		m.min = 0
+		m.max = m.Height - 1
+		return
+	}
+
+	if m.selected < 0 {
+		m.selected = 0
+	} else if m.selected >= len(m.files) {
+		m.selected = len(m.files) - 1
+	}
+
+	maxMin := max(0, len(m.files)-m.Height)
+	if m.min < 0 {
+		m.min = 0
+	} else if m.min > maxMin {
+		m.min = maxMin
+	}
+
+	if m.selected < m.min {
+		m.min = m.selected
+	} else if m.selected >= m.min+m.Height {
+		m.min = m.selected - m.Height + 1
+	}
+
+	if m.min > maxMin {
+		m.min = maxMin
+	}
+	m.max = min(len(m.files)-1, m.min+m.Height-1)
 }
 
 // Update handles user interactions within the file picker model.
@@ -272,93 +335,54 @@ func (m Model) Update(msg tea.Msg) (Model, tea.Cmd) {
 		if msg.id != m.id {
 			break
 		}
-		m.files = msg.entries
-		m.max = max(m.max, m.Height-1)
-
-		// 修复：当文件列表变化后，确保 selected 索引有效
-		if len(m.files) == 0 {
-			m.selected = 0
-		} else if m.selected >= len(m.files) {
-			m.selected = len(m.files) - 1
-		}
-
-		// 如果当前选中的文件不可见（被过滤隐藏），跳转到第一个可见的文件
-		if len(m.files) > 0 && !m.isFileVisible(m.selected) {
-			m.selected = m.findFirstVisibleFile()
-		}
-
-		// 同时调整 min 和 max 以确保视图范围有效
-		if m.min >= len(m.files) && len(m.files) > 0 {
-			m.min = 0
-		}
-		if m.max >= len(m.files) && len(m.files) > 0 {
-			m.max = len(m.files) - 1
-		}
+		m.allFiles = msg.entries
+		m.rebuildFilteredFiles()
+		m.ensureViewport()
 	case tea.WindowSizeMsg:
 		if m.AutoHeight {
-			m.Height = msg.Height - marginBottom
+			m.SetHeight(msg.Height - marginBottom)
+		} else {
+			m.ensureViewport()
 		}
-		m.max = m.Height - 1
 	case tea.KeyMsg:
 		switch {
 		case key.Matches(msg, m.KeyMap.GoToTop):
-			m.selected = m.findFirstVisibleFile()
+			m.selected = 0
 			m.min = 0
-			m.max = m.Height - 1
+			m.ensureViewport()
 		case key.Matches(msg, m.KeyMap.GoToLast):
-			m.selected = m.findLastVisibleFile()
-			m.min = len(m.files) - m.Height
-			m.max = len(m.files) - 1
+			if len(m.files) == 0 {
+				break
+			}
+			m.selected = len(m.files) - 1
+			m.min = max(0, len(m.files)-m.Height)
+			m.ensureViewport()
 		case key.Matches(msg, m.KeyMap.Down):
-			// 查找下一个可见的文件
-			nextVisible := m.findNextVisibleFile(m.selected + 1)
-			if nextVisible != m.selected+1 || m.isFileVisible(nextVisible) {
-				m.selected = nextVisible
+			if len(m.files) == 0 {
+				break
 			}
-			if m.selected >= len(m.files) {
-				m.selected = len(m.files) - 1
-			}
-			if m.selected > m.max {
-				m.min++
-				m.max++
-			}
+			m.selected = min(m.selected+1, len(m.files)-1)
+			m.ensureViewport()
 		case key.Matches(msg, m.KeyMap.Up):
-			// 查找上一个可见的文件
-			prevVisible := m.findPrevVisibleFile(m.selected - 1)
-			if prevVisible != m.selected-1 || m.isFileVisible(prevVisible) {
-				m.selected = prevVisible
+			if len(m.files) == 0 {
+				break
 			}
-			if m.selected < 0 {
-				m.selected = 0
-			}
-			if m.selected < m.min {
-				m.min--
-				m.max--
-			}
+			m.selected = max(m.selected-1, 0)
+			m.ensureViewport()
 		case key.Matches(msg, m.KeyMap.PageDown):
-			m.selected += m.Height
-			if m.selected >= len(m.files) {
-				m.selected = len(m.files) - 1
+			if len(m.files) == 0 {
+				break
 			}
-			m.min += m.Height
-			m.max += m.Height
-
-			if m.max >= len(m.files) {
-				m.max = len(m.files) - 1
-				m.min = m.max - m.Height
-			}
+			m.selected = min(m.selected+m.Height, len(m.files)-1)
+			m.min = min(m.min+m.Height, max(0, len(m.files)-m.Height))
+			m.ensureViewport()
 		case key.Matches(msg, m.KeyMap.PageUp):
-			m.selected -= m.Height
-			if m.selected < 0 {
-				m.selected = 0
+			if len(m.files) == 0 {
+				break
 			}
-			m.min -= m.Height
-			m.max -= m.Height
-
-			if m.min < 0 {
-				m.min = 0
-				m.max = m.min + m.Height
-			}
+			m.selected = max(m.selected-m.Height, 0)
+			m.min = max(m.min-m.Height, 0)
+			m.ensureViewport()
 		case key.Matches(msg, m.KeyMap.Back):
 			m.CurrentDirectory = filepath.Dir(m.CurrentDirectory)
 			if m.selectedStack.Length() > 0 {
@@ -428,11 +452,6 @@ func (m Model) View() string {
 		}
 
 		name := f.Name()
-
-		// 应用过滤：跳过不匹配的文件和目录
-		if !m.matchesFilter(name) {
-			continue
-		}
 
 		var symlinkPath string
 		info, _ := f.Info()
@@ -570,8 +589,9 @@ func (m Model) canSelect(file string) bool {
 		return true
 	}
 
+	lowerFile := strings.ToLower(file)
 	for _, ext := range m.AllowedTypes {
-		if strings.HasSuffix(file, ext) {
+		if strings.HasSuffix(lowerFile, strings.ToLower(ext)) {
 			return true
 		}
 	}
@@ -584,47 +604,4 @@ func (m Model) matchesFilter(name string) bool {
 		return true
 	}
 	return strings.HasPrefix(strings.ToLower(name), strings.ToLower(m.FilterPrefix))
-}
-
-// isFileVisible 检查文件是否可见（匹配过滤条件）
-func (m Model) isFileVisible(index int) bool {
-	if index < 0 || index >= len(m.files) {
-		return false
-	}
-	return m.matchesFilter(m.files[index].Name())
-}
-
-// findNextVisibleFile 查找下一个可见的文件索引
-func (m Model) findNextVisibleFile(start int) int {
-	for i := start; i < len(m.files); i++ {
-		if m.isFileVisible(i) {
-			return i
-		}
-	}
-	return start // 如果没找到，返回起始位置
-}
-
-// findPrevVisibleFile 查找上一个可见的文件索引
-func (m Model) findPrevVisibleFile(start int) int {
-	for i := start; i >= 0; i-- {
-		if m.isFileVisible(i) {
-			return i
-		}
-	}
-	return start // 如果没找到，返回起始位置
-}
-
-// findFirstVisibleFile 查找第一个可见的文件索引
-func (m Model) findFirstVisibleFile() int {
-	return m.findNextVisibleFile(0)
-}
-
-// findLastVisibleFile 查找最后一个可见的文件索引
-func (m Model) findLastVisibleFile() int {
-	for i := len(m.files) - 1; i >= 0; i-- {
-		if m.isFileVisible(i) {
-			return i
-		}
-	}
-	return 0
 }

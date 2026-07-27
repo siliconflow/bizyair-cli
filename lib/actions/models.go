@@ -1,14 +1,21 @@
 package actions
 
 import (
+	"context"
+
+	"github.com/siliconflow/bizyair-cli/internal/i18n"
 	"github.com/siliconflow/bizyair-cli/lib"
 	"github.com/siliconflow/bizyair-cli/meta"
 )
 
 func ListModels(api lib.BizyAPI, input ListModelsInput) ListModelsResult {
+	ctx := input.Context
+	if ctx == nil {
+		ctx = context.Background()
+	}
 	if input.ApiKey == "" {
 		return ListModelsResult{
-			Error: lib.WithStep("查询模型列表", lib.NewValidationError("未登录或缺少API Key")),
+			Error: lib.WithStep(i18n.T("step.list_models"), i18n.NewError("error.auth.api_key_missing", nil, nil)),
 		}
 	}
 
@@ -33,7 +40,8 @@ func ListModels(api lib.BizyAPI, input ListModelsInput) ListModelsResult {
 		}
 	}
 
-	resp, err := api.ListModel(
+	resp, err := api.ListModelContext(
+		ctx,
 		input.Current,
 		input.PageSize,
 		input.Keyword,
@@ -43,7 +51,7 @@ func ListModels(api lib.BizyAPI, input ListModelsInput) ListModelsResult {
 	)
 	if err != nil {
 		return ListModelsResult{
-			Error: lib.WithStep("查询模型列表", err),
+			Error: lib.WithStep(i18n.T("step.list_models"), err),
 		}
 	}
 
@@ -54,16 +62,20 @@ func ListModels(api lib.BizyAPI, input ListModelsInput) ListModelsResult {
 }
 
 func GetModelDetail(api lib.BizyAPI, modelId int64) ModelDetailResult {
-	resp, err := api.GetBizyModelDetail(modelId)
+	return GetModelDetailContext(context.Background(), api, modelId)
+}
+
+func GetModelDetailContext(ctx context.Context, api lib.BizyAPI, modelId int64) ModelDetailResult {
+	resp, err := api.GetBizyModelDetailContext(ctx, modelId)
 	if err != nil {
 		return ModelDetailResult{
-			Error: lib.WithStep("查询模型详情", err),
+			Error: lib.WithStep(i18n.T("step.model_detail"), err),
 		}
 	}
 
 	if resp == nil || resp.Data.Id == 0 {
 		return ModelDetailResult{
-			Error: lib.WithStep("查询模型详情", lib.NewValidationError("未获取到模型详情")),
+			Error: lib.WithStep(i18n.T("step.model_detail"), i18n.NewError("error.model.detail_missing", nil, nil)),
 		}
 	}
 
@@ -73,11 +85,15 @@ func GetModelDetail(api lib.BizyAPI, modelId int64) ModelDetailResult {
 }
 
 func DeleteModel(api lib.BizyAPI, modelId int64) DeleteModelResult {
-	_, err := api.DeleteBizyModelById(modelId)
+	return DeleteModelContext(context.Background(), api, modelId)
+}
+
+func DeleteModelContext(ctx context.Context, api lib.BizyAPI, modelId int64) DeleteModelResult {
+	_, err := api.DeleteBizyModelByIdContext(ctx, modelId)
 	if err != nil {
 		return DeleteModelResult{
 			Success: false,
-			Error:   lib.WithStep("删除模型", err),
+			Error:   lib.WithStep(i18n.T("step.delete_model"), err),
 		}
 	}
 

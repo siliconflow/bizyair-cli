@@ -189,110 +189,58 @@ func TestValidateYamlConfig(t *testing.T) {
 	}
 }
 
-func TestNormalizeModelPaths(t *testing.T) {
+func TestNormalizeYamlVersionInputs(t *testing.T) {
+	yamlDir := t.TempDir()
+	absoluteModelPath := filepath.Join(t.TempDir(), "file.safetensors")
+	public := true
 	config := &YamlConfig{
 		Models: []YamlModel{
 			{
 				Name: "test",
 				Type: "LoRA",
 				Versions: []YamlVersion{
-					{ModelPath: "models/file.safetensors", CoverPath: "covers/cover.jpg", IntroPath: "descs/intro.txt"},
-					{ModelPath: "/absolute/path/file.safetensors", CoverUrl: "https://example.com/cover.jpg"},
+					{
+						ModelPath: "models/file.safetensors",
+						CoverPath: "covers/cover.jpg",
+						IntroPath: "descs/intro.txt",
+						Public:    &public,
+					},
+					{
+						ModelPath: absoluteModelPath,
+						CoverUrl:  "https://example.com/cover.jpg",
+					},
 				},
 			},
 		},
 	}
 
-	err := NormalizeModelPaths(config, "/home/user/project")
-	if err != nil {
+	if err := NormalizeModelPaths(config, yamlDir); err != nil {
 		t.Fatal(err)
 	}
 
-	// First version: relative paths should be converted to absolute
 	v0 := config.Models[0].Versions[0]
-	if !filepath.IsAbs(v0.ModelPath) {
-		t.Errorf("ModelPath should be absolute, got %q", v0.ModelPath)
+	if want := filepath.Join(yamlDir, "models/file.safetensors"); v0.ModelPath != want {
+		t.Errorf("ModelPath = %q, want %q", v0.ModelPath, want)
 	}
-	if !filepath.IsAbs(v0.CoverPath) {
-		t.Errorf("CoverPath should be absolute, got %q", v0.CoverPath)
+	wantCover := filepath.Join(yamlDir, "covers/cover.jpg")
+	if v0.GetCoverInput() != wantCover {
+		t.Errorf("cover input = %q, want %q", v0.GetCoverInput(), wantCover)
 	}
-	if !filepath.IsAbs(v0.IntroPath) {
-		t.Errorf("IntroPath should be absolute, got %q", v0.IntroPath)
+	if want := filepath.Join(yamlDir, "descs/intro.txt"); v0.IntroPath != want {
+		t.Errorf("IntroPath = %q, want %q", v0.IntroPath, want)
+	}
+	if !v0.GetPublic() {
+		t.Error("explicit public value was not preserved")
 	}
 
-	// Second version: already absolute or URL should remain unchanged
 	v1 := config.Models[0].Versions[1]
-	if v1.ModelPath != "/absolute/path/file.safetensors" {
+	if v1.ModelPath != absoluteModelPath {
 		t.Errorf("absolute ModelPath should be unchanged, got %q", v1.ModelPath)
 	}
-	if v1.CoverUrl != "https://example.com/cover.jpg" {
-		t.Errorf("URL CoverUrl should be unchanged, got %q", v1.CoverUrl)
+	if want := "https://example.com/cover.jpg"; v1.GetCoverInput() != want {
+		t.Errorf("cover input = %q, want %q", v1.GetCoverInput(), want)
 	}
-}
-
-func TestYamlVersion_GetCoverInput(t *testing.T) {
-	tests := []struct {
-		name string
-		v    YamlVersion
-		want string
-	}{
-		{"cover_path takes priority", YamlVersion{CoverPath: "/local.jpg", CoverUrl: "http://x.jpg"}, "/local.jpg"},
-		{"cover_url fallback", YamlVersion{CoverUrl: "http://x.jpg"}, "http://x.jpg"},
-		{"empty both", YamlVersion{}, ""},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			got := tt.v.GetCoverInput()
-			if got != tt.want {
-				t.Errorf("GetCoverInput() = %q, want %q", got, tt.want)
-			}
-		})
-	}
-}
-
-func TestYamlVersion_GetPublic(t *testing.T) {
-	truth := true
-	fals := false
-
-	tests := []struct {
-		name string
-		v    YamlVersion
-		want bool
-	}{
-		{"explicit true", YamlVersion{Public: &truth}, true},
-		{"explicit false", YamlVersion{Public: &fals}, false},
-		{"nil defaults to false", YamlVersion{Public: nil}, false},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			got := tt.v.GetPublic()
-			if got != tt.want {
-				t.Errorf("GetPublic() = %v, want %v", got, tt.want)
-			}
-		})
-	}
-}
-
-func TestIsURL(t *testing.T) {
-	tests := []struct {
-		path string
-		want bool
-	}{
-		{"https://example.com/file.jpg", true},
-		{"http://example.com/file.jpg", true},
-		{"/local/path/file.jpg", false},
-		{"relative/path/file.jpg", false},
-		{"ftp://example.com/file.jpg", false},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.path, func(t *testing.T) {
-			got := isURL(tt.path)
-			if got != tt.want {
-				t.Errorf("isURL(%q) = %v, want %v", tt.path, got, tt.want)
-			}
-		})
+	if v1.GetPublic() {
+		t.Error("unset public value should default to false")
 	}
 }

@@ -14,18 +14,22 @@ import (
 	"github.com/aliyun/alibabacloud-oss-go-sdk-v2/oss"
 	"github.com/aliyun/alibabacloud-oss-go-sdk-v2/oss/credentials"
 	"github.com/cloudwego/hertz/cmd/hz/util/logs"
+	"github.com/siliconflow/bizyair-cli/internal/i18n"
 	"github.com/siliconflow/bizyair-cli/meta"
 )
 
 type AliOssStorageClient struct {
-	ossClient        *oss.Client
-	ossBucketName    string
-	ossRegion        string
-	ossSecurityToken string
-	ossEndpoint      string
-	ossAccessKeyId   string
-	ossAccessKey     string
-	ossExpiration    string
+	ossClient     ossObjectClient
+	ossBucketName string
+	ossRegion     string
+	ossEndpoint   string
+}
+
+type ossObjectClient interface {
+	PutObject(context.Context, *oss.PutObjectRequest, ...func(*oss.Options)) (*oss.PutObjectResult, error)
+	InitiateMultipartUpload(context.Context, *oss.InitiateMultipartUploadRequest, ...func(*oss.Options)) (*oss.InitiateMultipartUploadResult, error)
+	UploadPart(context.Context, *oss.UploadPartRequest, ...func(*oss.Options)) (*oss.UploadPartResult, error)
+	CompleteMultipartUpload(context.Context, *oss.CompleteMultipartUploadRequest, ...func(*oss.Options)) (*oss.CompleteMultipartUploadResult, error)
 }
 
 type FileToUpload struct {
@@ -63,23 +67,14 @@ func NewAliOssStorageClient(endpoint, bucketName, accessKey, secretKey, security
 	client := oss.NewClient(cfg)
 
 	ossStorageClient := &AliOssStorageClient{
-		ossClient:        client,
-		ossBucketName:    bucketName,
-		ossRegion:        region,
-		ossSecurityToken: securityToken,
-		ossEndpoint:      endpoint,
-		ossAccessKeyId:   accessKey,
-		ossAccessKey:     secretKey,
-		ossExpiration:    "",
+		ossClient:     client,
+		ossBucketName: bucketName,
+		ossRegion:     region,
+		ossEndpoint:   endpoint,
 	}
 
-	logs.Debugf("new oss storage client: %v", ossStorageClient)
+	logs.Debugf("new oss storage client: endpoint=%s bucket=%s region=%s", endpoint, bucketName, region)
 	return ossStorageClient, nil
-}
-
-// SetExpiration 设置当前临时凭证过期时间（用于写入 checkpoint）
-func (a *AliOssStorageClient) SetExpiration(exp string) {
-	a.ossExpiration = exp
 }
 
 func (a *AliOssStorageClient) UploadFile(file *FileToUpload, objectName string, fileIndex string, progress func(int64, int64)) (string, error) {
@@ -90,7 +85,7 @@ func (a *AliOssStorageClient) UploadFileCtx(ctx context.Context, file *FileToUpl
 	// 获取文件信息
 	fileInfo, err := os.Stat(file.Path)
 	if err != nil {
-		return "", fmt.Errorf("failed to stat file %v", err)
+		return "", i18n.NewError("error.io.stat_failed", map[string]any{"Path": file.Path}, err)
 	}
 
 	totalSize := fileInfo.Size()
@@ -99,7 +94,7 @@ func (a *AliOssStorageClient) UploadFileCtx(ctx context.Context, file *FileToUpl
 	// 打开文件
 	f, err := os.Open(file.Path)
 	if err != nil {
-		return "", fmt.Errorf("failed to open local file %v", err)
+		return "", i18n.NewError("error.io.open_file_failed", map[string]any{"Path": file.Path}, err)
 	}
 	defer f.Close()
 
@@ -124,7 +119,7 @@ func (a *AliOssStorageClient) UploadFileCtx(ctx context.Context, file *FileToUpl
 
 	_, err = a.ossClient.PutObject(ctx, putRequest)
 	if err != nil {
-		return "", fmt.Errorf("failed to put object %v", err)
+		return "", i18n.NewError("error.oss.put_failed", map[string]any{"Object": objectName}, err)
 	}
 
 	// 确保进度回调显示100%
@@ -161,10 +156,13 @@ func (pr *progressReader) Read(p []byte) (n int, err error) {
 
 // UploadFileMultipart 使用分片上传方式上传文件（支持断点续传）
 func (a *AliOssStorageClient) UploadFileMultipart(ctx context.Context, file *FileToUpload, objectName string, fileIndex string, progress func(int64, int64)) (string, error) {
+	if ctx == nil {
+		ctx = context.Background()
+	}
 	// 获取文件信息
 	fileInfo, err := os.Stat(file.Path)
 	if err != nil {
-		return "", fmt.Errorf("failed to stat file: %v", err)
+		return "", i18n.NewError("error.io.stat_failed", map[string]any{"Path": file.Path}, err)
 	}
 
 	totalSize := fileInfo.Size()
@@ -188,10 +186,59 @@ func (a *AliOssStorageClient) UploadFileMultipart(ctx context.Context, file *Fil
 		logs.Warnf("[%s] failed to get checkpoint file: %v, will proceed without checkpoint\n", fileIndex, err)
 		checkpointFile = ""
 	}
+	return a.uploadFileMultipartWithRetry(ctx, file, objectName, fileIndex, totalSize, progress, checkpointFile)
+}
+
+const maxNoSuchUploadRestarts = 1
+
+func (a *AliOssStorageClient) uploadFileMultipartWithRetry(
+	ctx context.Context,
+	file *FileToUpload,
+	objectName string,
+	fileIndex string,
+	totalSize int64,
+	progress func(int64, int64),
+	checkpointFile string,
+) (string, error) {
+	for restart := 0; ; restart++ {
+		result, err := a.uploadFileMultipartOnce(ctx, file, objectName, fileIndex, totalSize, progress, checkpointFile)
+		if err == nil {
+			return result, nil
+		}
+		if ctx.Err() != nil {
+			return "", ctx.Err()
+		}
+		if !isNoSuchUpload(err) {
+			return "", err
+		}
+
+		// The upload ID is unusable. Never leave it in a checkpoint, even when
+		// the single automatic restart has already been consumed.
+		if checkpointFile != "" {
+			_ = DeleteCheckpoint(checkpointFile)
+		}
+		file.RemoteKey = ""
+		if restart >= maxNoSuchUploadRestarts {
+			return "", err
+		}
+		logs.Warnf("[%s] uploadID is invalid or expired; restarting multipart upload once\n", fileIndex)
+	}
+}
+
+func (a *AliOssStorageClient) uploadFileMultipartOnce(
+	ctx context.Context,
+	file *FileToUpload,
+	objectName string,
+	fileIndex string,
+	totalSize int64,
+	progress func(int64, int64),
+	checkpointFile string,
+) (string, error) {
 
 	var uploadID string
 	var checkpoint *CheckpointInfo
 	var existingParts []oss.UploadPart
+	var err error
 
 	// 尝试加载checkpoint（仅使用当前正确命名规则）
 	if checkpointFile != "" {
@@ -210,28 +257,6 @@ func (a *AliOssStorageClient) UploadFileMultipart(ctx context.Context, file *Fil
 				objectName = checkpoint.ObjectKey
 				file.RemoteKey = objectName
 			}
-			// 如果 checkpoint 携带凭证，检查是否过期
-			if checkpoint.AccessKeyId != "" && checkpoint.AccessKeySecret != "" {
-				// 检查凭证是否过期
-				if !IsCredentialExpired(checkpoint.Expiration) {
-					logs.Debugf("[%s] checkpoint credentials are valid, using them\n", fileIndex)
-					if cli, cerr := NewAliOssStorageClient(checkpoint.Endpoint, checkpoint.Bucket, checkpoint.AccessKeyId, checkpoint.AccessKeySecret, checkpoint.SecurityToken); cerr == nil {
-						a.ossClient = cli.ossClient
-						a.ossBucketName = checkpoint.Bucket
-						a.ossRegion = parseRegionFromEndpoint(checkpoint.Endpoint)
-						a.ossSecurityToken = checkpoint.SecurityToken
-						a.ossEndpoint = checkpoint.Endpoint
-						a.ossAccessKeyId = checkpoint.AccessKeyId
-						a.ossAccessKey = checkpoint.AccessKeySecret
-					} else {
-						logs.Warnf("[%s] failed to rebuild client from checkpoint: %v\n", fileIndex, cerr)
-					}
-				} else {
-					logs.Warnf("[%s] checkpoint credentials expired, will refresh from server\n", fileIndex)
-				}
-			}
-			// 注意：即使凭证过期，我们仍保留 uploadID 和已上传分片信息
-			// 调用方需要提供新的凭证来继续上传
 			existingParts = checkpoint.UploadedParts
 		} else if checkpoint != nil {
 			logs.Warnf("[%s] checkpoint validation failed, starting new upload\n", fileIndex)
@@ -247,51 +272,31 @@ func (a *AliOssStorageClient) UploadFileMultipart(ctx context.Context, file *Fil
 	if uploadID == "" {
 		initResult, err := a.initiateMultipartUpload(ctx, objectName)
 		if err != nil {
-			return "", fmt.Errorf("failed to initiate multipart upload: %v", err)
+			return "", i18n.NewError("error.oss.multipart_start_failed", map[string]any{"Object": objectName}, err)
 		}
 		uploadID = *initResult.UploadId
 		logs.Debugf("[%s] initiated new upload (uploadID: %s)\n", fileIndex, uploadID)
 
 		// 创建新的checkpoint
 		checkpoint = &CheckpointInfo{
-			ObjectKey:       objectName,
-			UploadID:        uploadID,
-			FilePath:        file.Path,
-			FileSize:        totalSize,
-			FileSignature:   file.Signature,
-			PartSize:        meta.MultipartPartSize,
-			TotalParts:      (totalSize + meta.MultipartPartSize - 1) / meta.MultipartPartSize,
-			UploadedParts:   []oss.UploadPart{},
-			CreatedAt:       time.Now(),
-			Bucket:          a.ossBucketName,
-			Region:          a.ossRegion,
-			Endpoint:        a.ossEndpoint,
-			AccessKeyId:     a.ossAccessKeyId,
-			AccessKeySecret: a.ossAccessKey,
-			SecurityToken:   a.ossSecurityToken,
-			Expiration:      a.ossExpiration,
+			ObjectKey:     objectName,
+			UploadID:      uploadID,
+			FilePath:      file.Path,
+			FileSize:      totalSize,
+			FileSignature: file.Signature,
+			PartSize:      meta.MultipartPartSize,
+			TotalParts:    (totalSize + meta.MultipartPartSize - 1) / meta.MultipartPartSize,
+			UploadedParts: []oss.UploadPart{},
+			CreatedAt:     time.Now(),
+			Bucket:        a.ossBucketName,
+			Region:        a.ossRegion,
+			Endpoint:      a.ossEndpoint,
 		}
 		// 保存当前使用的远端key，供上层在提交阶段复用
 		file.RemoteKey = objectName
 		// 立即保存一次 checkpoint（若启用）
 		if checkpointFile != "" {
 			_ = SaveCheckpoint(checkpoint)
-		}
-	} else if checkpoint != nil {
-		// 如果是从checkpoint续传，但凭证已更新（外部传入了新凭证），则更新checkpoint中的凭证信息
-		if checkpoint.AccessKeyId != a.ossAccessKeyId || checkpoint.Expiration != a.ossExpiration {
-			logs.Debugf("[%s] updating checkpoint with refreshed credentials\n", fileIndex)
-			checkpoint.Bucket = a.ossBucketName
-			checkpoint.Region = a.ossRegion
-			checkpoint.Endpoint = a.ossEndpoint
-			checkpoint.AccessKeyId = a.ossAccessKeyId
-			checkpoint.AccessKeySecret = a.ossAccessKey
-			checkpoint.SecurityToken = a.ossSecurityToken
-			checkpoint.Expiration = a.ossExpiration
-			// 立即保存更新后的凭证
-			if checkpointFile != "" {
-				_ = SaveCheckpoint(checkpoint)
-			}
 		}
 	}
 
@@ -304,27 +309,15 @@ func (a *AliOssStorageClient) UploadFileMultipart(ctx context.Context, file *Fil
 			return "", err // 直接返回不包装，保持 context.Canceled 类型
 		}
 
-		// 检查是否是 NoSuchUpload 错误（UploadID已失效）
-		errStr := err.Error()
-		if strings.Contains(errStr, "NoSuchUpload") || strings.Contains(errStr, "does not exist") {
-			logs.Warnf("[%s] uploadID is invalid or expired, deleting checkpoint and restarting...\n", fileIndex)
-			// 删除无效的checkpoint
-			if checkpointFile != "" {
-				_ = DeleteCheckpoint(checkpointFile)
-			}
-			// 重新开始上传（递归调用一次）
-			return a.UploadFileMultipart(ctx, file, objectName, fileIndex, progress)
-		}
-
 		// 其他错误：保留 checkpoint，便于下次自动断点续传；不调用 Abort
 		logs.Warnf("[%s] upload failed, keep checkpoint for resuming: %v\n", fileIndex, err)
-		return "", fmt.Errorf("failed to upload parts: %v", err)
+		return "", i18n.NewError("error.oss.parts_failed", map[string]any{"Object": objectName}, err)
 	}
 
 	// 完成分片上传
 	_, err = a.completeMultipartUpload(ctx, objectName, uploadID, parts)
 	if err != nil {
-		return "", fmt.Errorf("failed to complete multipart upload: %v", err)
+		return "", i18n.NewError("error.oss.multipart_complete_failed", map[string]any{"Object": objectName}, err)
 	}
 
 	// 确保进度回调显示100%
@@ -339,6 +332,18 @@ func (a *AliOssStorageClient) UploadFileMultipart(ctx context.Context, file *Fil
 
 	logs.Debugf("[%s] multipart upload completed: %s\n", fileIndex, objectName)
 	return fmt.Sprintf(meta.OSSObjectKey, a.ossBucketName, a.ossRegion, objectName), nil
+}
+
+func isNoSuchUpload(err error) bool {
+	if err == nil {
+		return false
+	}
+	var serviceErr *oss.ServiceError
+	if errors.As(err, &serviceErr) {
+		return serviceErr.Code == "NoSuchUpload"
+	}
+	// Keep compatibility with wrapped responses from older OSS SDK versions.
+	return strings.Contains(err.Error(), "NoSuchUpload")
 }
 
 // initiateMultipartUpload 初始化分片上传
@@ -364,6 +369,9 @@ func (a *AliOssStorageClient) uploadParts(
 	progress func(int64, int64),
 	checkpointFile string,
 ) ([]oss.UploadPart, error) {
+	if ctx == nil {
+		ctx = context.Background()
+	}
 	partSize := int64(meta.MultipartPartSize)
 	partCount := (totalSize + partSize - 1) / partSize
 
@@ -372,7 +380,7 @@ func (a *AliOssStorageClient) uploadParts(
 	// 打开文件
 	f, err := os.Open(file.Path)
 	if err != nil {
-		return nil, fmt.Errorf("failed to open file: %v", err)
+		return nil, i18n.NewError("error.io.open_file_failed", map[string]any{"Path": file.Path}, err)
 	}
 	defer f.Close()
 
@@ -409,11 +417,63 @@ func (a *AliOssStorageClient) uploadParts(
 		}
 	}
 
+	workerCtx, cancel := context.WithCancel(ctx)
+	defer cancel()
+
 	// 使用信号量控制并发数
 	sem := make(chan struct{}, meta.MultipartParallel)
-	errChan := make(chan error, partCount)
+	errChan := make(chan error, meta.MultipartParallel)
 	var wg sync.WaitGroup
-	var mu sync.Mutex
+	var stateMu sync.Mutex
+	var progressMu sync.Mutex
+	var checkpointSaveMu sync.Mutex
+	lastReported := uploadedSize
+	lastCheckpointSave := time.Now()
+	var checkpointSequence uint64
+	var latestCheckpointAttempt uint64
+
+	checkpointSnapshotLocked := func(force bool) (*CheckpointInfo, uint64) {
+		if checkpoint == nil || checkpointFile == "" {
+			return nil, 0
+		}
+		now := time.Now()
+		if !force && now.Sub(lastCheckpointSave) < time.Second {
+			return nil, 0
+		}
+		lastCheckpointSave = now
+		checkpointSequence++
+		return cloneCheckpoint(checkpoint), checkpointSequence
+	}
+	persistCheckpoint := func(snapshot *CheckpointInfo, sequence uint64) {
+		if snapshot == nil {
+			return
+		}
+		checkpointSaveMu.Lock()
+		defer checkpointSaveMu.Unlock()
+		if sequence <= latestCheckpointAttempt {
+			return
+		}
+		latestCheckpointAttempt = sequence
+		if err := SaveCheckpoint(snapshot); err != nil {
+			logs.Warnf("[%s] failed to save checkpoint: %v\n", fileIndex, err)
+		}
+	}
+	reportProgress := func(consumed int64) {
+		if progress == nil {
+			return
+		}
+		progressMu.Lock()
+		defer progressMu.Unlock()
+		if consumed <= lastReported {
+			return
+		}
+		progress(consumed, totalSize)
+		lastReported = consumed
+	}
+	recordError := func(err error) {
+		errChan <- err
+		cancel()
+	}
 
 	// 并发上传分片
 	for i := int64(0); i < partCount; i++ {
@@ -437,61 +497,66 @@ func (a *AliOssStorageClient) uploadParts(
 		go func(partNum int64, off int64, size int64) {
 			defer wg.Done()
 
-			// 获取信号量
-			sem <- struct{}{}
+			// 获取信号量，同时允许首个失败立即取消等待中的分片。
+			select {
+			case sem <- struct{}{}:
+			case <-workerCtx.Done():
+				return
+			}
 			defer func() { <-sem }()
 
-			// 检查上下文是否已取消
-			select {
-			case <-ctx.Done():
-				errChan <- ctx.Err()
-				return
-			default:
-			}
-
 			// 上传单个分片（带重试）
-			part, err := a.uploadPartWithRetry(ctx, f, objectKey, uploadID, partNum, off, size, fileIndex, int(partCount))
+			part, err := a.uploadPartWithRetry(workerCtx, f, objectKey, uploadID, partNum, off, size, fileIndex, int(partCount))
 			if err != nil {
-				errChan <- fmt.Errorf("part %d failed: %v", partNum, err)
+				// A sibling may already have failed and canceled workerCtx. In that
+				// case the original error is already recorded.
+				if workerCtx.Err() != nil && errors.Is(err, context.Canceled) {
+					return
+				}
+				recordError(i18n.NewError("error.oss.part_failed", map[string]any{"Part": partNum}, err))
 				return
 			}
 
 			// 保存分片信息
-			mu.Lock()
+			stateMu.Lock()
 			parts[partNum-1] = part
 			uploadedSize += size
+			snapshotSize := uploadedSize
 
-			// 更新checkpoint
+			// 内存中 O(1) 追加，落盘节流并在锁外串行执行。
 			if checkpoint != nil && checkpointFile != "" {
-				checkpoint.UploadedParts = make([]oss.UploadPart, 0)
-				for _, p := range parts {
-					if p.PartNumber > 0 {
-						checkpoint.UploadedParts = append(checkpoint.UploadedParts, p)
-					}
-				}
-				_ = SaveCheckpoint(checkpoint)
+				checkpoint.UploadedParts = append(checkpoint.UploadedParts, part)
 			}
-			mu.Unlock()
+			checkpointSnapshot, checkpointSeq := checkpointSnapshotLocked(false)
+			stateMu.Unlock()
+			persistCheckpoint(checkpointSnapshot, checkpointSeq)
 
 			// 更新进度
-			if progress != nil {
-				progress(uploadedSize, totalSize)
-			}
+			reportProgress(snapshotSize)
 
 			logs.Debugf("[%s] part %d/%d uploaded (%.1f%%)\n",
-				fileIndex, partNum, partCount, float64(uploadedSize)*100/float64(totalSize))
+				fileIndex, partNum, partCount, float64(snapshotSize)*100/float64(totalSize))
 
 		}(partNumber, offset, currentPartSize)
 	}
 
 	// 等待所有分片上传完成
 	wg.Wait()
+	stateMu.Lock()
+	checkpointSnapshot, checkpointSeq := checkpointSnapshotLocked(true)
+	stateMu.Unlock()
+	persistCheckpoint(checkpointSnapshot, checkpointSeq)
 	close(errChan)
 
-	// 检查是否有错误
-	if len(errChan) > 0 {
-		err := <-errChan
-		return nil, err
+	if ctx.Err() != nil {
+		return nil, ctx.Err()
+	}
+	var uploadErrors []error
+	for uploadErr := range errChan {
+		uploadErrors = append(uploadErrors, uploadErr)
+	}
+	if len(uploadErrors) > 0 {
+		return nil, errors.Join(uploadErrors...)
 	}
 
 	return parts, nil
@@ -513,15 +578,40 @@ func (a *AliOssStorageClient) uploadPartWithRetry(
 	var lastErr error
 
 	for retry := 0; retry <= maxRetries; retry++ {
+		if err := ctx.Err(); err != nil {
+			return oss.UploadPart{}, err
+		}
 		if retry > 0 {
 			logs.Warnf("[%s] retrying part %d/%d (attempt %d/%d)\n", fileIndex, partNumber, totalParts, retry+1, maxRetries+1)
-			time.Sleep(time.Second * time.Duration(retry)) // 指数退避
+			timer := time.NewTimer(time.Second * time.Duration(retry))
+			select {
+			case <-ctx.Done():
+				if !timer.Stop() {
+					select {
+					case <-timer.C:
+					default:
+					}
+				}
+				return oss.UploadPart{}, ctx.Err()
+			case <-timer.C:
+			}
 		}
 
 		// 读取分片数据
 		buffer := make([]byte, size)
-		_, err := file.ReadAt(buffer, offset)
-		if err != nil && err != io.EOF {
+		n, err := file.ReadAt(buffer, offset)
+		if n != len(buffer) {
+			if err == nil {
+				err = io.ErrUnexpectedEOF
+			}
+			lastErr = i18n.NewError("error.oss.part_short_read", map[string]any{
+				"Offset":   offset,
+				"Read":     n,
+				"Expected": len(buffer),
+			}, err)
+			continue
+		}
+		if err != nil && !errors.Is(err, io.EOF) {
 			lastErr = err
 			continue
 		}
@@ -538,6 +628,9 @@ func (a *AliOssStorageClient) uploadPartWithRetry(
 		result, err := a.ossClient.UploadPart(ctx, request)
 		if err != nil {
 			lastErr = err
+			if isNoSuchUpload(err) {
+				return oss.UploadPart{}, err
+			}
 			continue
 		}
 
@@ -548,7 +641,7 @@ func (a *AliOssStorageClient) uploadPartWithRetry(
 		}, nil
 	}
 
-	return oss.UploadPart{}, fmt.Errorf("failed after %d retries: %v", maxRetries+1, lastErr)
+	return oss.UploadPart{}, i18n.NewError("error.oss.part_retries_exhausted", map[string]any{"Attempts": maxRetries + 1, "Part": partNumber}, lastErr)
 }
 
 // completeMultipartUpload 完成分片上传

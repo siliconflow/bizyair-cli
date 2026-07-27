@@ -1,12 +1,11 @@
 package lib
 
 import (
-	"fmt"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"runtime"
 
+	"github.com/siliconflow/bizyair-cli/internal/i18n"
 	"github.com/siliconflow/bizyair-cli/meta"
 )
 
@@ -17,48 +16,56 @@ func NewSfFolder() *SfFolder {
 	return &SfFolder{}
 }
 
-func (s *SfFolder) folderPath(filePath string) string {
-	currentOS := runtime.GOOS
-	// 判断是否为 Windows
-	if currentOS == meta.OSWindows {
-		homeDir := os.Getenv(meta.EnvUserProfile)
-		return filepath.Join(homeDir, meta.SfFolder, filePath)
+func (s *SfFolder) folderPath(filePath string) (string, error) {
+	homeDir, err := os.UserHomeDir()
+	if err != nil || homeDir == "" {
+		return "", i18n.NewError("error.io.home_directory_missing", nil, err)
 	}
-	return filepath.Join(os.Getenv(meta.EnvHome), meta.SfFolder, filePath)
+	return filepath.Join(homeDir, meta.SfFolder, filePath), nil
 }
 
 func (s *SfFolder) SaveKey(apikey string) error {
-	err := os.MkdirAll(s.folderPath(""), 0660)
+	folderPath, err := s.folderPath("")
 	if err != nil {
-		return fmt.Errorf("failed to create directory: %w", err)
+		return err
+	}
+	if err := os.MkdirAll(folderPath, 0700); err != nil {
+		return i18n.NewError("error.io.create_directory_failed", map[string]any{"Path": folderPath}, err)
 	}
 
 	if runtime.GOOS != meta.OSWindows {
-		err = os.Chmod(s.folderPath(""), 0770)
-		if err != nil {
-			return fmt.Errorf("failed to set directory permissions: %w", err)
+		if err := os.Chmod(folderPath, 0700); err != nil {
+			return i18n.NewError("error.io.permissions_failed", map[string]any{"Path": folderPath}, err)
 		}
 	}
 
-	keyFilePath := s.folderPath(meta.SfApiKey)
-	file, err := os.OpenFile(keyFilePath, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0644)
+	keyFilePath := filepath.Join(folderPath, meta.SfApiKey)
+	file, err := os.OpenFile(keyFilePath, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0600)
 	if err != nil {
-		return fmt.Errorf("open apikey failed: %w", err)
+		return i18n.NewError("error.auth.key_open_failed", map[string]any{"Path": keyFilePath}, err)
 	}
 	defer file.Close()
+	if runtime.GOOS != meta.OSWindows {
+		if err := file.Chmod(0600); err != nil {
+			return i18n.NewError("error.io.permissions_failed", map[string]any{"Path": keyFilePath}, err)
+		}
+	}
 
 	if _, err := file.WriteString(apikey); err != nil {
-		return fmt.Errorf("save apikey failed: %w", err)
+		return i18n.NewError("error.auth.key_save_failed", map[string]any{"Path": keyFilePath}, err)
 	}
 
 	return nil
 }
 
 func (s *SfFolder) RemoveKey() error {
-	keyFilePath := s.folderPath(meta.SfApiKey)
-	_, err := os.Stat(keyFilePath)
+	keyFilePath, err := s.folderPath(meta.SfApiKey)
+	if err != nil {
+		return err
+	}
+	_, err = os.Stat(keyFilePath)
 	if os.IsNotExist(err) {
-		return fmt.Errorf("%s", meta.NotLoggedIn)
+		return i18n.NewError("error.auth.not_logged_in_simple", nil, err)
 	}
 	err = os.Remove(keyFilePath)
 	if err != nil {
@@ -68,15 +75,26 @@ func (s *SfFolder) RemoveKey() error {
 }
 
 func (s *SfFolder) GetKey() (string, error) {
-	keyFilePath := s.folderPath(meta.SfApiKey)
-	_, err := os.Stat(keyFilePath)
+	keyFilePath, err := s.folderPath(meta.SfApiKey)
+	if err != nil {
+		return "", err
+	}
+	_, err = os.Stat(keyFilePath)
 	if os.IsNotExist(err) {
-		return "", fmt.Errorf("%s", meta.NotLoggedIn)
+		return "", i18n.NewError("error.auth.not_logged_in_simple", nil, err)
+	}
+	if err != nil {
+		return "", i18n.NewError("error.auth.key_load_failed", map[string]any{"Path": keyFilePath}, err)
+	}
+	if runtime.GOOS != meta.OSWindows {
+		if err := os.Chmod(keyFilePath, 0600); err != nil {
+			return "", i18n.NewError("error.io.permissions_failed", map[string]any{"Path": keyFilePath}, err)
+		}
 	}
 	// 读取文件内容
-	content, err := ioutil.ReadFile(keyFilePath)
+	content, err := os.ReadFile(keyFilePath)
 	if err != nil {
-		return "", fmt.Errorf("failed to load apikey file")
+		return "", i18n.NewError("error.auth.key_load_failed", map[string]any{"Path": keyFilePath}, err)
 	}
 
 	return string(content), nil

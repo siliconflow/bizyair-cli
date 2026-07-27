@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+
+	"github.com/siliconflow/bizyair-cli/internal/i18n"
 )
 
 // Version 语义化版本结构
@@ -22,22 +24,22 @@ func ParseVersion(ver string) (*Version, error) {
 
 	parts := strings.Split(ver, ".")
 	if len(parts) != 3 {
-		return nil, fmt.Errorf("invalid version format: %s (expected format: v1.2.3)", ver)
+		return nil, i18n.NewError("error.version.format", map[string]any{"Version": ver}, nil)
 	}
 
 	major, err := strconv.Atoi(parts[0])
 	if err != nil {
-		return nil, fmt.Errorf("invalid major version: %s", parts[0])
+		return nil, i18n.NewError("error.version.major", map[string]any{"Value": parts[0]}, err)
 	}
 
 	minor, err := strconv.Atoi(parts[1])
 	if err != nil {
-		return nil, fmt.Errorf("invalid minor version: %s", parts[1])
+		return nil, i18n.NewError("error.version.minor", map[string]any{"Value": parts[1]}, err)
 	}
 
 	patch, err := strconv.Atoi(parts[2])
 	if err != nil {
-		return nil, fmt.Errorf("invalid patch version: %s", parts[2])
+		return nil, i18n.NewError("error.version.patch", map[string]any{"Value": parts[2]}, err)
 	}
 
 	return &Version{

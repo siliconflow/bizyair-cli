@@ -1,12 +1,14 @@
 package tui
 
 import (
-	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
 
+	"github.com/charmbracelet/bubbles/list"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/siliconflow/bizyair-cli/cmd/tui/filepicker"
+	"github.com/siliconflow/bizyair-cli/internal/i18n"
 	"github.com/siliconflow/bizyair-cli/lib"
 )
 
@@ -27,12 +29,50 @@ func validateName(s string) error {
 func validatePath(p string) error {
 	st, err := os.Stat(p)
 	if err != nil {
-		return fmt.Errorf("路径不存在：%s", p)
+		return i18n.NewError("tui.error.path_missing", map[string]any{"Path": p}, err)
 	}
 	if st.IsDir() {
-		return fmt.Errorf("当前仅支持文件上传，不支持目录：%s", p)
+		return i18n.NewError("tui.error.path_is_directory", map[string]any{"Path": p}, nil)
 	}
 	return nil
+}
+
+func localizeList(m *list.Model) {
+	m.FilterInput.Prompt = i18n.T("tui.list.filter_prompt", nil)
+	m.SetStatusBarItemName(i18n.T("tui.list.item", nil), i18n.T("tui.list.items", nil))
+	m.KeyMap.CursorUp.SetHelp("↑/k", i18n.T("tui.list.up", nil))
+	m.KeyMap.CursorDown.SetHelp("↓/j", i18n.T("tui.list.down", nil))
+	m.KeyMap.PrevPage.SetHelp("←/h/pgup", i18n.T("tui.list.previous_page", nil))
+	m.KeyMap.NextPage.SetHelp("→/l/pgdn", i18n.T("tui.list.next_page", nil))
+	m.KeyMap.GoToStart.SetHelp("g/home", i18n.T("tui.list.start", nil))
+	m.KeyMap.GoToEnd.SetHelp("G/end", i18n.T("tui.list.end", nil))
+	m.KeyMap.Filter.SetHelp("/", i18n.T("tui.list.filter", nil))
+	m.KeyMap.ClearFilter.SetHelp("esc", i18n.T("tui.list.clear_filter", nil))
+	m.KeyMap.CancelWhileFiltering.SetHelp("esc", i18n.T("tui.list.cancel", nil))
+	m.KeyMap.AcceptWhileFiltering.SetHelp("enter", i18n.T("tui.list.apply_filter", nil))
+	m.KeyMap.ShowFullHelp.SetHelp("?", i18n.T("tui.list.more_help", nil))
+	m.KeyMap.CloseFullHelp.SetHelp("?", i18n.T("tui.list.close_help", nil))
+	m.KeyMap.Quit.SetHelp("q", i18n.T("tui.list.quit", nil))
+}
+
+func localizeFilePicker(m *filepicker.Model) {
+	m.KeyMap.GoToTop.SetHelp("g", i18n.T("tui.filepicker.first", nil))
+	m.KeyMap.GoToLast.SetHelp("G", i18n.T("tui.filepicker.last", nil))
+	m.KeyMap.Down.SetHelp("j", i18n.T("tui.filepicker.down", nil))
+	m.KeyMap.Up.SetHelp("k", i18n.T("tui.filepicker.up", nil))
+	m.KeyMap.PageUp.SetHelp("pgup", i18n.T("tui.filepicker.page_up", nil))
+	m.KeyMap.PageDown.SetHelp("pgdown", i18n.T("tui.filepicker.page_down", nil))
+	m.KeyMap.Back.SetHelp("h", i18n.T("tui.filepicker.back", nil))
+	m.KeyMap.Open.SetHelp("l", i18n.T("tui.filepicker.open", nil))
+	m.KeyMap.Select.SetHelp("enter", i18n.T("tui.filepicker.select", nil))
+}
+
+func uploadTitle(current int, sectionID string) string {
+	return i18n.T("tui.upload.step_title", map[string]any{
+		"Current": current,
+		"Total":   11,
+		"Name":    i18n.T(sectionID, nil),
+	})
 }
 
 // 绝对路径
@@ -278,76 +318,76 @@ func buildCompletionSuggestion(matches []string) string {
 func (m *mainModel) getContextualHint() string {
 	// 退出确认优先级最高
 	if m.confirmingExit {
-		return "<Enter> 确认\n<Esc> 取消"
+		return i18n.T("tui.hint.confirm_cancel", nil)
 	}
 
 	// 正在运行的上传任务
 	if m.running && m.currentAction == actionUpload && m.step == mainStepAction {
 		if m.canceling {
-			return "正在取消..."
+			return i18n.T("tui.hint.canceling", nil)
 		}
-		return "<Ctrl+C> 取消上传"
+		return i18n.T("tui.hint.cancel_upload", nil)
 	}
 
 	// 其他运行状态
 	if m.running {
-		return "请稍候..."
+		return i18n.T("tui.hint.wait", nil)
 	}
 
 	// 根据主步骤返回提示
 	switch m.step {
 	case mainStepLogin:
-		return "<Enter> 确认\n<Esc> 返回"
+		return i18n.T("tui.hint.confirm_back", nil)
 	case mainStepMenu:
-		return "<↑/k> 上移\n<↓/j> 下移\n</> 筛选\n<Enter> 选择"
+		return i18n.T("tui.hint.menu", nil)
 	case mainStepAction:
 		// 根据上传步骤细分
 		switch m.upStep {
 		case stepType:
-			return "<↑/k> 上移\n<↓/j> 下移\n<Enter> 选择\n<Esc> 返回"
+			return i18n.T("tui.hint.select_back", nil)
 		case stepName:
-			return "<Enter> 确认\n<Esc> 返回"
+			return i18n.T("tui.hint.confirm_back", nil)
 		case stepVersion:
-			return "<Enter> 确认\n<Esc> 返回"
+			return i18n.T("tui.hint.confirm_back", nil)
 		case stepBase:
-			return "<↑/k> 上移\n<↓/j> 下移\n<Enter> 选择\n<Esc> 返回"
+			return i18n.T("tui.hint.select_back", nil)
 		case stepCoverMethod:
-			return "<↑/k> 上移\n<↓/j> 下移\n<Enter> 选择\n<Esc> 返回"
+			return i18n.T("tui.hint.select_back", nil)
 		case stepCover:
 			if m.act.coverUploadMethod == "url" {
-				return "<Enter> 确认\n<Esc> 返回"
+				return i18n.T("tui.hint.confirm_back", nil)
 			}
 			// 本地文件上传模式 - 根据焦点显示不同提示
 			if m.coverPathInputFocused {
-				return "<Tab> 补全\n<Enter> 确认\n<Ctrl+P> 切换至文件选择器\n<Esc> 返回"
+				return i18n.T("tui.hint.path_input", nil)
 			}
-			return "<←/→> 导航\n<↑/↓> 选择\n<Enter> 确认\n<Ctrl+P> 切换至路径输入框\n<Esc> 返回"
+			return i18n.T("tui.hint.file_picker", nil)
 		case stepIntroMethod:
-			return "<↑/k> 上移\n<↓/j> 下移\n<Enter> 选择\n<Esc> 返回"
+			return i18n.T("tui.hint.select_back", nil)
 		case stepIntro:
 			if m.act.introInputMethod == "file" {
 				// 文件导入模式 - 根据焦点显示不同提示
 				if m.act.introPathInputFocused {
-					return "<Tab> 补全\n<Enter> 确认\n<Ctrl+P> 切换至文件选择器\n<Esc> 返回"
+					return i18n.T("tui.hint.path_input", nil)
 				}
-				return "<←/→> 导航\n<↑/↓> 选择\n<Enter> 确认\n<Ctrl+P> 切换至路径输入框\n<Esc> 返回"
+				return i18n.T("tui.hint.file_picker", nil)
 			}
-			return "<Ctrl+S> 提交\n<Esc> 返回"
+			return i18n.T("tui.hint.editor", nil)
 		case stepPath:
 			// 文件路径选择 - 根据焦点显示不同提示
 			if m.act.pathInputFocused {
-				return "<Tab> 补全\n<Enter> 确认\n<Ctrl+P> 切换至文件选择器\n<Esc> 返回"
+				return i18n.T("tui.hint.path_input", nil)
 			}
-			return "<←/→> 导航\n<↑/↓> 选择\n<Enter> 确认\n<Ctrl+P> 切换至路径输入框\n<Esc> 返回"
+			return i18n.T("tui.hint.file_picker", nil)
 		case stepPublic:
-			return "<↑/k> 上移\n<↓/j> 下移\n<Enter> 选择\n<Esc> 返回"
+			return i18n.T("tui.hint.select_back", nil)
 		case stepAskMore:
-			return "<↑/k> 上移\n<↓/j> 下移\n<Enter> 选择\n<Esc> 返回"
+			return i18n.T("tui.hint.select_back", nil)
 		case stepConfirm:
-			return "<Enter> 开始上传\n<Esc> 返回"
+			return i18n.T("tui.hint.start_upload", nil)
 		}
 	case mainStepOutput:
-		return "<Enter> 返回菜单"
+		return i18n.T("tui.hint.return_menu", nil)
 	}
 
 	return ""
@@ -456,13 +496,4 @@ func (m *mainModel) renderStyledHint(hint string) string {
 	}
 
 	return strings.Join(rows, "\n")
-}
-
-// renderVPNWarning 渲染简短的VPN警告提示
-func (m *mainModel) renderVPNWarning() string {
-	warningStyle := lipgloss.NewStyle().
-		Foreground(lipgloss.Color("#FFA500")). // 橙色
-		Bold(true)
-
-	return warningStyle.Render("⚠️ 检测到VPN，可能影响上传")
 }

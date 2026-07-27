@@ -1,6 +1,7 @@
 package meta
 
 import (
+	"sort"
 	"strings"
 
 	"github.com/samber/lo"
@@ -12,7 +13,6 @@ const (
 	CmdUpload  = "upload"
 	CmdModel   = "model"
 	CmdLs      = "ls"
-	CmdLsFiles = "ls-files"
 	CmdDetail  = "detail"
 	CmdRm      = "rm"
 	CmdCommit  = "commit"
@@ -20,14 +20,24 @@ const (
 )
 
 const (
-	DefaultDomain = "https://api.bizyair.cn"
-	StorageDomain = "https://storage.bizyair.cn"
+	// DefaultServiceHost is the only Go default that needs to change for a
+	// future BizyAir API domain migration.
+	DefaultServiceHost = "bizyair.ai"
+
+	// DefaultBaseDomain is the configurable root used to derive BizyAir API,
+	// metadata, web, and general storage service domains.
+	DefaultBaseDomain = "https://" + DefaultServiceHost
+
+	// Deprecated: use DefaultBaseDomain. Kept for source compatibility.
+	DefaultDomain = DefaultBaseDomain
+	StorageDomain = "https://storage." + DefaultServiceHost
 )
 
 const (
-	LoadError   = 1
-	ServerError = 2
-	HttpError   = 3
+	LoadError           = 1
+	ServerError         = 2
+	HttpError           = 3
+	InterruptedExitCode = 130
 )
 
 const (
@@ -37,8 +47,9 @@ const (
 	MultipartThreshold = 100 * 1024 * 1024 // 超过100MB使用分片上传
 	CheckpointFolder   = "uploads"         // checkpoint文件夹名称
 
-	// 升级相关配置
-	ManifestURL         = StorageDomain + "/cli/releases/manifest.json"
+	// ManifestURL intentionally does not follow DefaultBaseDomain. CLI
+	// releases are published to the fixed .ai storage domain.
+	ManifestURL         = "https://storage.bizyair.ai/cli/releases/manifest.json"
 	UpgradeBackupSuffix = ".backup"
 	UpgradeMaxRetries   = 3
 )
@@ -103,34 +114,41 @@ var IgnoreUploadDirs = []string{
 	".idea",
 }
 
+// SupportedBaseModels is the offline fallback used by the TUI and upload help.
+// Keep it in sync with /api/special/community/base_model_types.
 var SupportedBaseModels = map[string]bool{
-	"Flux.1 D":       true,
-	"Flux.2 D":       true,
-	"Flux.1 Kontext": true,
-	"Flux.1 S":       true,
+	"FLUX.1 D":       true,
+	"FLUX.1 Kontext": true,
+	"FLUX.1 S":       true,
 	"SDXL":           true,
 	"SD 1.5":         true,
 	"SD 3.5":         true,
 	"Pony":           true,
 	"Illustrious":    true,
 	"NoobAI":         true,
+	"Anima":          true,
+	"FLUX.2 D":       true,
+	"FLUX.2 Klein":   true,
+	"ERNIE-Image":    true,
+	"Ideogram":       true,
 	"Kolors":         true,
-	"Hunyuan 1":      true,
 	"Hunyuan Video":  true,
 	"Wan Video":      true,
 	"Qwen-Image":     true,
 	"Qwen-Edit":      true,
-	"Z-image":        true,
+	"Z-Image":        true,
 	"Ovis":           true,
+	"LTX-2":          true,
 	"Nano Banana":    true,
-	"Seedream 4.0":   true,
-	"Seedream 4.5":   true,
+	"Seedream":       true,
 	"Seedance":       true,
-	"Sora":           true,
 	"Veo":            true,
 	"Kling":          true,
 	"Hailuo":         true,
 	"GPT-Image":      true,
+	"Vidu":           true,
+	"Grok":           true,
+	"Happy Horse":    true,
 	"Other":          true,
 }
 
@@ -141,5 +159,6 @@ func parseMapKey[T any](myMap map[string]T) string {
 	for k := range myMap {
 		strs = append(strs, k)
 	}
+	sort.Strings(strs)
 	return "'" + strings.Join(strs, "','") + "'"
 }

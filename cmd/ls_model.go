@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/cloudwego/hertz/cmd/hz/util/logs"
+	"github.com/siliconflow/bizyair-cli/internal/i18n"
 	"github.com/siliconflow/bizyair-cli/lib"
 	"github.com/siliconflow/bizyair-cli/meta"
 	"github.com/urfave/cli/v2"
@@ -13,19 +13,25 @@ import (
 func ListModel(c *cli.Context) error {
 	args := parseArgument(c, meta.CmdLs)
 	setLogVerbose(args.Verbose)
-	logs.Debugf("args: %#v\n", args)
+	logArguments(args)
+
+	endpoints, resolveErr := lib.ResolveServiceEndpoints(args.BaseDomain)
+	if resolveErr != nil {
+		return cli.Exit(resolveErr, meta.LoadError)
+	}
+	myModelsURL := endpoints.MyModelsURL()
 
 	// 打开浏览器查看"我的模型"
-	msg, err := lib.OpenBrowser(lib.MyModelsURL)
+	msg, err := lib.OpenBrowser(myModelsURL)
 	if err != nil {
 		// 如果无法打开浏览器，提示用户手动访问
-		fmt.Fprintf(os.Stderr, "无法打开浏览器: %v\n", err)
-		fmt.Fprintf(os.Stdout, "请在浏览器中访问: %s\n", lib.MyModelsURL)
+		fmt.Fprintln(os.Stderr, i18n.T("cli.model.browser_failed", map[string]any{"Cause": err}))
+		fmt.Fprintln(os.Stdout, i18n.T("cli.model.visit_manually", map[string]any{"URL": myModelsURL}))
 		return cli.Exit(err, meta.LoadError)
 	}
 
 	// 成功打开浏览器
 	fmt.Fprintln(os.Stdout, msg)
-	fmt.Fprintf(os.Stdout, "访问: %s\n", lib.MyModelsURL)
+	fmt.Fprintln(os.Stdout, i18n.T("cli.model.visit", map[string]any{"URL": myModelsURL}))
 	return nil
 }

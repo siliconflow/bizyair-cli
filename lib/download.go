@@ -2,13 +2,13 @@ package lib
 
 import (
 	"context"
-	"fmt"
 	"io"
 	"net/http"
 	"os"
 	"time"
 
 	"github.com/cloudwego/hertz/cmd/hz/util/logs"
+	"github.com/siliconflow/bizyair-cli/internal/i18n"
 )
 
 // DownloadFileOptions 下载文件的选项
@@ -20,16 +20,32 @@ type DownloadFileOptions struct {
 }
 
 // DownloadFile 下载文件到指定路径
-func DownloadFile(opts DownloadFileOptions) error {
+func DownloadFile(opts DownloadFileOptions) (retErr error) {
+	out, err := os.Create(opts.DestPath)
+	if err != nil {
+		return i18n.NewError("error.io.create_file_failed", map[string]any{"Path": opts.DestPath}, err)
+	}
+	return downloadFileTo(opts, out)
+}
+
+func downloadFileTo(opts DownloadFileOptions, out *os.File) (retErr error) {
 	ctx := opts.Context
 	if ctx == nil {
 		ctx = context.Background()
 	}
+	defer func() {
+		if closeErr := out.Close(); retErr == nil && closeErr != nil {
+			retErr = i18n.NewError("error.io.write_failed", map[string]any{"Path": opts.DestPath}, closeErr)
+		}
+		if retErr != nil {
+			_ = os.Remove(opts.DestPath)
+		}
+	}()
 
 	// 创建 HTTP 请求
 	req, err := http.NewRequestWithContext(ctx, "GET", opts.URL, nil)
 	if err != nil {
-		return fmt.Errorf("failed to create request: %v", err)
+		return i18n.NewError("error.download.request_failed", map[string]any{"URL": opts.URL}, err)
 	}
 
 	// 发送请求
@@ -38,20 +54,13 @@ func DownloadFile(opts DownloadFileOptions) error {
 	}
 	resp, err := client.Do(req)
 	if err != nil {
-		return fmt.Errorf("failed to download: %v", err)
+		return i18n.NewError("error.download.failed", map[string]any{"URL": opts.URL}, err)
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("bad status: %s", resp.Status)
+		return i18n.NewError("error.download.status", map[string]any{"Status": resp.Status, "URL": opts.URL}, nil)
 	}
-
-	// 创建目标文件
-	out, err := os.Create(opts.DestPath)
-	if err != nil {
-		return fmt.Errorf("failed to create file: %v", err)
-	}
-	defer out.Close()
 
 	// 获取文件总大小
 	totalSize := resp.ContentLength
@@ -69,7 +78,7 @@ func DownloadFile(opts DownloadFileOptions) error {
 	// 复制数据
 	written, err := io.Copy(out, reader)
 	if err != nil {
-		return fmt.Errorf("failed to write file: %v", err)
+		return i18n.NewError("error.io.write_failed", map[string]any{"Path": opts.DestPath}, err)
 	}
 
 	logs.Debugf("downloaded %d bytes to %s", written, opts.DestPath)

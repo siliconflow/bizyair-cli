@@ -1,11 +1,15 @@
 package lib
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"net/http"
+	"os"
 	"time"
+
+	"github.com/siliconflow/bizyair-cli/internal/i18n"
 )
 
 // Manifest 发布清单文件结构
@@ -30,28 +34,36 @@ type PlatformBinary struct {
 
 // LoadManifestFromURL 从 URL 加载 manifest.json
 func LoadManifestFromURL(url string) (*Manifest, error) {
+	return LoadManifestFromURLContext(context.Background(), url)
+}
+
+func LoadManifestFromURLContext(ctx context.Context, url string) (*Manifest, error) {
 	client := &http.Client{
 		Timeout: 30 * time.Second,
 	}
 
-	resp, err := client.Get(url)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
-		return nil, fmt.Errorf("failed to download manifest: %v", err)
+		return nil, i18n.NewError("error.manifest.download_failed", map[string]any{"URL": url}, err)
+	}
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, i18n.NewError("error.manifest.download_failed", map[string]any{"URL": url}, err)
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("failed to download manifest: HTTP %d", resp.StatusCode)
+		return nil, i18n.NewError("error.manifest.http_status", map[string]any{"Status": resp.StatusCode, "URL": url}, nil)
 	}
 
-	body, err := ioutil.ReadAll(resp.Body)
+	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return nil, fmt.Errorf("failed to read manifest: %v", err)
+		return nil, i18n.NewError("error.manifest.read_failed", nil, err)
 	}
 
 	var manifest Manifest
 	if err := json.Unmarshal(body, &manifest); err != nil {
-		return nil, fmt.Errorf("failed to parse manifest: %v", err)
+		return nil, i18n.NewError("error.manifest.parse_failed", nil, err)
 	}
 
 	return &manifest, nil
@@ -59,14 +71,14 @@ func LoadManifestFromURL(url string) (*Manifest, error) {
 
 // LoadManifestFromFile 从本地文件加载 manifest.json
 func LoadManifestFromFile(path string) (*Manifest, error) {
-	data, err := ioutil.ReadFile(path)
+	data, err := os.ReadFile(path)
 	if err != nil {
-		return nil, fmt.Errorf("failed to read manifest file: %v", err)
+		return nil, i18n.NewError("error.manifest.file_read_failed", map[string]any{"Path": path}, err)
 	}
 
 	var manifest Manifest
 	if err := json.Unmarshal(data, &manifest); err != nil {
-		return nil, fmt.Errorf("failed to parse manifest: %v", err)
+		return nil, i18n.NewError("error.manifest.parse_failed", nil, err)
 	}
 
 	return &manifest, nil
@@ -76,11 +88,11 @@ func LoadManifestFromFile(path string) (*Manifest, error) {
 func SaveManifestToFile(manifest *Manifest, path string) error {
 	data, err := json.MarshalIndent(manifest, "", "  ")
 	if err != nil {
-		return fmt.Errorf("failed to marshal manifest: %v", err)
+		return i18n.NewError("error.manifest.encode_failed", nil, err)
 	}
 
-	if err := ioutil.WriteFile(path, data, 0644); err != nil {
-		return fmt.Errorf("failed to write manifest file: %v", err)
+	if err := os.WriteFile(path, data, 0644); err != nil {
+		return i18n.NewError("error.manifest.write_failed", map[string]any{"Path": path}, err)
 	}
 
 	return nil
@@ -98,18 +110,18 @@ func GetPlatformKey(goos, goarch string) string {
 // GetBinaryForPlatform 获取指定平台的二进制文件信息
 func (m *Manifest) GetBinaryForPlatform(goos, goarch string) (*PlatformBinary, error) {
 	if m.LatestVersion == "" {
-		return nil, fmt.Errorf("no latest version found in manifest")
+		return nil, i18n.NewError("error.manifest.latest_missing", nil, nil)
 	}
 
 	release, ok := m.Releases[m.LatestVersion]
 	if !ok {
-		return nil, fmt.Errorf("release %s not found in manifest", m.LatestVersion)
+		return nil, i18n.NewError("error.manifest.release_missing", map[string]any{"Version": m.LatestVersion}, nil)
 	}
 
 	platformKey := GetPlatformKey(goos, goarch)
 	binary, ok := release.Platforms[platformKey]
 	if !ok {
-		return nil, fmt.Errorf("platform %s not found in release %s", platformKey, m.LatestVersion)
+		return nil, i18n.NewError("error.manifest.platform_missing", map[string]any{"Platform": platformKey, "Version": m.LatestVersion}, nil)
 	}
 
 	return binary, nil
