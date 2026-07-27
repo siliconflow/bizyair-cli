@@ -22,7 +22,7 @@ const (
 const (
 	// DefaultServiceHost is the only Go default that needs to change for a
 	// future BizyAir API domain migration.
-	DefaultServiceHost = "bizyair.vip"
+	DefaultServiceHost = "bizyair.ai"
 
 	// DefaultBaseDomain is the configurable root used to derive BizyAir API,
 	// metadata, web, and general storage service domains.
