@@ -25,6 +25,9 @@ go.work.sum
 .env
 .idea
 .vscode
+
+# macOS
+.DS_Store
 temp
 .exe
 execs

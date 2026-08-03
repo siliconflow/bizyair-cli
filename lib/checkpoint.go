@@ -25,10 +25,14 @@ type CheckpointInfo struct {
 	UploadedParts []oss.UploadPart `json:"uploaded_parts"` // 已上传的分片列表
 	CreatedAt     time.Time        `json:"created_at"`     // 创建时间
 
-	// 用于恢复续传的非敏感存储信息。临时凭证每次从 API 刷新，不落盘。
-	Bucket   string `json:"bucket,omitempty"`
-	Region   string `json:"region,omitempty"`
-	Endpoint string `json:"endpoint,omitempty"`
+	// 用于恢复续传的凭证与存储信息。checkpoint 文件和所在目录均使用私有权限。
+	Bucket          string `json:"bucket,omitempty"`
+	Region          string `json:"region,omitempty"`
+	Endpoint        string `json:"endpoint,omitempty"`
+	AccessKeyId     string `json:"access_key_id,omitempty"`
+	AccessKeySecret string `json:"access_key_secret,omitempty"`
+	SecurityToken   string `json:"security_token,omitempty"`
+	Expiration      string `json:"expiration,omitempty"` // RFC3339 时间
 }
 
 func cloneCheckpoint(info *CheckpointInfo) *CheckpointInfo {
@@ -99,14 +103,24 @@ func SaveCheckpoint(info *CheckpointInfo) error {
 		return i18n.NewError("error.checkpoint.encode_failed", nil, err)
 	}
 
-	// 写入文件
-	if err := os.WriteFile(checkpointFile, data, 0600); err != nil {
+	// 在写入包含临时凭证的数据前先收紧现有文件权限。os.WriteFile 对已存在
+	// 文件不会应用新的 mode，因此这里与 API Key 文件使用相同的安全写入方式。
+	file, err := os.OpenFile(checkpointFile, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0600)
+	if err != nil {
 		return i18n.NewError("error.checkpoint.write_failed", map[string]any{"Path": checkpointFile}, err)
 	}
 	if runtime.GOOS != meta.OSWindows {
-		if err := os.Chmod(checkpointFile, 0600); err != nil {
+		if err := file.Chmod(0600); err != nil {
+			_ = file.Close()
 			return i18n.NewError("error.io.permissions_failed", map[string]any{"Path": checkpointFile}, err)
 		}
+	}
+	if _, err := file.Write(data); err != nil {
+		_ = file.Close()
+		return i18n.NewError("error.checkpoint.write_failed", map[string]any{"Path": checkpointFile}, err)
+	}
+	if err := file.Close(); err != nil {
+		return i18n.NewError("error.checkpoint.write_failed", map[string]any{"Path": checkpointFile}, err)
 	}
 
 	logs.Debugf("checkpoint saved: %s\n", checkpointFile)
@@ -153,6 +167,19 @@ func DeleteCheckpoint(checkpointFile string) error {
 
 	logs.Debugf("checkpoint deleted: %s\n", checkpointFile)
 	return nil
+}
+
+// IsCredentialExpired 检查凭证是否过期（提前5分钟判定为过期）。
+func IsCredentialExpired(expiration string) bool {
+	if expiration == "" {
+		return true
+	}
+	expiresAt, err := time.Parse(time.RFC3339, expiration)
+	if err != nil {
+		logs.Warnf("failed to parse credential expiration: %v\n", err)
+		return true
+	}
+	return time.Now().Add(5 * time.Minute).After(expiresAt)
 }
 
 // ValidateCheckpoint 验证checkpoint是否有效（不比对 objectKey，仅校验文件与分片大小）

@@ -60,8 +60,32 @@ func UnifiedUpload(opts UploadOptions) (string, error) {
 
 	// 4. 如果有有效的 checkpoint，尝试续传
 	if checkpoint != nil && ValidateCheckpoint(checkpoint, opts.File) {
-		logs.Debugf("[%s] valid checkpoint found; refreshing temporary credentials for resume\n", opts.FileIndex)
-		objectKey = checkpoint.ObjectKey
+		logs.Debugf("[%s] valid checkpoint found; preparing to resume\n", opts.FileIndex)
+
+		// 凭证仍有效时复用完整的旧上传会话；
+		// 凭证过期或缺失时丢弃 checkpoint，从零创建新的上传会话。
+		if checkpoint.AccessKeyId != "" && checkpoint.AccessKeySecret != "" && !IsCredentialExpired(checkpoint.Expiration) {
+			cli, credentialErr := NewAliOssStorageClient(
+				checkpoint.Endpoint,
+				checkpoint.Bucket,
+				checkpoint.AccessKeyId,
+				checkpoint.AccessKeySecret,
+				checkpoint.SecurityToken,
+			)
+			if credentialErr == nil {
+				cli.SetExpiration(checkpoint.Expiration)
+				ossClient = cli
+				objectKey = checkpoint.ObjectKey
+			} else {
+				logs.Warnf("[%s] checkpoint credentials could not be restored: %v; refreshing credentials\n", opts.FileIndex, credentialErr)
+			}
+		} else {
+			logs.Warnf("[%s] checkpoint credentials expired or missing; deleting checkpoint and restarting\n", opts.FileIndex)
+			if checkpointFile != "" {
+				_ = DeleteCheckpoint(checkpointFile)
+			}
+			checkpoint = nil
+		}
 	}
 
 	// 5. 如果没有有效的 OSS 客户端，获取新的签名
@@ -100,6 +124,7 @@ func UnifiedUpload(opts UploadOptions) (string, error) {
 		if err != nil {
 			return "", WithStep(i18n.T("step.create_oss_client"), err)
 		}
+		cli.SetExpiration(fileRecord.Expiration)
 		ossClient = cli
 		objectKey = fileRecord.ObjectKey
 	}

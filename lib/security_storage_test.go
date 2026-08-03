@@ -4,7 +4,6 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
-	"strings"
 	"testing"
 	"time"
 
@@ -37,17 +36,21 @@ func TestCredentialAndCheckpointFilesUsePrivatePermissions(t *testing.T) {
 	assertPermission(t, keyPath, 0600)
 
 	checkpoint := &CheckpointInfo{
-		ObjectKey:     "models/test.safetensors",
-		UploadID:      "upload-id",
-		FilePath:      "/tmp/test.safetensors",
-		FileSize:      42,
-		FileSignature: "signature",
-		PartSize:      int64(meta.MultipartPartSize),
-		TotalParts:    1,
-		CreatedAt:     time.Now(),
-		Bucket:        "bucket",
-		Region:        "region",
-		Endpoint:      "endpoint",
+		ObjectKey:       "models/test.safetensors",
+		UploadID:        "upload-id",
+		FilePath:        "/tmp/test.safetensors",
+		FileSize:        42,
+		FileSignature:   "signature",
+		PartSize:        int64(meta.MultipartPartSize),
+		TotalParts:      1,
+		CreatedAt:       time.Now(),
+		Bucket:          "bucket",
+		Region:          "region",
+		Endpoint:        "endpoint",
+		AccessKeyId:     "access-key-id",
+		AccessKeySecret: "access-key-secret",
+		SecurityToken:   "security-token",
+		Expiration:      time.Now().Add(time.Hour).UTC().Format(time.RFC3339),
 	}
 	if err := SaveCheckpoint(checkpoint); err != nil {
 		t.Fatalf("SaveCheckpoint() error = %v", err)
@@ -59,15 +62,22 @@ func TestCredentialAndCheckpointFilesUsePrivatePermissions(t *testing.T) {
 	assertPermission(t, filepath.Dir(checkpointPath), 0700)
 	assertPermission(t, checkpointPath, 0600)
 
-	data, err := os.ReadFile(checkpointPath)
-	if err != nil {
-		t.Fatalf("read checkpoint: %v", err)
+	// Checkpoints now intentionally contain the original temporary credentials
+	// so an interrupted multipart upload can resume with the same authorized
+	// object key. Existing permissive files are repaired before credentials are read.
+	if err := os.Chmod(checkpointPath, 0644); err != nil {
+		t.Fatalf("chmod legacy checkpoint: %v", err)
 	}
-	serialized := strings.ToLower(string(data))
-	for _, secretField := range []string{"access_key", "access_key_secret", "security_token", "expiration"} {
-		if strings.Contains(serialized, secretField) {
-			t.Errorf("checkpoint contains credential field %q: %s", secretField, data)
-		}
+	loaded, err := LoadCheckpoint(checkpointPath)
+	if err != nil {
+		t.Fatalf("LoadCheckpoint() error = %v", err)
+	}
+	assertPermission(t, checkpointPath, 0600)
+	if loaded.AccessKeyId != checkpoint.AccessKeyId ||
+		loaded.AccessKeySecret != checkpoint.AccessKeySecret ||
+		loaded.SecurityToken != checkpoint.SecurityToken ||
+		loaded.Expiration != checkpoint.Expiration {
+		t.Fatal("checkpoint credentials did not round-trip")
 	}
 }
 
