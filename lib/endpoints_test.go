@@ -14,7 +14,7 @@ func TestResolveServiceEndpoints(t *testing.T) {
 			input: "https://bizyair.vip",
 			want: ServiceEndpoints{
 				Base: "https://bizyair.vip", API: "https://api.bizyair.vip", Meta: "https://meta.bizyair.vip",
-				Web: "https://bizyair.vip", Storage: "https://storage.bizyair.vip",
+				Web: "https://www.bizyair.vip", Storage: "https://storage.bizyair.vip",
 			},
 		},
 		{
@@ -22,7 +22,7 @@ func TestResolveServiceEndpoints(t *testing.T) {
 			input: "https://api.bizyair.vip/",
 			want: ServiceEndpoints{
 				Base: "https://bizyair.vip", API: "https://api.bizyair.vip", Meta: "https://meta.bizyair.vip",
-				Web: "https://bizyair.vip", Storage: "https://storage.bizyair.vip",
+				Web: "https://www.bizyair.vip", Storage: "https://storage.bizyair.vip",
 			},
 		},
 		{
@@ -30,7 +30,15 @@ func TestResolveServiceEndpoints(t *testing.T) {
 			input: "https://bizyair.ai",
 			want: ServiceEndpoints{
 				Base: "https://bizyair.ai", API: "https://api.bizyair.ai", Meta: "https://meta.bizyair.ai",
-				Web: "https://bizyair.ai", Storage: "https://storage.bizyair.ai",
+				Web: "https://www.bizyair.ai", Storage: "https://storage.bizyair.ai",
+			},
+		},
+		{
+			name:  "web origin normalizes without duplicating prefix",
+			input: "https://www.bizyair.ai/",
+			want: ServiceEndpoints{
+				Base: "https://bizyair.ai", API: "https://api.bizyair.ai", Meta: "https://meta.bizyair.ai",
+				Web: "https://www.bizyair.ai", Storage: "https://storage.bizyair.ai",
 			},
 		},
 		{
@@ -68,9 +76,9 @@ func TestServiceEndpointURLs(t *testing.T) {
 		"model detail": endpoints.ModelDetailURL(42),
 	}
 	wants := map[string]string{
-		"base models":  "https://bizyair.vip/api/special/community/base_model_types",
-		"my models":    "https://bizyair.vip/community?path=my",
-		"model detail": "https://bizyair.vip/community/models/my/42",
+		"base models":  "https://www.bizyair.vip/api/special/community/base_model_types",
+		"my models":    "https://www.bizyair.vip/community?path=my",
+		"model detail": "https://www.bizyair.vip/community/models/my/42",
 	}
 	for name, got := range tests {
 		if got != wants[name] {
