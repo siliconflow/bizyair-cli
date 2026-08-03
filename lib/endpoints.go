@@ -73,7 +73,7 @@ func ResolveServiceEndpoints(baseDomain string) (ServiceEndpoints, error) {
 		Base:    origin(rootHost),
 		API:     origin("api." + rootHost),
 		Meta:    origin("meta." + rootHost),
-		Web:     origin(rootHost),
+		Web:     origin("www." + rootHost),
 		Storage: origin("storage." + rootHost),
 	}, nil
 }
