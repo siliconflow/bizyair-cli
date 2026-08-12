@@ -2,7 +2,6 @@ package lib
 
 import (
 	"context"
-	"errors"
 	"path/filepath"
 	"strings"
 
@@ -54,8 +53,10 @@ func UploadCover(client BizyAPI, coverInput string, ctx context.Context, statusC
 	webpPath, webpCleanup, err := ConvertImageToWebPContext(ctx, localPath)
 	convertFailed := false
 	if err != nil {
-		if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
-			return "", err
+		// 只有上传任务本身被取消或超时时才终止；cwebp 下载或转换失败
+		// 只是可选优化失败，给出 warning 并继续上传原始图片。
+		if ctxErr := ctx.Err(); ctxErr != nil {
+			return "", ctxErr
 		}
 		// 转换失败，回退使用原格式（不中断上传）
 		webpPath = localPath
