@@ -76,7 +76,7 @@ func TestServiceEndpointURLs(t *testing.T) {
 		"model detail": endpoints.ModelDetailURL(42),
 	}
 	wants := map[string]string{
-		"base models":  "https://www.bizyair.vip/api/special/community/base_model_types",
+		"base models":  "https://meta.bizyair.vip/v1/dict",
 		"my models":    "https://www.bizyair.vip/community?path=my",
 		"model detail": "https://www.bizyair.vip/community/models/my/42",
 	}

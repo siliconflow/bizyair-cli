@@ -72,22 +72,6 @@ func ValidateBaseModel(baseModel string, allowedModels []string) error {
 	return nil
 }
 
-// ValidateBaseModelLegacy 使用本地常量列表验证（保留用于向后兼容，但标记为deprecated）
-// Deprecated: 使用 ValidateBaseModel 并传入从API获取的列表
-func ValidateBaseModelLegacy(baseModel string) error {
-	if baseModel == "" {
-		return i18n.NewError("validation.base_model_required", nil, nil)
-	}
-	valid, exists := meta.SupportedBaseModels[baseModel]
-	if !exists {
-		return i18n.NewError("validation.base_model_unsupported_simple", map[string]any{"Model": baseModel}, nil)
-	}
-	if !valid {
-		return i18n.NewError("validation.base_model_invalid", map[string]any{"Model": baseModel}, nil)
-	}
-	return nil
-}
-
 // ValidateCoverFile 校验封面文件格式和大小
 func ValidateCoverFile(path string) error {
 	info, err := os.Stat(path)

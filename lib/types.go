@@ -215,3 +215,8 @@ type BaseModelTypeItem struct {
 	Label string `json:"label,omitempty"`
 	Value string `json:"value,omitempty"`
 }
+
+// MetaDict 字典接口响应（/v1/dict），CLI 仅消费 base_models 字段
+type MetaDict struct {
+	BaseModels []*BaseModelTypeItem `json:"base_models,omitempty"`
+}

@@ -46,6 +46,40 @@ func TestClientCheckModelExists(t *testing.T) {
 	}
 }
 
+func TestGetBaseModelTypes(t *testing.T) {
+	t.Run("dict endpoint", func(t *testing.T) {
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`{"code":20000,"data":{"base_models":[{"label":"0010","value":"FLUX.1 D"}]}}`))
+		}))
+		defer server.Close()
+
+		resp, err := NewClient(server.URL, "test-api-key").GetBaseModelTypes()
+		if err != nil {
+			t.Fatalf("GetBaseModelTypes() error = %v", err)
+		}
+		if len(resp.Data) != 1 || resp.Data[0].Value != "FLUX.1 D" {
+			t.Fatalf("GetBaseModelTypes() = %#v", resp.Data)
+		}
+	})
+
+	t.Run("falls back to local list on server error", func(t *testing.T) {
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			w.WriteHeader(http.StatusForbidden)
+			_, _ = w.Write([]byte("Forbidden"))
+		}))
+		defer server.Close()
+
+		resp, err := NewClient(server.URL, "test-api-key").GetBaseModelTypes()
+		if err != nil {
+			t.Fatalf("GetBaseModelTypes() error = %v", err)
+		}
+		if len(resp.Data) != len(meta.SupportedBaseModels) {
+			t.Fatalf("GetBaseModelTypes() returned %d items, want %d", len(resp.Data), len(meta.SupportedBaseModels))
+		}
+	})
+}
+
 func TestHandleResponse(t *testing.T) {
 	t.Run("success", func(t *testing.T) {
 		body, err := json.Marshal(Response[UserInfo]{
