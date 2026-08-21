@@ -17,6 +17,10 @@ const (
 	CmdRm      = "rm"
 	CmdCommit  = "commit"
 	CmdUpgrade = "upgrade"
+	CmdWhoami  = "whoami"
+	CmdPlan    = "plan"
+	CmdWallet  = "wallet"
+	CmdDayCost = "day-cost"
 )
 
 const (

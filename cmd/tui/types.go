@@ -14,15 +14,22 @@ const (
 	mainStepMenu
 	mainStepAction
 	mainStepOutput
+	mainStepUserInfo
 )
 
 type actionKind string
 
 const (
-	actionUpload  actionKind = "upload"
-	actionLsModel actionKind = "ls_model"
-	actionLogout  actionKind = "logout"
-	actionExit    actionKind = "exit"
+	actionUpload   actionKind = "upload"
+	actionLsModel  actionKind = "ls_model"
+	actionLogout   actionKind = "logout"
+	actionExit     actionKind = "exit"
+	actionUserInfo actionKind = "user_info"
+	actionWhoami   actionKind = "whoami"
+	actionPlan     actionKind = "plan"
+	actionWallet   actionKind = "wallet"
+	actionCredits  actionKind = "credits"
+	actionDayCost  actionKind = "day_cost"
 )
 
 // 上传步骤
@@ -146,6 +153,11 @@ type actionInputs struct {
 	pathMatchCount           int    // 匹配项数量
 }
 
+// userInfoInputs 用户信息子菜单状态
+type userInfoInputs struct {
+	selectedAction actionKind
+}
+
 // 打开浏览器结果消息
 type openBrowserDoneMsg struct {
 	msg string
@@ -157,4 +169,34 @@ type openBrowserDoneMsg struct {
 type baseModelTypesLoadedMsg struct {
 	items []*lib.BaseModelTypeItem
 	err   error
+}
+
+// --- User info messages ---
+
+// whoamiDoneMsg 用户信息查询结果消息。
+type whoamiDoneMsg struct {
+	user *lib.UserInfo
+	err  error
+}
+
+// planDoneMsg 套餐查询结果消息。
+type planDoneMsg struct {
+	plan *lib.PlanOverviewResp
+	err  error
+}
+
+// creditsDoneMsg 积分明细查询结果消息。
+type creditsDoneMsg struct {
+	credits     []*lib.CreditItem
+	total       int
+	giftAmt     int64
+	rechargeAmt int64
+	totalAmt    int64
+	err         error
+}
+
+// dayCostDoneMsg 每日消费查询结果消息。
+type dayCostDoneMsg struct {
+	records []*lib.CostByTimeResult
+	err     error
 }

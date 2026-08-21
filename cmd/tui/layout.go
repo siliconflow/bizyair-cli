@@ -27,6 +27,65 @@ func clipToWidth(s string, width int) string {
 	return lipgloss.NewStyle().Width(width).Render(s)
 }
 
+// truncateLine 将 s 截断到最多 maxW 个可见终端列：
+// 对 ANSI 转义序列透明处理；超宽时截断并追加省略号"…"，
+// 保留尾部 ANSI 重置序列避免颜色泄漏到后续输出。
+func truncateLine(s string, maxW int) string {
+	if maxW <= 0 {
+		return ""
+	}
+	// 整行已能放下时直接返回，避免恰好 maxW 的行被误截断
+	if lipgloss.Width(s) <= maxW {
+		return s
+	}
+	var out strings.Builder
+	visibleW := 0
+	truncated := false
+	ellipsisW := lipgloss.Width("…")
+	runes := []rune(s)
+	i := 0
+	for i < len(runes) {
+		// 原样透传 ANSI 转义序列（\x1b[...m），不占可见宽度
+		if runes[i] == '\x1b' && i+1 < len(runes) && runes[i+1] == '[' {
+			j := i + 2
+			for j < len(runes) && runes[j] != 'm' {
+				j++
+			}
+			if j < len(runes) {
+				out.WriteString(string(runes[i : j+1]))
+				i = j + 1
+				continue
+			}
+		}
+		rw := lipgloss.Width(string(runes[i]))
+		if visibleW+rw+ellipsisW > maxW {
+			truncated = true
+			break
+		}
+		out.WriteRune(runes[i])
+		visibleW += rw
+		i++
+	}
+	if truncated {
+		out.WriteString("…")
+		// 从被截断的剩余部分中找回最后一个 ANSI 颜色序列并追加，保证颜色不泄漏
+		remaining := runes[i:]
+		for j := len(remaining) - 1; j >= 0; j-- {
+			if remaining[j] == 'm' {
+				k := j - 1
+				for k >= 0 && remaining[k] != '\x1b' {
+					k--
+				}
+				if k >= 0 && remaining[k] == '\x1b' && k+1 < len(remaining) && remaining[k+1] == '[' {
+					out.WriteString(string(remaining[k : j+1]))
+				}
+				break
+			}
+		}
+	}
+	return out.String()
+}
+
 func ensureTrailingSep(p string) string {
 	sep := string(filepath.Separator)
 	if strings.HasSuffix(p, sep) {

@@ -1,24 +1,25 @@
 package lib
 
+import "github.com/siliconflow/bizyair-cli/domain"
+
 type FileReq struct {
 	Sign string `json:"sign,omitempty" form:"sign" query:"sign"`
 }
 
-type UserInfo struct {
-	Id               string `json:"id" form:"id" query:"id"`
-	Name             string `json:"name" form:"name" query:"name"`
-	Image            string `json:"image" form:"image" query:"image"`
-	Email            string `json:"email" form:"email" query:"email"`
-	IsAdmin          bool   `json:"isAdmin" form:"isAdmin" query:"isAdmin"`
-	Balance          string `json:"balance" form:"balance" query:"balance"`
-	Status           string `json:"status" form:"status" query:"status"`
-	Introduction     string `json:"introduction" form:"introduction" query:"introduction"`
-	Role             string `json:"role" form:"role" query:"role"`
-	ChargeBalance    string `json:"chargeBalance" form:"chargeBalance" query:"chargeBalance"`
-	TotalBalance     string `json:"totalBalance" form:"totalBalance" query:"totalBalance"`
-	Category         string `json:"category" form:"category" query:"category"`
-	CurrentMonthCost string `json:"currentMonthCost" form:"currentMonthCost" query:"currentMonthCost"`
-}
+// User/account types（定义见 domain/user.go）
+type UserInfo = domain.UserInfo
+type PlanInfo = domain.PlanInfo
+type PlanNextTier = domain.PlanNextTier
+type PlanWalletInfo = domain.PlanWalletInfo
+type PlanRollingWindow = domain.PlanRollingWindow
+type PlanOverviewResp = domain.PlanOverviewResp
+type WalletInfo = domain.WalletInfo
+type WalletResp = domain.WalletResp
+type CreditItem = domain.CreditItem
+type CreditsListResp = domain.CreditsListResp
+type CreditsReq = domain.CreditsReq
+type CostByTimeResult = domain.CostByTimeResult
+type DayCostResp = domain.DayCostResp
 
 type FilesResp struct {
 	File    *FileInfo    `json:"file,omitempty" form:"file" query:"file"`
