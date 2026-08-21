@@ -11,6 +11,7 @@ common:
   version: "显示版本"
   yes: "是"
   no: "否"
+  currency_usd: "$"
 
 tui:
   menu:
@@ -23,6 +24,18 @@ tui:
     logout_desc: "清除本地 API Key"
     exit: "退出程序"
     exit_desc: "离开 BizyAir CLI"
+    user_info: "用户信息"
+    user_info_desc: "账户信息、套餐、钱包和今日消费"
+    whoami: "基本信息"
+    whoami_desc: "查看账户基本信息"
+    plan: "订阅套餐"
+    plan_desc: "查看订阅套餐概览"
+    wallet: "钱包余额"
+    wallet_desc: "查看钱包余额"
+    credits: "余额明细"
+    credits_desc: "查看余额明细和过期信息"
+    day_cost: "今日消费"
+    day_cost_desc: "查看今日消费明细"
   model_type:
     title: "选择模型类型"
     checkpoint: "完整的扩散模型，包含所有组件"
@@ -264,6 +277,61 @@ cli:
     model_list: "列出你的模型"
     model_remove: "删除你的模型"
     upgrade: "检查并升级 CLI 到最新版本"
+    whoami: "显示当前用户身份"
+    plan: "显示订阅套餐概览"
+    wallet: "显示钱包余额"
+    credits: "显示余额明细和过期信息"
+    day_cost: "显示今日消费"
+  whoami:
+    id_label: "ID"
+    name_label: "名称"
+    email_label: "邮箱"
+    level_label: "等级"
+    level_with_number: "{{.Name}}（Lv.{{.Level}}）"
+    status_label: "状态"
+    online_tester_label: "在线测试员"
+    api_key_label: "API Key"
+  plan:
+    effective_plan_label: "当前套餐"
+    effective_level_label: "当前等级"
+    current_level_label: "当前等级"
+    next_downgrade_label: "下次降级检查"
+    next_tier_label: "下一等级"
+    need_recharge_label: "升级需充值"
+    level_name:
+      basic: "基础"
+      iron: "黑铁"
+      bronze: "青铜"
+      silver: "白银"
+      gold: "黄金"
+      platinum: "铂金"
+  wallet:
+    recharge_balance_label: "充值余额"
+    gift_balance_label: "赠送余额"
+  credits:
+    not_logged_in: "未登录，请先使用 'bizyair login' 登录。"
+    no_credits: "未找到余额记录。"
+    card_title: "余额与权益"
+    current_balance: "当前余额"
+    recharge_balance: "充值余额"
+    gift_balance: "赠送余额"
+    days_until_expire: "{{.Days}} 天后过期"
+    expired_short: "已过期"
+    expire_with_date: "{{.Date}} 过期 (剩 {{.Days}} 天)"
+    expired_with_date: "{{.Date}} 已过期"
+    total_label: "总条目"
+    total_credits_label: "总余额"
+    gift_credits_label: "赠送余额"
+    recharge_credits_label: "充值余额"
+    expire_at_label: "过期时间"
+  day_cost:
+    no_records: "今日暂无消费记录。"
+    total_credits_label: "总消费金额"
+    total_prompts_label: "总请求数"
+  chart:
+    intro: "每小时消费柱状图：白条长度 = 该小时消费金额，右侧数字 = 请求次数"
+    row_format: "{{.Time}}  {{.Cost}}  {{.Bar}}  {{.Requests}} 请求"
+    total_format: "合计  {{.Cost}}  {{.Requests}} 请求"
   flag:
     verbose: "启用详细日志模式"
     base_domain: "指定 BizyAir 根域名，用于派生 API、元数据、网页和存储端点。"
@@ -516,6 +584,11 @@ step:
   create_oss_client: "创建 OSS 客户端"
   oss_upload: "OSS 上传"
   commit_file: "提交文件"
+  whoami: "用户信息"
+  plan: "套餐概览"
+  wallet: "钱包"
+  credits: "额度"
+  day_cost: "日消费"
 
 config:
   yaml:
@@ -542,3 +615,11 @@ test:
   greeting: "你好，{{.Name}}！"
   files:
     other: "{{.Count}} 个文件"
+
+api:
+  user_status:
+    normal: "正常"
+    banned: "已封禁"
+    frozen: "已冻结"
+    pending: "待激活"
+    inactive: "未激活"

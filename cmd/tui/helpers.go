@@ -497,3 +497,78 @@ func (m *mainModel) renderStyledHint(hint string) string {
 
 	return strings.Join(rows, "\n")
 }
+
+// renderKeyValueTable 渲染"标签 │ 值"两列表格：
+// 标签列按内容自适应并限制在 maxW 的三分之一内，值列占剩余宽度，
+// 行间以横线分隔，超宽内容由 truncateLine 截断。
+func renderKeyValueTable(labels, values []string, maxW int) string {
+	if len(labels) == 0 || len(labels) != len(values) {
+		return ""
+	}
+
+	maxLabelW := 0
+	for _, l := range labels {
+		if w := lipgloss.Width(l); w > maxLabelW {
+			maxLabelW = w
+		}
+	}
+
+	sep := " │ "
+	sepW := lipgloss.Width(sep)
+	hPad := 2
+
+	availW := maxW
+	labelColW := maxLabelW + hPad
+	maxLabelColW := availW / 3
+	if maxLabelColW < 12 {
+		maxLabelColW = 12
+	}
+	if labelColW > maxLabelColW {
+		labelColW = maxLabelColW
+	}
+
+	valueColW := availW - labelColW - sepW
+	if valueColW < 12 {
+		valueColW = 12
+	}
+
+	labelContentW := labelColW - hPad
+	valueContentW := valueColW - hPad
+
+	labelStyle := lipgloss.NewStyle().
+		Foreground(lipgloss.Color("#22D3EE")).
+		Bold(true).
+		Padding(0, 1).
+		Width(labelColW)
+
+	valueStyle := lipgloss.NewStyle().
+		Padding(0, 1).
+		Width(valueColW)
+
+	sepStyle := lipgloss.NewStyle().
+		Foreground(lipgloss.Color("#6B7280"))
+
+	lineW := labelColW + sepW + valueColW
+	lineStyle := lipgloss.NewStyle().
+		Foreground(lipgloss.Color("#6B7280"))
+	line := lineStyle.Render(strings.Repeat("─", lineW))
+
+	var parts []string
+	for i := range labels {
+		label := truncateLine(labels[i], labelContentW)
+		value := truncateLine(values[i], valueContentW)
+
+		leftCell := labelStyle.Render(label)
+		rightCell := valueStyle.Render(value)
+		sepCell := sepStyle.Render(sep)
+
+		row := lipgloss.JoinHorizontal(lipgloss.Top, leftCell, sepCell, rightCell)
+		parts = append(parts, row)
+
+		if i < len(labels)-1 {
+			parts = append(parts, line)
+		}
+	}
+
+	return lipgloss.JoinVertical(lipgloss.Left, parts...)
+}

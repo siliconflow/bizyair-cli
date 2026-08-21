@@ -144,6 +144,36 @@ func Init() *cli.App {
 			},
 			Action: Upgrade,
 		},
+		{
+			Name:   meta.CmdWhoami,
+			Usage:  i18n.T("cli.command.whoami"),
+			Flags:  []cli.Flag{&apiKeyFlag, &baseDomainFlag},
+			Action: Whoami,
+		},
+		{
+			Name:   meta.CmdPlan,
+			Usage:  i18n.T("cli.command.plan"),
+			Flags:  []cli.Flag{&apiKeyFlag, &baseDomainFlag},
+			Action: Plan,
+		},
+		{
+			Name:   meta.CmdWallet,
+			Usage:  i18n.T("cli.command.wallet"),
+			Flags:  []cli.Flag{&apiKeyFlag, &baseDomainFlag},
+			Action: Wallet,
+		},
+		{
+			Name:   meta.CmdCredits,
+			Usage:  i18n.T("cli.command.credits"),
+			Flags:  []cli.Flag{&apiKeyFlag, &baseDomainFlag},
+			Action: Credits,
+		},
+		{
+			Name:   meta.CmdDayCost,
+			Usage:  i18n.T("cli.command.day_cost"),
+			Flags:  []cli.Flag{&apiKeyFlag, &baseDomainFlag},
+			Action: DayCost,
+		},
 		localizedHelpCommand(),
 	}
 

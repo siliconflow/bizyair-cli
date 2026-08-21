@@ -34,6 +34,10 @@ type BizyAPI interface {
 	GetUploadTokenContext(ctx context.Context, fileName, fileType string) (*Response[FilesResp], error)
 	CommitInputResourceContext(ctx context.Context, name, objectKey string) (*Response[InputResourceCommitResp], error)
 	GetBaseModelTypesContext(ctx context.Context) (*Response[[]*BaseModelTypeItem], error)
+	GetPlanOverviewContext(ctx context.Context) (*Response[PlanOverviewResp], error)
+	GetWalletContext(ctx context.Context) (*Response[WalletResp], error)
+	GetCreditsContext(ctx context.Context, current, pageSize, expireDays int) (*Response[CreditsListResp], error)
+	GetDayCostContext(ctx context.Context, date string) (*Response[DayCostResp], error)
 }
 
 // Client bizyair client
@@ -310,6 +314,88 @@ func (c *Client) GetBaseModelTypesContext(ctx context.Context) (*Response[[]*Bas
 	}
 
 	return handleResponse[[]*BaseModelTypeItem](body)
+}
+
+// GetPlanOverview 获取套餐概览
+func (c *Client) GetPlanOverview() (*Response[PlanOverviewResp], error) {
+	return c.GetPlanOverviewContext(context.Background())
+}
+
+func (c *Client) GetPlanOverviewContext(ctx context.Context) (*Response[PlanOverviewResp], error) {
+	serverURL := joinEndpoint(c.Endpoints.Meta, "/v1/user/plan_overview")
+	body, statusCode, err := c.doGet(ctx, serverURL, nil, c.authHeader())
+	if err != nil {
+		return nil, err
+	}
+	if statusCode != http.StatusOK {
+		return nil, handleError(body, statusCode)
+	}
+	return handleResponse[PlanOverviewResp](body)
+}
+
+// GetWallet 获取钱包余额
+func (c *Client) GetWallet() (*Response[WalletResp], error) {
+	return c.GetWalletContext(context.Background())
+}
+
+func (c *Client) GetWalletContext(ctx context.Context) (*Response[WalletResp], error) {
+	serverURL := joinEndpoint(c.Endpoints.FinanceURL(), "/v1/wallet")
+	body, statusCode, err := c.doGet(ctx, serverURL, nil, c.authHeader())
+	if err != nil {
+		return nil, err
+	}
+	if statusCode != http.StatusOK {
+		return nil, handleError(body, statusCode)
+	}
+	return handleResponse[WalletResp](body)
+}
+
+// GetCredits 获取积分明细
+func (c *Client) GetCredits(current, pageSize, expireDays int) (*Response[CreditsListResp], error) {
+	return c.GetCreditsContext(context.Background(), current, pageSize, expireDays)
+}
+
+func (c *Client) GetCreditsContext(ctx context.Context, current, pageSize, expireDays int) (*Response[CreditsListResp], error) {
+	serverURL := joinEndpoint(c.Endpoints.FinanceURL(), "/v1/credits")
+	body, statusCode, err := c.doGet(ctx, serverURL, CreditsReq{
+		Current:    current,
+		PageSize:   pageSize,
+		ExpireDays: expireDays,
+	}, c.authHeader())
+	if err != nil {
+		return nil, err
+	}
+	if statusCode != http.StatusOK {
+		return nil, handleError(body, statusCode)
+	}
+	return handleResponse[CreditsListResp](body)
+}
+
+// GetDayCost 获取每日消费记录
+func (c *Client) GetDayCost(date string) (*Response[DayCostResp], error) {
+	return c.GetDayCostContext(context.Background(), date)
+}
+
+func (c *Client) GetDayCostContext(ctx context.Context, date string) (*Response[DayCostResp], error) {
+	serverURL := joinEndpoint(c.Endpoints.FinanceURL(), "/v1/bills/day_cost")
+	// API requires ISO 8601 date format (e.g. "2026-08-10T00:00:00Z").
+	// Default to today if no date provided.
+	if date == "" {
+		date = time.Now().UTC().Format("2006-01-02T00:00:00Z")
+	} else if len(date) == 10 && date[4] == '-' && date[7] == '-' {
+		// Convert plain date like "2026-08-10" to ISO 8601.
+		date = date + "T00:00:00Z"
+	}
+	body, statusCode, err := c.doGet(ctx, serverURL, struct {
+		Date string `form:"date" query:"date"`
+	}{Date: date}, c.authHeader())
+	if err != nil {
+		return nil, err
+	}
+	if statusCode != http.StatusOK {
+		return nil, handleError(body, statusCode)
+	}
+	return handleResponse[DayCostResp](body)
 }
 
 func (c *Client) authHeader() map[string]string {
