@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"net/url"
 	"reflect"
+	"sort"
 	"strings"
 	"time"
 	"unicode"
@@ -298,7 +299,22 @@ func (c *Client) GetBaseModelTypes() (*Response[[]*BaseModelTypeItem], error) {
 	return c.GetBaseModelTypesContext(context.Background())
 }
 
+// GetBaseModelTypesContext 获取基础模型类型列表，接口失败或返回空时回退到本地列表
 func (c *Client) GetBaseModelTypesContext(ctx context.Context) (*Response[[]*BaseModelTypeItem], error) {
+	resp, err := c.fetchBaseModelTypes(ctx)
+	if err != nil {
+		if ctx != nil && ctx.Err() != nil {
+			return nil, err
+		}
+		return localBaseModelTypes(), nil
+	}
+	if len(resp.Data) == 0 {
+		return localBaseModelTypes(), nil
+	}
+	return resp, nil
+}
+
+func (c *Client) fetchBaseModelTypes(ctx context.Context) (*Response[[]*BaseModelTypeItem], error) {
 	serverURL := c.Endpoints.BaseModelTypesURL()
 	body, statusCode, err := c.doGet(ctx, serverURL, nil, nil)
 	if err != nil {
@@ -309,7 +325,31 @@ func (c *Client) GetBaseModelTypesContext(ctx context.Context) (*Response[[]*Bas
 		return nil, handleError(body, statusCode)
 	}
 
-	return handleResponse[[]*BaseModelTypeItem](body)
+	dictResp, err := handleResponse[MetaDict](body)
+	if err != nil {
+		return nil, err
+	}
+	return &Response[[]*BaseModelTypeItem]{
+		RequestId: dictResp.RequestId,
+		Code:      dictResp.Code,
+		Message:   dictResp.Message,
+		Status:    dictResp.Status,
+		Data:      dictResp.Data.BaseModels,
+	}, nil
+}
+
+// localBaseModelTypes 用本地兜底列表构造响应
+func localBaseModelTypes() *Response[[]*BaseModelTypeItem] {
+	items := make([]*BaseModelTypeItem, 0, len(meta.SupportedBaseModels))
+	for name := range meta.SupportedBaseModels {
+		items = append(items, &BaseModelTypeItem{Value: name})
+	}
+	sort.Slice(items, func(i, j int) bool { return items[i].Value < items[j].Value })
+	return &Response[[]*BaseModelTypeItem]{
+		Code:   meta.OKCode,
+		Status: true,
+		Data:   items,
+	}
 }
 
 func (c *Client) authHeader() map[string]string {
