@@ -63,19 +63,22 @@ func TestGetBaseModelTypes(t *testing.T) {
 		}
 	})
 
-	t.Run("falls back to local list on server error", func(t *testing.T) {
+	t.Run("falls back with nil context on server error", func(t *testing.T) {
 		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 			w.WriteHeader(http.StatusForbidden)
 			_, _ = w.Write([]byte("Forbidden"))
 		}))
 		defer server.Close()
 
-		resp, err := NewClient(server.URL, "test-api-key").GetBaseModelTypes()
+		resp, err := NewClient(server.URL, "test-api-key").GetBaseModelTypesContext(nil)
 		if err != nil {
 			t.Fatalf("GetBaseModelTypes() error = %v", err)
 		}
 		if len(resp.Data) != len(meta.SupportedBaseModels) {
 			t.Fatalf("GetBaseModelTypes() returned %d items, want %d", len(resp.Data), len(meta.SupportedBaseModels))
+		}
+		if resp.Code != meta.OKCode || !resp.Status {
+			t.Fatalf("GetBaseModelTypes() fallback status = code %d, status %t; want code %d, status true", resp.Code, resp.Status, meta.OKCode)
 		}
 	})
 }

@@ -303,7 +303,7 @@ func (c *Client) GetBaseModelTypes() (*Response[[]*BaseModelTypeItem], error) {
 func (c *Client) GetBaseModelTypesContext(ctx context.Context) (*Response[[]*BaseModelTypeItem], error) {
 	resp, err := c.fetchBaseModelTypes(ctx)
 	if err != nil {
-		if ctx.Err() != nil {
+		if ctx != nil && ctx.Err() != nil {
 			return nil, err
 		}
 		return localBaseModelTypes(), nil
@@ -345,7 +345,11 @@ func localBaseModelTypes() *Response[[]*BaseModelTypeItem] {
 		items = append(items, &BaseModelTypeItem{Value: name})
 	}
 	sort.Slice(items, func(i, j int) bool { return items[i].Value < items[j].Value })
-	return &Response[[]*BaseModelTypeItem]{Data: items}
+	return &Response[[]*BaseModelTypeItem]{
+		Code:   meta.OKCode,
+		Status: true,
+		Data:   items,
+	}
 }
 
 func (c *Client) authHeader() map[string]string {
