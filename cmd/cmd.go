@@ -163,12 +163,6 @@ func Init() *cli.App {
 			Action: Wallet,
 		},
 		{
-			Name:   meta.CmdCredits,
-			Usage:  i18n.T("cli.command.credits"),
-			Flags:  []cli.Flag{&apiKeyFlag, &baseDomainFlag},
-			Action: Credits,
-		},
-		{
 			Name:   meta.CmdDayCost,
 			Usage:  i18n.T("cli.command.day_cost"),
 			Flags:  []cli.Flag{&apiKeyFlag, &baseDomainFlag},

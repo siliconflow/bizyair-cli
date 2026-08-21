@@ -20,7 +20,6 @@ const (
 	CmdWhoami  = "whoami"
 	CmdPlan    = "plan"
 	CmdWallet  = "wallet"
-	CmdCredits = "credits"
 	CmdDayCost = "day-cost"
 )
 

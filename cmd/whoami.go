@@ -271,45 +271,6 @@ func formatExpiryCLI(expiredAt string) string {
 	return i18n.T("cli.credits.expire_with_date", map[string]any{"Date": dateStr, "Days": days})
 }
 
-// Credits 查询积分汇总及逐笔积分明细（充值/赠送/有效期）。
-func Credits(c *cli.Context) error {
-	args := parseArgument(c, meta.CmdCredits)
-	setLogVerbose(args.Verbose)
-	logArguments(args)
-
-	_, client, err := resolveClient(args)
-	if err != nil {
-		return cli.Exit(err, meta.LoadError)
-	}
-
-	resp, err := client.GetCreditsContext(c.Context, 1, 100, 0)
-	if err != nil {
-		return cli.Exit(lib.WithStep(i18n.T("step.credits"), err), meta.ServerError)
-	}
-	data := resp.Data
-
-	if data.Total == 0 || len(data.List) == 0 {
-		fmt.Fprintln(os.Stdout, i18n.T("cli.credits.no_credits"))
-		return nil
-	}
-
-	fmt.Fprintf(os.Stdout, "%s: %d\n", i18n.T("cli.credits.total_label"), data.Total)
-	fmt.Fprintf(os.Stdout, "%s: %s\n", i18n.T("cli.credits.total_credits_label"), formatCredits(data.TotalAmount))
-	fmt.Fprintf(os.Stdout, "%s: %s\n", i18n.T("cli.credits.gift_credits_label"), formatCredits(data.GiftAmount))
-	fmt.Fprintf(os.Stdout, "%s: %s\n", i18n.T("cli.credits.recharge_credits_label"), formatCredits(data.RechargeAmount))
-
-	for _, item := range data.List {
-		expiry := formatTimestampCLI(item.ExpiredAt)
-		fmt.Fprintf(os.Stdout, "  - %s: %s  %s: %s  %s: %s  %s: %s\n",
-			i18n.T("cli.credits.total_credits_label"), formatCredits(item.TotalAmount),
-			i18n.T("cli.credits.gift_credits_label"), formatCredits(item.GiftAmount),
-			i18n.T("cli.credits.recharge_credits_label"), formatCredits(item.RechargeAmount),
-			i18n.T("cli.credits.expire_at_label"), expiry,
-		)
-	}
-	return nil
-}
-
 // DayCost 查询今日按小时的消费记录：绘制每小时消费柱状图并汇总总积分与总请求数。
 func DayCost(c *cli.Context) error {
 	args := parseArgument(c, meta.CmdDayCost)
