@@ -316,7 +316,7 @@ func (c *Client) GetBaseModelTypesContext(ctx context.Context) (*Response[[]*Bas
 
 func (c *Client) fetchBaseModelTypes(ctx context.Context) (*Response[[]*BaseModelTypeItem], error) {
 	serverURL := c.Endpoints.BaseModelTypesURL()
-	body, statusCode, err := c.doGet(ctx, serverURL, nil, c.authHeader())
+	body, statusCode, err := c.doGet(ctx, serverURL, nil, nil)
 	if err != nil {
 		return nil, err
 	}

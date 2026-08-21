@@ -136,7 +136,7 @@ func TestClientUsesNewServiceEndpointContract(t *testing.T) {
 		if got.RawQuery != want.query {
 			t.Errorf("meta request %d query = %q, want %q", i, got.RawQuery, want.query)
 		}
-		if got.Authorization != "Bearer test-key" {
+		if want.path != "/v1/dict" && got.Authorization != "Bearer test-key" {
 			t.Errorf("meta request %d authorization = %q", i, got.Authorization)
 		}
 		if got.CLIVersion != meta.Version {
