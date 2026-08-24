@@ -191,6 +191,7 @@ type BizyModelDetailVersion struct {
 	Counter     ModelCounter `json:"counter,omitempty"`
 	ModelId     int64        `json:"model_id,omitempty"`
 	FileSize    int64        `json:"file_size,omitempty"`
+	Public      bool         `json:"public,omitempty"`
 	CreatedAt   string       `json:"created_at,omitempty"`
 	UpdatedAt   string       `json:"updated_at,omitempty"`
 	CoverUrls   []string     `json:"cover_urls,omitempty"`

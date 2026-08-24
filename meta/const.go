@@ -14,6 +14,7 @@ const (
 	CmdModel   = "model"
 	CmdLs      = "ls"
 	CmdDetail  = "detail"
+	CmdPublic  = "public"
 	CmdRm      = "rm"
 	CmdCommit  = "commit"
 	CmdUpgrade = "upgrade"

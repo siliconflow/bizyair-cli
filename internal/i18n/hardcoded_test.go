@@ -5,6 +5,7 @@ import (
 	"go/parser"
 	"go/token"
 	"io/fs"
+	"os"
 	"path/filepath"
 	"regexp"
 	"runtime"
@@ -62,6 +63,15 @@ func TestLiteralMessageIDsExist(t *testing.T) {
 		if entry.IsDir() {
 			if entry.Name() == ".git" {
 				return filepath.SkipDir
+			}
+			// Skip nested Go modules (e.g. the gitignored bizyair-cli_参照
+			// reference copy). They keep their own go.mod and i18n catalogs
+			// and are not part of this module, so their message IDs must not
+			// be validated against this module's catalog.
+			if path != repositoryRoot {
+				if _, statErr := os.Stat(filepath.Join(path, "go.mod")); statErr == nil {
+					return filepath.SkipDir
+				}
 			}
 			return nil
 		}

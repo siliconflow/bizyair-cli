@@ -281,12 +281,10 @@ func (m mainModel) renderCredits(credits []*lib.CreditItem, total int, giftAmt, 
 		subCards + "\n"
 
 	outerCard := lipgloss.NewStyle().
-		Border(lipgloss.RoundedBorder()).
-		BorderForeground(lipgloss.Color("#8B5CF6")).
 		Padding(1, 2).
 		Width(outerW).
 		Height(panelH).
-		Render(titleStyle.Render(i18n.T("cli.credits.card_title", nil)) + "\n\n" + inner)
+		Render(inner)
 
 	return outerCard
 }

@@ -101,3 +101,14 @@ func DeleteModelContext(ctx context.Context, api lib.BizyAPI, modelId int64) Del
 		Success: true,
 	}
 }
+
+func ToggleModelPublicContext(ctx context.Context, api lib.BizyAPI, versionIDs []int64, public bool) error {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	_, err := api.BatchUpdateVersionPublicContext(ctx, versionIDs, public)
+	if err != nil {
+		return lib.WithStep(i18n.T("step.toggle_model_public"), err)
+	}
+	return nil
+}

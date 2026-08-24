@@ -11,16 +11,16 @@ import (
 	"github.com/urfave/cli/v2"
 )
 
+// RemoveModel 删除模型。支持两种定位方式：
+//   - 位置参数 <id>：直接按数字 ID 删除；
+//   - -n <name> [-t <type>]：按名称（可选限定类型）解析后删除。
+//
+// 未提供 -y 时需交互确认，避免误删。
 func RemoveModel(c *cli.Context) error {
 	args := parseArgument(c, meta.CmdRm)
 	setLogVerbose(args.Verbose)
 	logArguments(args)
 
-	if err := lib.ValidateModelType(args.Type); err != nil {
-		return cli.Exit(err, meta.LoadError)
-	}
-
-	// 获取API Key
 	apiKey := args.ApiKey
 	if apiKey == "" {
 		var err error
@@ -29,40 +29,45 @@ func RemoveModel(c *cli.Context) error {
 			return cli.Exit(err, meta.LoadError)
 		}
 	}
-
-	// 先查找模型以获取ID
+	args.ApiKey = apiKey // 回写：resolveModelID 读 args.ApiKey 调 ListModels 做名称解析
 	client := lib.NewClient(args.BaseDomain, apiKey)
-	listInput := actions.ListModelsInput{
-		Context:    c.Context,
-		ApiKey:     apiKey,
-		BaseDomain: args.BaseDomain,
-		ModelType:  args.Type,
-		Keyword:    args.Name,
-	}
-	listResult := actions.ListModels(client, listInput)
-	if listResult.Error != nil {
-		return cli.Exit(listResult.Error, meta.ServerError)
+
+	var modelID int64
+	idStr := c.Args().First()
+	if idStr != "" {
+		mid, err := resolveModelID(c, client, args, idStr)
+		if err != nil {
+			return cli.Exit(err, meta.LoadError)
+		}
+		modelID = mid
+	} else {
+		// 按名称删除时必须先校验类型（空类型会返回“模型类型不能为空”）。
+		if err := lib.ValidateModelType(args.Type); err != nil {
+			return cli.Exit(err, meta.LoadError)
+		}
+		if args.Name == "" {
+			return cli.Exit(i18n.NewError("cli.rm.name_or_id_required", nil, nil), meta.LoadError)
+		}
+		mid, err := resolveModelID(c, client, args, args.Name)
+		if err != nil {
+			return cli.Exit(err, meta.LoadError)
+		}
+		modelID = mid
 	}
 
-	// 查找匹配的模型
-	var modelId int64
-	for _, model := range listResult.Models {
-		if model.Name == args.Name {
-			modelId = model.Id
-			break
+	if !c.Bool("yes") {
+		fmt.Fprint(os.Stdout, i18n.T("cli.model.rm_confirm", map[string]any{"ID": modelID}))
+		var resp string
+		_, _ = fmt.Scanln(&resp)
+		if !confirmYes(resp) {
+			return cli.Exit(i18n.NewError("cli.model.rm_canceled", nil, nil), meta.LoadError)
 		}
 	}
 
-	if modelId == 0 {
-		return cli.Exit(i18n.NewError("error.model.not_found_named", map[string]any{"Name": args.Name}, nil), meta.LoadError)
-	}
-
-	// 调用统一的删除逻辑
-	result := actions.DeleteModelContext(c.Context, client, modelId)
+	result := actions.DeleteModelContext(c.Context, client, modelID)
 	if !result.Success {
 		return cli.Exit(result.Error, meta.ServerError)
 	}
-
 	fmt.Fprintln(os.Stdout, i18n.T("cli.model.remove_success"))
 	return nil
 }

@@ -5,6 +5,8 @@ import (
 	"path/filepath"
 	"strings"
 
+	tablev2 "charm.land/bubbles/v2/table"
+	lipglossv2 "charm.land/lipgloss/v2"
 	"github.com/charmbracelet/bubbles/list"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/siliconflow/bizyair-cli/cmd/tui/filepicker"
@@ -386,6 +388,10 @@ func (m *mainModel) getContextualHint() string {
 		case stepConfirm:
 			return i18n.T("tui.hint.start_upload", nil)
 		}
+	case mainStepMyModelsList:
+		return i18n.T("tui.my_models.hint_list", nil)
+	case mainStepModelDetail:
+		return i18n.T("tui.my_models.hint_detail", nil)
 	case mainStepOutput:
 		return i18n.T("tui.hint.return_menu", nil)
 	}
@@ -571,4 +577,96 @@ func renderKeyValueTable(labels, values []string, maxW int) string {
 	}
 
 	return lipgloss.JoinVertical(lipgloss.Left, parts...)
+}
+
+// --- v2 table helpers ---
+
+var tableFrame = lipglossv2.NewStyle().
+	BorderStyle(lipglossv2.NormalBorder()).
+	BorderForeground(lipglossv2.Color("240"))
+
+// fitColumnWidthsByContent 根据每列理想宽度与可用宽度计算实际列宽：
+// 空间充足时均分余量（fill=true），不足时按比例压缩（保底 4 列宽）。
+func fitColumnWidthsByContent(ideal []int, maxW int, fill bool) []tablev2.Column {
+	if len(ideal) == 0 {
+		return nil
+	}
+	const minW = 4
+	sum := 0
+	for _, w := range ideal {
+		sum += w
+	}
+	n := len(ideal)
+	result := make([]tablev2.Column, n)
+	if sum <= maxW {
+		if fill {
+			leftover := maxW - sum
+			base := leftover / n
+			rem := leftover % n
+			for i, w := range ideal {
+				extra := base
+				if i < rem {
+					extra++
+				}
+				result[i] = tablev2.Column{Width: w + extra}
+			}
+			return result
+		}
+		for i, w := range ideal {
+			result[i] = tablev2.Column{Width: w}
+		}
+		return result
+	}
+	remaining := maxW - n*minW
+	if remaining < 0 {
+		remaining = 0
+	}
+	used := 0
+	for i, w := range ideal {
+		aw := minW
+		if sum > 0 && remaining > 0 {
+			extra := remaining * w / sum
+			aw += extra
+		}
+		if aw < minW {
+			aw = minW
+		}
+		result[i] = tablev2.Column{Width: aw}
+		used += aw
+	}
+	overflow := used - maxW
+	for i := len(result) - 1; i >= 0 && overflow > 0; i-- {
+		if result[i].Width > minW {
+			cut := result[i].Width - minW
+			if cut > overflow {
+				cut = overflow
+			}
+			result[i].Width -= cut
+			overflow -= cut
+		}
+	}
+	return result
+}
+
+// applyTableStyles 设置 v2 table 的样式：灰色 Header 边框（240）、
+// 深蓝选中底（57）、统一 cell padding(0,1)。
+func applyTableStyles(t *tablev2.Model) {
+	s := tablev2.DefaultStyles()
+	s.Header = s.Header.
+		BorderStyle(lipglossv2.NormalBorder()).
+		BorderForeground(lipglossv2.Color("240")).
+		BorderBottom(true).
+		Bold(false).
+		Padding(0, 1)
+	s.Selected = s.Selected.
+		Foreground(lipglossv2.Color("229")).
+		Background(lipglossv2.Color("57")).
+		Bold(false)
+	s.Cell = s.Cell.Padding(0, 1)
+	t.SetStyles(s)
+}
+
+// renderTable 给表格视图套上灰色外框后输出。
+func renderTable(t tablev2.Model) string {
+	return tableFrame.Render(t.View())
 }

@@ -30,6 +30,7 @@ type BizyAPI interface {
 	ListModelContext(ctx context.Context, current, pageSize int, keyword, sort string, modelTypes, baseModels []string) (*Response[BizyModelListResp], error)
 	GetBizyModelDetailContext(ctx context.Context, bizyModelId int64) (*Response[BizyModelDetail], error)
 	DeleteBizyModelByIdContext(ctx context.Context, bizyModelId int64) (*Response[interface{}], error)
+	BatchUpdateVersionPublicContext(ctx context.Context, versionIDs []int64, public bool) (*Response[interface{}], error)
 	CheckModelExistsContext(ctx context.Context, modelName, modelType string) (bool, error)
 	GetUploadTokenContext(ctx context.Context, fileName, fileType string) (*Response[FilesResp], error)
 	CommitInputResourceContext(ctx context.Context, name, objectKey string) (*Response[InputResourceCommitResp], error)
@@ -224,6 +225,22 @@ func (c *Client) DeleteBizyModelById(bizyModelId int64) (*Response[interface{}],
 func (c *Client) DeleteBizyModelByIdContext(ctx context.Context, bizyModelId int64) (*Response[interface{}], error) {
 	serverURL := joinEndpoint(c.Endpoints.Meta, fmt.Sprintf("/v1/bizy_models/%d", bizyModelId))
 	body, statusCode, err := c.doDelete(ctx, serverURL, nil, c.authHeader())
+	if err != nil {
+		return nil, err
+	}
+	if statusCode != http.StatusOK {
+		return nil, handleError(body, statusCode)
+	}
+	return handleResponse[interface{}](body)
+}
+
+// BatchUpdateVersionPublicContext 批量更新模型版本公开状态
+func (c *Client) BatchUpdateVersionPublicContext(ctx context.Context, versionIDs []int64, public bool) (*Response[interface{}], error) {
+	serverURL := joinEndpoint(c.Endpoints.Meta, "/v1/bizy_models/versions/batch_update_public")
+	body, statusCode, err := c.do(ctx, meta.HTTPPut, serverURL, nil, map[string]any{
+		"ids":    versionIDs,
+		"public": public,
+	}, c.authHeader())
 	if err != nil {
 		return nil, err
 	}

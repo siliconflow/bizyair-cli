@@ -32,6 +32,13 @@ func Init() *cli.App {
 	coverUrlsFlag := cli.StringSliceFlag{Name: "cover", Usage: i18n.T("cli.flag.cover"), Destination: &cli.StringSlice{}}
 	baseModelFlag := cli.StringSliceFlag{Name: "base", Aliases: []string{"b"}, Usage: i18n.T("cli.flag.base", map[string]any{"Models": meta.BaseModelStr}), Required: false, Destination: &cli.StringSlice{}}
 	fileFlag := cli.StringFlag{Name: "file", Aliases: []string{"f"}, Usage: i18n.T("cli.flag.file"), Destination: &globalArgs.FilePath}
+	// model 子命令专用 flag
+	keywordFlag := cli.StringFlag{Name: "keyword", Usage: i18n.T("cli.flag.keyword")}
+	pageFlag := cli.IntFlag{Name: "page", Usage: i18n.T("cli.flag.page")}
+	pageSizeFlag := cli.IntFlag{Name: "page-size", Usage: i18n.T("cli.flag.page_size")}
+	openFlag := cli.BoolFlag{Name: "open", Usage: i18n.T("cli.flag.open")}
+	versionIDsFlag := cli.StringFlag{Name: "version-ids", Aliases: []string{"vid"}, Usage: i18n.T("cli.flag.version_ids")}
+	yesFlag := cli.BoolFlag{Name: "yes", Aliases: []string{"y"}, Usage: i18n.T("cli.flag.yes")}
 
 	configureCLIHelp()
 
@@ -113,6 +120,10 @@ func Init() *cli.App {
 					Usage: i18n.T("cli.command.model_list"),
 					Flags: []cli.Flag{
 						&typeFlag,
+						&keywordFlag,
+						&pageFlag,
+						&pageSizeFlag,
+						&openFlag,
 					},
 					Action: ListModel,
 				},
@@ -122,8 +133,31 @@ func Init() *cli.App {
 					Flags: []cli.Flag{
 						&typeFlag,
 						&nameFlag,
+						&yesFlag,
 					},
 					Action: RemoveModel,
+				},
+				{
+					Name:  meta.CmdDetail,
+					Usage: i18n.T("cli.detail.usage"),
+					Flags: []cli.Flag{
+						&typeFlag,
+					},
+					Action: DetailModel,
+				},
+				{
+					Name:  meta.CmdPublic,
+					Usage: i18n.T("cli.public.usage"),
+					Flags: []cli.Flag{
+						&versionIDsFlag,
+						&cli.BoolFlag{
+							Name:    "public",
+							Aliases: []string{"pub"},
+							Usage:   i18n.T("cli.public.public_flag"),
+						},
+						&yesFlag,
+					},
+					Action: PublicModel,
 				},
 			},
 		},

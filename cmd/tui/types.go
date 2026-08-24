@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"github.com/charmbracelet/bubbles/list"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/siliconflow/bizyair-cli/lib"
 )
@@ -15,21 +16,24 @@ const (
 	mainStepAction
 	mainStepOutput
 	mainStepUserInfo
+	mainStepMyModelsList
+	mainStepModelDetail
 )
 
 type actionKind string
 
 const (
-	actionUpload   actionKind = "upload"
-	actionLsModel  actionKind = "ls_model"
-	actionLogout   actionKind = "logout"
-	actionExit     actionKind = "exit"
-	actionUserInfo actionKind = "user_info"
-	actionWhoami   actionKind = "whoami"
-	actionPlan     actionKind = "plan"
-	actionWallet   actionKind = "wallet"
-	actionCredits  actionKind = "credits"
-	actionDayCost  actionKind = "day_cost"
+	actionUpload      actionKind = "upload"
+	actionLsModel     actionKind = "ls_model"
+	actionModelDetail actionKind = "model_detail"
+	actionLogout      actionKind = "logout"
+	actionExit        actionKind = "exit"
+	actionUserInfo    actionKind = "user_info"
+	actionWhoami      actionKind = "whoami"
+	actionPlan        actionKind = "plan"
+	actionWallet      actionKind = "wallet"
+	actionCredits     actionKind = "credits"
+	actionDayCost     actionKind = "day_cost"
 )
 
 // 上传步骤
@@ -158,13 +162,6 @@ type userInfoInputs struct {
 	selectedAction actionKind
 }
 
-// 打开浏览器结果消息
-type openBrowserDoneMsg struct {
-	msg string
-	url string
-	err error
-}
-
 // 基础模型类型列表加载消息
 type baseModelTypesLoadedMsg struct {
 	items []*lib.BaseModelTypeItem
@@ -198,5 +195,70 @@ type creditsDoneMsg struct {
 // dayCostDoneMsg 每日消费查询结果消息。
 type dayCostDoneMsg struct {
 	records []*lib.CostByTimeResult
+	err     error
+}
+
+// myModelsFilterMode 筛选选择器类型
+type myModelsFilterMode int
+
+const (
+	myModelsFilterNone myModelsFilterMode = iota
+	myModelsFilterType
+	myModelsFilterSort
+	myModelsFilterBaseModel
+)
+
+// filterOption 筛选选项
+type filterOption struct {
+	label string
+	value string
+	count int
+}
+
+// filterBarItem 筛选条片段
+type filterBarItem struct {
+	label  string
+	value  string
+	active bool
+}
+
+// myModelsInputs 我的模型列表页输入状态
+type myModelsInputs struct {
+	typeFilter      string
+	sortBy          string
+	baseModelFilter string
+	filterMode      myModelsFilterMode
+	filterList      list.Model
+
+	typeOpts []filterOption
+	sortOpts []filterOption
+	bmOpts   []filterOption
+
+	searchQuery  string
+	searchActive bool
+}
+
+// myModelsDoneMsg 我的模型列表加载完成消息
+type myModelsDoneMsg struct {
+	models []*lib.BizyModelInfo
+	total  int
+	err    error
+}
+
+// modelDetailDoneMsg 模型详情加载完成消息
+type modelDetailDoneMsg struct {
+	detail *lib.BizyModelDetail
+	err    error
+}
+
+// modelDeletedMsg 模型删除完成消息
+type modelDeletedMsg struct {
+	success bool
+	err     error
+}
+
+// modelPublicToggledMsg 模型公开状态切换完成消息
+type modelPublicToggledMsg struct {
+	success bool
 	err     error
 }

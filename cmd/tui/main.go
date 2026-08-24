@@ -7,6 +7,8 @@ import (
 	"strings"
 	"time"
 
+	tablev2 "charm.land/bubbles/v2/table"
+
 	"github.com/charmbracelet/bubbles/list"
 	"github.com/charmbracelet/bubbles/progress"
 	"github.com/charmbracelet/bubbles/spinner"
@@ -108,6 +110,15 @@ type mainModel struct {
 	// 封面状态追踪
 	coverStatus        string // 当前封面状态信息
 	coverStatusWarning bool   // 是否为警告状态（如转换失败回退）
+
+	// My Models
+	myModels           []*lib.BizyModelInfo
+	myModelsTotal      int
+	myModelsInputs     myModelsInputs
+	myModelsTable      tablev2.Model
+	modelDetail        *lib.BizyModelDetail
+	deleteConfirmModel *lib.BizyModelInfo
+	program            *tea.Program
 }
 
 func newMainModel() mainModel {
@@ -391,6 +402,10 @@ func (m mainModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return m, nil
 			}
 		}
+		// 我的模型列表/详情视图：按键交给专用处理器
+		if m.step == mainStepMyModelsList || m.step == mainStepModelDetail {
+			return m.handleMyModelsKey(msg)
+		}
 		switch msg.String() {
 		case "ctrl+c":
 			// 如果正在上传，保持取消上传逻辑
@@ -448,7 +463,8 @@ func (m mainModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 						return m, nil
 					case actionLsModel:
 						m.running = true
-						return m, openMyModelsInBrowser(m.baseDomain)
+						m.step = mainStepMyModelsList
+						return m, m.fetchMyModels()
 					case actionUserInfo:
 						m.step = mainStepUserInfo
 						return m, nil
@@ -521,15 +537,6 @@ func (m mainModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.apiKey = m.inpApi.Value()
 		m.step = mainStepMenu
 		return m, nil
-	case openBrowserDoneMsg:
-		m.running = false
-		if msg.err != nil {
-			m.output = i18n.T("tui.status.browser_failed", map[string]any{"URL": msg.url})
-		} else {
-			m.output = msg.msg
-		}
-		m.step = mainStepOutput
-		return m, nil
 	case actionDoneMsg:
 		m.running = false
 		m.canceling = false
@@ -591,6 +598,68 @@ func (m mainModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		m.output = m.renderDayCost(msg.records)
 		m.step = mainStepOutput
+		return m, nil
+	case myModelsDoneMsg:
+		m.running = false
+		if msg.err != nil {
+			m.err = msg.err
+			m.step = mainStepMenu
+			return m, nil
+		}
+		m.myModels = msg.models
+		m.myModelsTotal = msg.total
+		m.extractMyModelsFilterOptions()
+		m.updateMyModelsTable()
+		if m.step != mainStepModelDetail {
+			m.step = mainStepMyModelsList
+		}
+		return m, nil
+	case modelDetailDoneMsg:
+		m.running = false
+		if msg.err != nil {
+			m.err = msg.err
+			m.step = mainStepMyModelsList
+			return m, nil
+		}
+		m.modelDetail = msg.detail
+		m.step = mainStepModelDetail
+		return m, nil
+	case modelDeletedMsg:
+		if msg.err != nil {
+			m.running = false
+			m.err = msg.err
+			return m, nil
+		}
+		m.deleteConfirmModel = nil
+		m.modelDetail = nil
+		m.step = mainStepMyModelsList
+		m.myModelsInputs.typeFilter = ""
+		m.myModelsInputs.sortBy = ""
+		m.myModelsInputs.baseModelFilter = ""
+		m.myModelsInputs.searchQuery = ""
+		m.myModelsInputs.searchActive = false
+		m.running = true
+		return m, m.fetchMyModels()
+	case modelPublicToggledMsg:
+		m.running = false
+		if msg.err != nil {
+			m.err = msg.err
+			return m, nil
+		}
+		if m.modelDetail != nil && len(m.modelDetail.Versions) > 0 {
+			for i := range m.modelDetail.Versions {
+				m.modelDetail.Versions[i].Public = !m.modelDetail.Versions[i].Public
+			}
+		}
+		for i, model := range m.myModels {
+			if model != nil && m.modelDetail != nil && model.Id == m.modelDetail.Id {
+				for j := range model.Versions {
+					m.myModels[i].Versions[j].Public = !m.myModels[i].Versions[j].Public
+				}
+				break
+			}
+		}
+		m.updateMyModelsTable()
 		return m, nil
 	case uploadStartMsg:
 		m.uploadCh = msg.ch
@@ -754,6 +823,16 @@ func (m mainModel) handleUserInfoSelect(key actionKind) (tea.Model, tea.Cmd) {
 	}
 }
 
+func (m mainModel) outputTitle() string {
+	if m.returnStep == mainStepUserInfo {
+		switch m.userInfo.selectedAction {
+		case actionWhoami, actionPlan, actionCredits, actionDayCost:
+			return i18n.T("tui.menu."+string(m.userInfo.selectedAction), nil)
+		}
+	}
+	return i18n.T("tui.status.done", nil)
+}
+
 func (m mainModel) View() string {
 	innerW, innerH := m.innerSize()
 	if innerW < 10 {
@@ -839,7 +918,11 @@ func (m mainModel) View() string {
 			body += i18n.T("tui.status.error", map[string]any{"Error": m.err})
 			return m.renderFrame(header + "\n" + panel.Render(m.titleStyle.Render(i18n.T("tui.status.done_with_errors", nil))+"\n\n"+body+"\n\n"+m.hintStyle.Render(i18n.T("tui.hint.enter_menu", nil))))
 		}
-		return m.renderFrame(header + "\n" + panel.Render(m.titleStyle.Render(i18n.T("tui.status.done", nil))+"\n\n"+m.output+"\n\n"+m.hintStyle.Render(i18n.T("tui.hint.enter_menu", nil))))
+		return m.renderFrame(header + "\n" + panel.Render(m.titleStyle.Render(m.outputTitle())+"\n\n"+m.output+"\n\n"+m.hintStyle.Render(i18n.T("tui.hint.enter_menu", nil))))
+	case mainStepMyModelsList:
+		return m.renderFrame(header + "\n" + panel.Render(m.renderMyModelsView()))
+	case mainStepModelDetail:
+		return m.renderFrame(header + "\n" + panel.Render(m.renderModelDetailView()))
 	default:
 		if m.running {
 			spin := m.sp.View()
@@ -872,40 +955,41 @@ func (m mainModel) renderGradientLogo(logoText string) string {
 	return strings.TrimRight(logoB.String(), "\n")
 }
 
-// openMyModelsInBrowser 在浏览器中打开我的模型页面
-func openMyModelsInBrowser(baseDomain string) tea.Cmd {
-	return func() tea.Msg {
-		endpoints, resolveErr := lib.ResolveServiceEndpoints(baseDomain)
-		if resolveErr != nil {
-			return openBrowserDoneMsg{err: resolveErr}
-		}
-		url := endpoints.MyModelsURL()
-		msg, err := lib.OpenBrowser(url)
-		return openBrowserDoneMsg{
-			msg: msg,
-			url: url,
-			err: err,
-		}
+// 入口
+func (m *mainModel) syncListSizes() {
+	iw, ih := m.innerSize()
+	if iw < 1 || ih < 1 {
+		return
+	}
+	lw := iw - 6
+	if lw < 10 {
+		lw = 10
+	}
+	h := ih - 12
+	if h < 5 {
+		h = 5
+	}
+	m.menu.SetSize(lw, h)
+	if m.myModelsInputs.filterMode != myModelsFilterNone {
+		m.myModelsInputs.filterList.SetSize(lw, h)
 	}
 }
 
-// 入口
 func MainTUI(c *cli.Context) error {
 	ctx := c.Context
 	if ctx == nil {
 		ctx = context.Background()
 	}
+	m := newMainModelWithContext(ctx, c.String("base_domain"))
 	p := tea.NewProgram(
-		newMainModelWithContext(ctx, c.String("base_domain")),
+		m,
 		tea.WithAltScreen(),
 		tea.WithContext(ctx),
 	)
-	model, err := p.Run()
+	m.program = p
+	_, err := p.Run()
 	if err != nil {
 		return err
-	}
-	if _, ok := model.(mainModel); ok {
-		return nil
 	}
 	return nil
 }
