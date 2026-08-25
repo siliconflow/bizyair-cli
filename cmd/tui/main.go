@@ -433,6 +433,7 @@ func (m mainModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			case mainStepMenu:
 				if it, ok := m.menu.SelectedItem().(menuEntry); ok {
 					m.currentAction = it.key
+					m.returnStep = mainStepMenu
 					switch it.key {
 					case actionExit:
 						return m, tea.Quit
@@ -492,6 +493,7 @@ func (m mainModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return m, nil
 			case mainStepUserInfo:
 				m.step = mainStepMenu
+				m.returnStep = mainStepMenu
 				return m, nil
 			}
 		default:
