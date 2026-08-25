@@ -52,20 +52,6 @@ type PlanOverviewResp struct {
 	RollingWindow *PlanRollingWindow `json:"rolling_window,omitempty"`
 }
 
-// WalletInfo 钱包余额信息。
-type WalletInfo struct {
-	GiftBalance           int64 `json:"gift_balance,omitempty"`
-	RechargeBalance       int64 `json:"recharge_balance,omitempty"`
-	TotalAvailableCoupons int   `json:"total_available_coupons,omitempty"`
-	CreditsTodayExpired   bool  `json:"credits_today_expired,omitempty"`
-}
-
-// WalletResp 是 /v1/wallet 的响应：钱包字段平铺在 data 层
-// （与 PlanOverviewResp 的 wallet 嵌套不同），内嵌 WalletInfo 直接吸收。
-type WalletResp struct {
-	WalletInfo
-}
-
 // CreditItem 单笔积分明细。
 type CreditItem struct {
 	TotalAmount    int64  `json:"total_amount,omitempty"`

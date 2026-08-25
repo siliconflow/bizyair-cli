@@ -117,11 +117,6 @@ type PlanResult struct {
 }
 
 // WalletResult 钱包余额查询结果
-type WalletResult struct {
-	Wallet *lib.WalletInfo
-	Error  error
-}
-
 // CreditsResult 积分明细查询结果
 type CreditsResult struct {
 	Credits        []*lib.CreditItem

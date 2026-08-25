@@ -6,6 +6,10 @@ type FileReq struct {
 	Sign string `json:"sign,omitempty" form:"sign" query:"sign"`
 }
 
+type MetaDict struct {
+	BaseModels []*BaseModelTypeItem `json:"base_models,omitempty"`
+}
+
 // User/account types（定义见 domain/user.go）
 type UserInfo = domain.UserInfo
 type PlanInfo = domain.PlanInfo
@@ -13,8 +17,6 @@ type PlanNextTier = domain.PlanNextTier
 type PlanWalletInfo = domain.PlanWalletInfo
 type PlanRollingWindow = domain.PlanRollingWindow
 type PlanOverviewResp = domain.PlanOverviewResp
-type WalletInfo = domain.WalletInfo
-type WalletResp = domain.WalletResp
 type CreditItem = domain.CreditItem
 type CreditsListResp = domain.CreditsListResp
 type CreditsReq = domain.CreditsReq

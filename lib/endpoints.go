@@ -49,6 +49,7 @@ func ResolveServiceEndpoints(baseDomain string) (ServiceEndpoints, error) {
 	if hostname == "localhost" || net.ParseIP(hostname) != nil || u.Port() != "" || u.Path != "" {
 		return ServiceEndpoints{
 			Base: normalized, API: normalized, Meta: normalized, Web: normalized, Storage: normalized,
+			Finance: normalized,
 		}, nil
 	}
 
@@ -76,6 +77,7 @@ func ResolveServiceEndpoints(baseDomain string) (ServiceEndpoints, error) {
 		Meta:    origin("meta." + rootHost),
 		Web:     origin("www." + rootHost),
 		Storage: origin("storage." + rootHost),
+		Finance: origin("finance." + rootHost),
 	}, nil
 }
 
@@ -109,22 +111,5 @@ func (e ServiceEndpoints) FinanceURL() string {
 	if e.Finance != "" {
 		return e.Finance
 	}
-	u, err := url.Parse(e.Meta)
-	if err != nil || u.Host == "" {
-		return "https://finance." + meta.DefaultServiceHost
-	}
-	host := strings.ToLower(u.Hostname())
-	for _, p := range []string{"meta.", "api.", "storage.", "www."} {
-		if strings.HasPrefix(host, p) {
-			host = strings.TrimPrefix(host, p)
-			break
-		}
-	}
-	if host == "" {
-		return "https://finance." + meta.DefaultServiceHost
-	}
-	copyURL := *u
-	copyURL.Host = "finance." + host
-	copyURL.Path = ""
-	return strings.TrimRight(copyURL.String(), "/")
+	return "https://finance." + meta.DefaultServiceHost
 }

@@ -592,7 +592,6 @@ step:
   commit_file: "Commit file"
   whoami: "User info"
   plan: "Plan overview"
-  wallet: "Wallet"
   credits: "Credits"
   day_cost: "Day cost"
 

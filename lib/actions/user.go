@@ -2,10 +2,10 @@ package actions
 
 import (
 	"context"
-	"time"
 
 	"github.com/siliconflow/bizyair-cli/internal/i18n"
 	"github.com/siliconflow/bizyair-cli/lib"
+	"github.com/siliconflow/bizyair-cli/lib/format"
 )
 
 // Whoami 查询当前用户信息。
@@ -52,28 +52,6 @@ func PlanContext(ctx context.Context, api lib.BizyAPI) PlanResult {
 	}
 }
 
-// Wallet 查询钱包余额。
-func Wallet(api lib.BizyAPI) WalletResult {
-	return WalletContext(context.Background(), api)
-}
-
-// WalletContext 查询钱包余额。
-func WalletContext(ctx context.Context, api lib.BizyAPI) WalletResult {
-	resp, err := api.GetWalletContext(ctx)
-	if err != nil {
-		return WalletResult{
-			Error: lib.WithStep(i18n.T("step.wallet"), err),
-		}
-	}
-	var wallet *lib.WalletInfo
-	if resp != nil {
-		wallet = &resp.Data.WalletInfo
-	}
-	return WalletResult{
-		Wallet: wallet,
-	}
-}
-
 // Credits 查询积分明细。
 func Credits(api lib.BizyAPI) CreditsResult {
 	return CreditsContext(context.Background(), api)
@@ -113,7 +91,7 @@ func DayCost(api lib.BizyAPI) DayCostResult {
 
 // DayCostContext 查询今日消费记录。
 func DayCostContext(ctx context.Context, api lib.BizyAPI) DayCostResult {
-	today := time.Now().UTC().Format("2006-01-02")
+	today := format.TodayDate()
 	resp, err := api.GetDayCostContext(ctx, today)
 	if err != nil {
 		return DayCostResult{

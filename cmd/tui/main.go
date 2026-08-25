@@ -121,6 +121,11 @@ func (m *mainModel) getAPI() lib.BizyAPI {
 	return m.api
 }
 
+func (m *mainModel) setAPIKey(key string) {
+	m.apiKey = key
+	m.api = nil
+}
+
 func newMainModelWithBaseDomain(baseDomain string) mainModel {
 	return newMainModelWithContext(context.Background(), baseDomain)
 }
@@ -320,7 +325,7 @@ func newMainModelWithContext(ctx context.Context, baseDomain string) mainModel {
 	}
 	if key, err := lib.NewSfFolder().GetKey(); err == nil && key != "" {
 		m.loggedIn = true
-		m.apiKey = key
+		m.setAPIKey(key)
 		m.step = mainStepMenu
 	} else {
 		m.step = mainStepLogin
@@ -518,7 +523,7 @@ func (m mainModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 		m.loggedIn = true
-		m.apiKey = m.inpApi.Value()
+		m.setAPIKey(m.inpApi.Value())
 		m.step = mainStepMenu
 		return m, nil
 	case openBrowserDoneMsg:
@@ -542,7 +547,7 @@ func (m mainModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			// 清除登录状态
 			m.loggedIn = false
-			m.apiKey = ""
+			m.setAPIKey("")
 			m.step = mainStepLogin
 			m.inpApi.SetValue("")
 			m.inpApi.Focus() // 设置焦点以便用户可以输入新的 API Key
@@ -754,6 +759,16 @@ func (m mainModel) handleUserInfoSelect(key actionKind) (tea.Model, tea.Cmd) {
 	}
 }
 
+func (m mainModel) outputTitle() string {
+	if m.returnStep == mainStepUserInfo {
+		switch m.userInfo.selectedAction {
+		case actionWhoami, actionPlan, actionCredits, actionDayCost:
+			return i18n.T("tui.menu."+string(m.userInfo.selectedAction), nil)
+		}
+	}
+	return i18n.T("tui.status.done", nil)
+}
+
 func (m mainModel) View() string {
 	innerW, innerH := m.innerSize()
 	if innerW < 10 {
@@ -839,7 +854,7 @@ func (m mainModel) View() string {
 			body += i18n.T("tui.status.error", map[string]any{"Error": m.err})
 			return m.renderFrame(header + "\n" + panel.Render(m.titleStyle.Render(i18n.T("tui.status.done_with_errors", nil))+"\n\n"+body+"\n\n"+m.hintStyle.Render(i18n.T("tui.hint.enter_menu", nil))))
 		}
-		return m.renderFrame(header + "\n" + panel.Render(m.titleStyle.Render(i18n.T("tui.status.done", nil))+"\n\n"+m.output+"\n\n"+m.hintStyle.Render(i18n.T("tui.hint.enter_menu", nil))))
+		return m.renderFrame(header + "\n" + panel.Render(m.titleStyle.Render(m.outputTitle())+"\n\n"+m.output+"\n\n"+m.hintStyle.Render(i18n.T("tui.hint.enter_menu", nil))))
 	default:
 		if m.running {
 			spin := m.sp.View()

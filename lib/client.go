@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"net/url"
 	"reflect"
+	"sort"
 	"strings"
 	"time"
 	"unicode"
@@ -35,7 +36,6 @@ type BizyAPI interface {
 	CommitInputResourceContext(ctx context.Context, name, objectKey string) (*Response[InputResourceCommitResp], error)
 	GetBaseModelTypesContext(ctx context.Context) (*Response[[]*BaseModelTypeItem], error)
 	GetPlanOverviewContext(ctx context.Context) (*Response[PlanOverviewResp], error)
-	GetWalletContext(ctx context.Context) (*Response[WalletResp], error)
 	GetCreditsContext(ctx context.Context, current, pageSize, expireDays int) (*Response[CreditsListResp], error)
 	GetDayCostContext(ctx context.Context, date string) (*Response[DayCostResp], error)
 }
@@ -303,6 +303,20 @@ func (c *Client) GetBaseModelTypes() (*Response[[]*BaseModelTypeItem], error) {
 }
 
 func (c *Client) GetBaseModelTypesContext(ctx context.Context) (*Response[[]*BaseModelTypeItem], error) {
+	resp, err := c.fetchBaseModelTypes(ctx)
+	if err != nil {
+		if ctx != nil && ctx.Err() != nil {
+			return nil, err
+		}
+		return localBaseModelTypes(), nil
+	}
+	if len(resp.Data) == 0 {
+		return localBaseModelTypes(), nil
+	}
+	return resp, nil
+}
+
+func (c *Client) fetchBaseModelTypes(ctx context.Context) (*Response[[]*BaseModelTypeItem], error) {
 	serverURL := c.Endpoints.BaseModelTypesURL()
 	body, statusCode, err := c.doGet(ctx, serverURL, nil, nil)
 	if err != nil {
@@ -313,7 +327,30 @@ func (c *Client) GetBaseModelTypesContext(ctx context.Context) (*Response[[]*Bas
 		return nil, handleError(body, statusCode)
 	}
 
-	return handleResponse[[]*BaseModelTypeItem](body)
+	dictResp, err := handleResponse[MetaDict](body)
+	if err != nil {
+		return nil, err
+	}
+	return &Response[[]*BaseModelTypeItem]{
+		RequestId: dictResp.RequestId,
+		Code:      dictResp.Code,
+		Message:   dictResp.Message,
+		Status:    dictResp.Status,
+		Data:      dictResp.Data.BaseModels,
+	}, nil
+}
+
+func localBaseModelTypes() *Response[[]*BaseModelTypeItem] {
+	items := make([]*BaseModelTypeItem, 0, len(meta.SupportedBaseModels))
+	for name := range meta.SupportedBaseModels {
+		items = append(items, &BaseModelTypeItem{Value: name})
+	}
+	sort.Slice(items, func(i, j int) bool { return items[i].Value < items[j].Value })
+	return &Response[[]*BaseModelTypeItem]{
+		Code:   meta.OKCode,
+		Status: true,
+		Data:   items,
+	}
 }
 
 // GetPlanOverview 获取套餐概览
@@ -331,23 +368,6 @@ func (c *Client) GetPlanOverviewContext(ctx context.Context) (*Response[PlanOver
 		return nil, handleError(body, statusCode)
 	}
 	return handleResponse[PlanOverviewResp](body)
-}
-
-// GetWallet 获取钱包余额
-func (c *Client) GetWallet() (*Response[WalletResp], error) {
-	return c.GetWalletContext(context.Background())
-}
-
-func (c *Client) GetWalletContext(ctx context.Context) (*Response[WalletResp], error) {
-	serverURL := joinEndpoint(c.Endpoints.FinanceURL(), "/v1/wallet")
-	body, statusCode, err := c.doGet(ctx, serverURL, nil, c.authHeader())
-	if err != nil {
-		return nil, err
-	}
-	if statusCode != http.StatusOK {
-		return nil, handleError(body, statusCode)
-	}
-	return handleResponse[WalletResp](body)
 }
 
 // GetCredits 获取积分明细

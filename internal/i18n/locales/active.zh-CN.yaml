@@ -586,7 +586,6 @@ step:
   commit_file: "提交文件"
   whoami: "用户信息"
   plan: "套餐概览"
-  wallet: "钱包"
   credits: "额度"
   day_cost: "日消费"
 
