@@ -18,23 +18,26 @@ import (
 )
 
 // myModelTitles 我的模型列表表头
-var myModelTitles = []string{
-	i18n.T("tui.my_models.col_name", nil),
-	i18n.T("tui.my_models.col_type", nil),
-	i18n.T("tui.my_models.col_versions", nil),
-	i18n.T("tui.my_models.col_base_model", nil),
-	i18n.T("tui.my_models.col_used", nil),
-	i18n.T("tui.my_models.col_liked", nil),
-	i18n.T("tui.my_models.col_public", nil),
+func myModelTitles() []string {
+	return []string{
+		i18n.T("tui.my_models.col_name", nil),
+		i18n.T("tui.my_models.col_type", nil),
+		i18n.T("tui.my_models.col_versions", nil),
+		i18n.T("tui.my_models.col_base_model", nil),
+		i18n.T("tui.my_models.col_used", nil),
+		i18n.T("tui.my_models.col_liked", nil),
+		i18n.T("tui.my_models.col_public", nil),
+	}
 }
 
 // updateMyModelsTable 根据当前模型数据动态计算列宽并重建表格。
 // 数据变更或过滤/排序/搜索状态变更后调用；渲染时仅读取存储的表格。
 func (m *mainModel) updateMyModelsTable() {
 	models := m.myModels
+	titles := myModelTitles()
 
-	ideal := make([]int, len(myModelTitles))
-	for i, t := range myModelTitles {
+	ideal := make([]int, len(titles))
+	for i, t := range titles {
 		ideal[i] = lipglossv2.Width(t)
 	}
 
@@ -45,7 +48,7 @@ func (m *mainModel) updateMyModelsTable() {
 	if maxW < 24 {
 		maxW = 24
 	}
-	overhead := len(myModelTitles)*2 + 2
+	overhead := len(titles)*2 + 2
 	if maxW > overhead {
 		maxW -= overhead
 	}
@@ -74,7 +77,7 @@ func (m *mainModel) updateMyModelsTable() {
 	}
 
 	cols := fitColumnWidthsByContent(ideal, maxW, true)
-	for i, t := range myModelTitles {
+	for i, t := range titles {
 		cols[i].Title = t
 	}
 

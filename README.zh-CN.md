@@ -22,6 +22,8 @@ BizyAir CLI 是用于管理 BizyAir 上模型文件的命令行工具。它提�
 - 📋 **YAML 批量上传** - 通过配置文件一次上传多个模型
 - 📊 **实时进度显示** - 上传速率、进度条实时更新
 - 🔄 **自动升级** - 一键升级到最新版本，支持版本检查和安全回滚
+- 📂 **我的模型管理** - 列表查看、筛选、搜索、详情、删除、切换公开状态
+- 👤 **用户信息** - 基础信息、订阅套餐、钱包余额、今日消费
 
 ## 发布版本
 
@@ -251,7 +253,8 @@ bizyair
 3. **选择功能**
 
    - 上传模型：交互式收集参数并上传
-   - 我的模型：在浏览器中查看已上传的模型
+   - 我的模型：查看、筛选和管理你的模型
+   - 用户信息：查看基础信息、套餐、钱包和消费
    - 退出登录：清除本地 API Key
    - 退出程序
 
@@ -411,14 +414,42 @@ Checkpoint 文件保存在 `~/.bizyair/uploads/` 目录。
 #### 7. 查看和管理模型
 
 ```bash
-# 查看我的模型（在浏览器中打开）
+# 列出你的模型（支持筛选、排序和搜索）
 bizyair model ls
+bizyair model ls -t LoRA --sort "Most Downloaded"
+bizyair model ls --keyword test --base-model "FLUX.1 D"
 
-# 删除模型
-bizyair model rm -n mymodel -t Checkpoint
+# 按 ID 或名称查看模型详情
+bizyair model detail 56391
+bizyair model detail mymodel -t Checkpoint
+
+# 删除模型（按 ID 或名称）
+bizyair model rm 56391 -y
+bizyair model rm -n mymodel -t Checkpoint -y
+
+# 切换公开状态（自动切换或显式指定）
+bizyair model public 56391 -y
+bizyair model public 56391 --public true -y
+bizyair model public -n mymodel -t LoRA -y
 ```
 
-#### 8. 退出登录
+在 TUI 中，从主菜单选择「我的模型」即可进入交互式表格：
+
+- `↑/↓` 导航，`Enter` 查看详情
+- `t` 类型筛选，`s` 排序，`b` 基座模型筛选，`/` 搜索
+- `d` 删除（需二次确认），`p` 切换公开状态（需二次确认）
+- `r` 重置所有筛选，`Esc` 返回
+
+#### 8. 查看用户信息
+
+```bash
+bizyair whoami      # 显示当前用户身份
+bizyair plan        # 显示订阅套餐概览
+bizyair wallet      # 显示钱包余额
+bizyair day-cost    # 显示今日消费
+```
+
+#### 9. 退出登录
 
 ```bash
 bizyair logout

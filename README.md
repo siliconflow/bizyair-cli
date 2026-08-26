@@ -18,6 +18,8 @@ BizyAir CLI manages model files on BizyAir. It provides both an interactive term
 - Direct or `.txt`/`.md` model introductions
 - YAML batch uploads for multiple models and versions
 - Live progress, transfer rate, and per-version status
+- My Models module: list, filter, search, detail view, delete, and toggle public status
+- User info module: whoami, plan overview, wallet balance, and daily spending
 - Built-in update checks, installation, and safe rollback
 - Standard English and Simplified Chinese interfaces
 
@@ -201,9 +203,10 @@ sudo bizyair upgrade
 3. Choose an action:
    - Upload model
    - My models
+   - User info
    - Log out
    - Exit
-4. Follow the upload steps. You can select files or type paths, add multiple versions, and monitor progress and transfer speed.
+4. Follow the upload steps. You can select files or type paths, add multiple versions, and monitor progress and transfer speed. In **My Models**, you can browse, filter, search, view details, delete, and toggle public status without leaving the TUI.
 
 ### Option 2: command line
 
@@ -351,14 +354,42 @@ Checkpoint files are stored under `~/.bizyair/uploads/`.
 #### 7. View and manage models
 
 ```bash
-# Open My Models in a browser
+# List your models (with filtering, sorting, and search)
 bizyair model ls
+bizyair model ls -t LoRA --sort "Most Downloaded"
+bizyair model ls --keyword test --base-model "FLUX.1 D"
 
-# Delete a model
-bizyair model rm -n mymodel -t Checkpoint
+# Show model detail by ID or name
+bizyair model detail 56391
+bizyair model detail mymodel -t Checkpoint
+
+# Delete a model (by ID or name)
+bizyair model rm 56391 -y
+bizyair model rm -n mymodel -t Checkpoint -y
+
+# Toggle public status (auto-toggle or explicit)
+bizyair model public 56391 -y
+bizyair model public 56391 --public true -y
+bizyair model public -n mymodel -t LoRA -y
 ```
 
-#### 8. Log out
+In the TUI, select **My Models** from the main menu to access an interactive table with:
+
+- `↑/↓` navigation, `Enter` to view detail
+- `t` type filter, `s` sort, `b` base model filter, `/` search
+- `d` delete (with confirmation), `p` toggle public (with confirmation)
+- `r` reset all filters, `Esc` back
+
+#### 8. View user info
+
+```bash
+bizyair whoami      # Show current user identity
+bizyair plan        # Show subscription plan overview
+bizyair wallet      # Show wallet balance
+bizyair day-cost    # Show today's spending
+```
+
+#### 9. Log out
 
 ```bash
 bizyair logout
