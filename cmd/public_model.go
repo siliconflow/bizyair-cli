@@ -21,12 +21,20 @@ func PublicModel(c *cli.Context) error {
 	setLogVerbose(args.Verbose)
 	logArguments(args)
 
-	idStr := c.Args().First()
+	idStr := firstModelArg(c.Args())
 	if idStr == "" {
 		idStr = args.Name
 	}
 	if idStr == "" {
+		if v, ok := tailFlagValue(c.Args(), "n", "name"); ok {
+			idStr = v
+		}
+	}
+	if idStr == "" {
 		return cli.Exit(i18n.NewError("cli.public.id_or_name_required", nil, nil), meta.LoadError)
+	}
+	if modelType, ok := tailFlagValue(c.Args(), "t", "type"); ok {
+		args.Type = modelType
 	}
 	if _, err := strconv.ParseInt(idStr, 10, 64); err != nil {
 		if args.Type != "" {
@@ -61,11 +69,14 @@ func PublicModel(c *cli.Context) error {
 	if c.IsSet("public") {
 		publicStr := strings.ToLower(strings.TrimSpace(c.String("public")))
 		public = publicStr == "true" || publicStr == "1" || publicStr == "yes"
+	} else if v, ok := tailFlagValue(c.Args(), "public", "pub"); ok {
+		publicStr := strings.ToLower(strings.TrimSpace(v))
+		public = publicStr == "true" || publicStr == "1" || publicStr == "yes"
 	} else {
 		public = !detail.Versions[0].Public
 	}
 
-	if !c.Bool("yes") {
+	if !c.Bool("yes") && !tailYesFlag(c.Args()) {
 		fmt.Fprint(os.Stdout, i18n.T("cli.public.confirm", map[string]any{"Count": len(versionIDs), "Public": public}))
 		var resp string
 		_, _ = fmt.Scanln(&resp)

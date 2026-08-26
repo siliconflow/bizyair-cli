@@ -50,3 +50,4 @@ testdata/
 
 # go build 产生的根目录二进制（勿提交）
 /bizyair-cli
+.omo_tmp/

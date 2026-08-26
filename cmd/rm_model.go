@@ -27,7 +27,15 @@ func RemoveModel(c *cli.Context) error {
 	}
 
 	var modelID int64
-	idStr := c.Args().First()
+	idStr := firstModelArg(c.Args())
+	if idStr == "" {
+		if v, ok := tailFlagValue(c.Args(), "n", "name"); ok {
+			args.Name = v
+		}
+	}
+	if modelType, ok := tailFlagValue(c.Args(), "t", "type"); ok {
+		args.Type = modelType
+	}
 	if idStr != "" {
 		mid, err := resolveModelID(c, client, args, idStr)
 		if err != nil {
@@ -49,7 +57,7 @@ func RemoveModel(c *cli.Context) error {
 		modelID = mid
 	}
 
-	if !c.Bool("yes") {
+	if !c.Bool("yes") && !tailYesFlag(c.Args()) {
 		fmt.Fprint(os.Stdout, i18n.T("cli.model.rm_confirm", map[string]any{"ID": modelID}))
 		var resp string
 		_, _ = fmt.Scanln(&resp)

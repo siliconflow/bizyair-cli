@@ -20,11 +20,14 @@ func DetailModel(c *cli.Context) error {
 	setLogVerbose(args.Verbose)
 	logArguments(args)
 
-	idStr := c.Args().First()
+	idStr := firstModelArg(c.Args())
 	if idStr == "" {
 		return cli.Exit(i18n.NewError("cli.detail.id_required", nil, nil), meta.LoadError)
 	}
 
+	if modelType, ok := tailFlagValue(c.Args(), "t", "type"); ok {
+		args.Type = modelType
+	}
 	if _, err := strconv.ParseInt(idStr, 10, 64); err != nil {
 		if args.Type != "" {
 			if verr := lib.ValidateModelType(args.Type); verr != nil {

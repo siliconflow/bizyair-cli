@@ -263,3 +263,6 @@ type modelPublicToggledMsg struct {
 	success bool
 	err     error
 }
+
+// myModelsResizeIdleMsg 窗口尺寸调整停止（防抖期结束）后触发列表重置
+type myModelsResizeIdleMsg struct{}

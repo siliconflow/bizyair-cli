@@ -339,6 +339,19 @@ func (m *mainModel) renderModelDetailView() string {
 		return m.renderStyledHint(i18n.T("tui.hint.wait", nil))
 	}
 
+	// 切换公开确认提示
+	if m.publicConfirm {
+		publicLabel := i18n.T("tui.my_models.col_public_yes", nil)
+		if !m.publicConfirmNew {
+			publicLabel = i18n.T("tui.my_models.col_public_no", nil)
+		}
+		confirm := lipgloss.NewStyle().Foreground(lipgloss.Color("#FBBF24")).Bold(true).Render(
+			i18n.T("tui.my_models.public_confirm", map[string]any{"Public": publicLabel}))
+		hint := lipgloss.NewStyle().Foreground(lipgloss.Color("#6B7280")).Render(
+			i18n.T("tui.my_models.public_hint", nil))
+		return lipgloss.JoinVertical(lipgloss.Left, confirm, hint)
+	}
+
 	// 删除确认提示叠加在详情内容上方
 	if m.deleteConfirmModel != nil {
 		confirm := lipgloss.NewStyle().Foreground(lipgloss.Color("#EF4444")).Bold(true).Render(
@@ -443,6 +456,10 @@ func (m *mainModel) handleMyModelsKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "ctrl+c":
 		return m, tea.Quit
 	case "esc":
+		if m.publicConfirm {
+			m.publicConfirm = false
+			return m, nil
+		}
 		if m.deleteConfirmModel != nil {
 			m.deleteConfirmModel = nil
 			return m, nil
@@ -467,6 +484,11 @@ func (m *mainModel) handleMyModelsKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.step = mainStepMenu
 		return m, nil
 	case "enter":
+		if m.publicConfirm {
+			m.publicConfirm = false
+			m.running = true
+			return m, m.toggleModelPublicCmd(m.publicConfirmIDs, m.publicConfirmNew)
+		}
 		if m.deleteConfirmModel != nil {
 			return m.confirmDelete()
 		}
@@ -493,11 +515,16 @@ func (m *mainModel) handleMyModelsKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 	case "p":
-		if m.step == mainStepModelDetail && m.modelDetail != nil && len(m.modelDetail.Versions) > 0 {
-			ids := actions.ExtractVersionIDs(m.modelDetail)
-			newPublic := !m.modelDetail.Versions[0].Public
+		if m.publicConfirm {
+			m.publicConfirm = false
 			m.running = true
-			return m, m.toggleModelPublicCmd(ids, newPublic)
+			return m, m.toggleModelPublicCmd(m.publicConfirmIDs, m.publicConfirmNew)
+		}
+		if m.step == mainStepModelDetail && m.modelDetail != nil && len(m.modelDetail.Versions) > 0 {
+			m.publicConfirmIDs = actions.ExtractVersionIDs(m.modelDetail)
+			m.publicConfirmNew = !m.modelDetail.Versions[0].Public
+			m.publicConfirm = true
+			return m, nil
 		}
 	case "/":
 		if m.step == mainStepMyModelsList {

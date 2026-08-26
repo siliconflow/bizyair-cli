@@ -118,8 +118,12 @@ type mainModel struct {
 	myModelsTable      tablev2.Model
 	modelDetail        *lib.BizyModelDetail
 	deleteConfirmModel *lib.BizyModelInfo
+	publicConfirm      bool
+	publicConfirmIDs   []int64
+	publicConfirmNew   bool
 	myModelsLoaded     bool
 	program            *tea.Program
+	lastResizeAt        time.Time
 }
 
 func newMainModel() mainModel {
@@ -401,6 +405,10 @@ func (m mainModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		m.filepicker.SetHeight(pickerHeight)
 
+		m.lastResizeAt = time.Now()
+		if m.step == mainStepMyModelsList {
+			return m, m.waitForResizeIdle()
+		}
 		return m, nil
 	case tea.KeyMsg:
 		if m.err != nil {
@@ -610,6 +618,8 @@ func (m mainModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.output = m.renderDayCost(msg.records)
 		m.step = mainStepOutput
 		return m, nil
+	case myModelsResizeIdleMsg:
+		return m.myModelsResetOnIdle()
 	case myModelsDoneMsg:
 		m.running = false
 		if msg.err != nil {
@@ -986,6 +996,33 @@ func (m *mainModel) syncListSizes() {
 	if m.myModelsInputs.filterMode != myModelsFilterNone {
 		m.myModelsInputs.filterList.SetSize(lw, h)
 	}
+}
+
+
+const myModelsResizeIdleDelay = 400 * time.Millisecond
+
+// waitForResizeIdle 固定延迟后发出 myModelsResizeIdleMsg；由 myModelsResetOnIdle 做二次校验。
+func (m *mainModel) waitForResizeIdle() tea.Cmd {
+	return tea.Tick(myModelsResizeIdleDelay, func(time.Time) tea.Msg {
+		return myModelsResizeIdleMsg{}
+	})
+}
+
+// myModelsResetOnIdle 处理窗口调整防抖结束：仅当距上次 resize 超过阈值时才重置。
+func (m *mainModel) myModelsResetOnIdle() (tea.Model, tea.Cmd) {
+	if time.Since(m.lastResizeAt) < myModelsResizeIdleDelay {
+		return m, nil
+	}
+	if m.step != mainStepMyModelsList || m.running {
+		return m, nil
+	}
+	m.myModelsInputs.typeFilter = ""
+	m.myModelsInputs.sortBy = ""
+	m.myModelsInputs.baseModelFilter = ""
+	m.myModelsInputs.search.SetValue("")
+	m.myModelsInputs.searchActive = false
+	m.running = true
+	return m, m.fetchMyModels()
 }
 
 func MainTUI(c *cli.Context) error {
