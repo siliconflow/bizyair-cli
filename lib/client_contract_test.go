@@ -122,6 +122,7 @@ func TestClientUsesNewServiceEndpointContract(t *testing.T) {
 		{http.MethodDelete, "/v1/bizy_models/7", ""},
 		{http.MethodGet, "/v1/bizy_models/exists", "name=model&type=LoRA"},
 		{http.MethodPost, "/v1/input_resource/commit", ""},
+		{http.MethodGet, "/v1/dict", ""},
 	}
 	gotMeta := metaRequests.snapshot()
 	if len(gotMeta) != len(wantMeta) {
@@ -135,7 +136,7 @@ func TestClientUsesNewServiceEndpointContract(t *testing.T) {
 		if got.RawQuery != want.query {
 			t.Errorf("meta request %d query = %q, want %q", i, got.RawQuery, want.query)
 		}
-		if got.Authorization != "Bearer test-key" {
+		if want.path != "/v1/dict" && got.Authorization != "Bearer test-key" {
 			t.Errorf("meta request %d authorization = %q", i, got.Authorization)
 		}
 		if got.CLIVersion != meta.Version {
@@ -173,11 +174,8 @@ func TestClientUsesNewServiceEndpointContract(t *testing.T) {
 		t.Errorf("upload token headers = %#v", gotAPI[0])
 	}
 	gotWeb := webRequests.snapshot()
-	if len(gotWeb) != 1 || gotWeb[0].Path != "/api/special/community/base_model_types" {
-		t.Fatalf("base model request = %#v", gotWeb)
-	}
-	if gotWeb[0].Authorization != "" || gotWeb[0].CLIVersion != meta.Version {
-		t.Errorf("base model headers = %#v", gotWeb[0])
+	if len(gotWeb) != 0 {
+		t.Fatalf("web requests = %#v, want none", gotWeb)
 	}
 }
 

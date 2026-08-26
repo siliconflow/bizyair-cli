@@ -119,7 +119,7 @@ var IgnoreUploadDirs = []string{
 }
 
 // SupportedBaseModels is the offline fallback used by the TUI and upload help.
-// Keep it in sync with /api/special/community/base_model_types.
+// Keep it in sync with the base_models field of the /v1/dict API.
 var SupportedBaseModels = map[string]bool{
 	"FLUX.1 D":       true,
 	"FLUX.1 Kontext": true,
@@ -135,7 +135,9 @@ var SupportedBaseModels = map[string]bool{
 	"FLUX.2 Klein":   true,
 	"ERNIE-Image":    true,
 	"Ideogram":       true,
+	"Krea":           true,
 	"Kolors":         true,
+	"MiniMax H3":     true,
 	"Hunyuan Video":  true,
 	"Wan Video":      true,
 	"Qwen-Image":     true,

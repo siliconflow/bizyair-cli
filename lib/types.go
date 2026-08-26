@@ -218,3 +218,4 @@ type BaseModelTypeItem struct {
 	Label string `json:"label,omitempty"`
 	Value string `json:"value,omitempty"`
 }
+

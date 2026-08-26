@@ -302,6 +302,7 @@ func (c *Client) GetBaseModelTypes() (*Response[[]*BaseModelTypeItem], error) {
 	return c.GetBaseModelTypesContext(context.Background())
 }
 
+// GetBaseModelTypesContext 获取基础模型类型列表，接口失败或返回空时回退到本地列表
 func (c *Client) GetBaseModelTypesContext(ctx context.Context) (*Response[[]*BaseModelTypeItem], error) {
 	resp, err := c.fetchBaseModelTypes(ctx)
 	if err != nil {

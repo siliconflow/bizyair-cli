@@ -538,8 +538,6 @@ validation:
   base_model_required: "Base model is required."
   base_model_list_missing: "The base model cannot be validated because the allowed list was not loaded from the API."
   base_model_unsupported: "Unsupported base model: {{.Model}} (supported: {{.Supported}})"
-  base_model_unsupported_simple: "Unsupported base model: {{.Model}}"
-  base_model_invalid: "Invalid base model: {{.Model}}"
   cover_not_found: "Cover file does not exist: {{.Path}}: {{.Cause}}"
   cover_format_unsupported: "Unsupported cover format {{.Format}} (supported: {{.Supported}})"
   cover_too_large: "Video cover exceeds the size limit ({{.Size}} MB > {{.Limit}} MB)."

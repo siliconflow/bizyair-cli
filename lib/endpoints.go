@@ -94,7 +94,7 @@ func joinEndpoint(origin, path string) string {
 }
 
 func (e ServiceEndpoints) BaseModelTypesURL() string {
-	return joinEndpoint(e.Web, "/api/special/community/base_model_types")
+	return joinEndpoint(e.Meta, "/v1/dict")
 }
 
 func (e ServiceEndpoints) MyModelsURL() string {

@@ -532,8 +532,6 @@ validation:
   base_model_required: "Base Model 不能为空。"
   base_model_list_missing: "无法验证 Base Model：尚未从 API 获取允许的模型列表。"
   base_model_unsupported: "不支持的 Base Model：{{.Model}}（支持：{{.Supported}}）"
-  base_model_unsupported_simple: "不支持的 Base Model：{{.Model}}"
-  base_model_invalid: "Base Model 无效：{{.Model}}"
   cover_not_found: "封面文件不存在：{{.Path}}：{{.Cause}}"
   cover_format_unsupported: "不支持的封面格式 {{.Format}}（支持：{{.Supported}}）"
   cover_too_large: "视频封面超过大小限制（{{.Size}} MB > {{.Limit}} MB）。"
