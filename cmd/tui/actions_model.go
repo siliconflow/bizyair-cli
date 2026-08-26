@@ -32,36 +32,16 @@ func fetchMyModelsList(api lib.BizyAPI, apiKey, baseDomain string, input myModel
 }
 
 func fetchModelDetail(api lib.BizyAPI, modelId int64) modelDetailDoneMsg {
-	resp, err := api.GetBizyModelDetailContext(context.Background(), modelId)
-	if err != nil {
-		return modelDetailDoneMsg{
-			err: lib.WithStep(i18n.T("step.model_detail"), err),
-		}
+	result := actions.GetModelDetailContext(context.Background(), api, modelId)
+	if result.Error != nil {
+		return modelDetailDoneMsg{err: result.Error}
 	}
-
-	if resp == nil || resp.Data.Id == 0 {
-		return modelDetailDoneMsg{
-			err: lib.WithStep(i18n.T("step.model_detail"), i18n.NewError("error.model.detail_missing", nil, nil)),
-		}
-	}
-
-	return modelDetailDoneMsg{
-		detail: &resp.Data,
-	}
+	return modelDetailDoneMsg{detail: result.Detail}
 }
 
 func deleteModelCmd(api lib.BizyAPI, modelId int64) modelDeletedMsg {
-	_, err := api.DeleteBizyModelByIdContext(context.Background(), modelId)
-	if err != nil {
-		return modelDeletedMsg{
-			success: false,
-			err:     lib.WithStep(i18n.T("step.delete_model"), err),
-		}
-	}
-
-	return modelDeletedMsg{
-		success: true,
-	}
+	result := actions.DeleteModelContext(context.Background(), api, modelId)
+	return modelDeletedMsg{success: result.Success, err: result.Error}
 }
 
 func toggleModelPublicCmd(api lib.BizyAPI, versionIDs []int64, public bool) modelPublicToggledMsg {
