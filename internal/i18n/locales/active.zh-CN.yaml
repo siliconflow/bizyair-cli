@@ -1,5 +1,13 @@
 app:
   summary: "BizyAir 命令行工具。"
+  quick_start: |-
+    BizyAir CLI 管理你在 BizyAir 上的模型文件，提供交互式 TUI 和命令行两种模式。
+
+    快速开始:
+       bizyair                           # 启动交互式 TUI
+       bizyair login                     # 使用 API Key 登录
+       bizyair upload -n mymodel ...     # 上传模型
+       bizyair model ls                  # 列出你的模型
   language: "本次运行使用的语言（en 或 zh-CN）。"
   version_format: |-
     版本：{{.Version}}
@@ -58,54 +66,31 @@ tui:
     col_public_yes: "公开"
     col_public_no: "私有"
     key_search: "搜索"
-    key_type: "类型"
-    key_sort: "排序"
-    key_delete: "删除"
-    key_detail: "详情"
-    key_public: "切换公开"
-    key_reset: "重置"
-    filter_all: "全部类型"
-    filter_checkpoint: "Checkpoint"
-    filter_lora: "LoRA"
-    filter_controlnet: "ControlNet"
-    filter_vae: "VAE"
-    filter_unet: "UNet"
-    filter_upscale: "Upscaler"
-    filter_detection: "Detection"
-    filter_other: "Other"
-    sort_recent: "最近更新"
-    sort_name: "名称"
-    sort_type: "类型"
+    sort_recently: "最近"
+    sort_most_liked: "最多收藏"
+    sort_most_downloaded: "最多下载"
+    sort_most_used: "最多使用"
+    sort_most_forked: "最多派生"
     type_all: "全部"
     search_placeholder: "按名称搜索..."
     empty: "暂无模型。"
-    delete_confirm: "确定删除模型“{{.Name}}”？此操作不可撤销。"
+    no_match: "无匹配模型"
+    showing_count: "显示模型数 {{.Count}}"
+    delete_confirm: "确定删除模型\"{{.Name}}\"？此操作不可撤销。"
     delete_hint: "Enter: 确认 | Esc: 取消"
-    delete_success: "模型删除成功。"
     detail_title: "模型详情"
-    detail_name: "名称：{{.Name}}"
-    detail_type: "类型：{{.Type}}"
-    detail_base_model: "基础模型：{{.BaseModel}}"
-    detail_versions: "版本数：{{.Count}}"
+    detail_name: "名称"
+    detail_type: "类型"
+    detail_versions: "版本数"
     detail_versions_header: "版本列表："
     detail_version: "版本"
     detail_public_status: "公开状态"
-    detail_created: "创建时间：{{.Date}}"
-    detail_updated: "更新时间：{{.Date}}"
-    detail_cover: "封面"
-    detail_intro: "介绍"
-    version_label: "版本：{{.Version}}"
-    version_size: "大小：{{.Size}}"
-    version_status: "状态：{{.Status}}"
-    version_public: "公开：{{.Public}}"
-    version_private: "私有：{{.Private}}"
-    toggle_public_success: "公开状态已更新。"
-    toggle_public_fail: "更新公开状态失败：{{.Error}}"
+    detail_created: "创建时间"
+    version_size: "文件大小"
     filter_type_title: "选择类型"
     filter_sort_title: "选择排序"
     filter_base_model_title: "选择基座模型"
-    filter_base_model: "基座模型"
-    hint_list: "<↑/k> 上移\n<↓/j> 下移\n<Enter> 详情\n<t> 类型\n<s> 排序\n<b> 基座\n</> 搜索\n<r> 重置\n<Esc> 返回"
+    hint_list: "<↑/k> 上移\n<↓/j> 下移\n<Enter> 详情\n<t> 类型\n<s> 排序\n<b> 基座\n</> 搜索\n<Enter> 确认搜索\n<r> 重置\n<Esc> 返回"
     hint_detail: "<d> 删除\n<p> 切换公开\n<Esc> 返回"
   choice:
     base_model: "选择 Base Model（必选）"
@@ -333,7 +318,7 @@ cli:
     login: "登录到 BizyAir"
     logout: "退出登录"
     upload: "上传模型文件到 BizyAir"
-    model: "与模型交互：{ls, rm, detail, public}"
+    model: "管理你的模型"
     model_list: "列出你的模型"
     model_remove: "删除你的模型"
     upgrade: "检查并升级 CLI 到最新版本"
@@ -342,6 +327,53 @@ cli:
     wallet: "显示钱包余额"
     credits: "显示余额明细和过期信息"
     day_cost: "显示今日消费"
+    login_desc: |-
+      登录到 BizyAir。使用 API Key 认证。
+
+      示例:
+         bizyair login
+         bizyair login -k $SF_API_KEY
+    upload_desc: |-
+      上传模型文件到 BizyAir。支持单文件上传和 YAML 批量上传。
+
+      示例:
+         bizyair upload -n mymodel -t LoRA -p model.safetensors -b "FLUX.1 D" --cover cover.jpg --intro "desc"
+         bizyair upload -f config.yaml
+    model_list_desc: |-
+      列出你上传到 BizyAir 的模型。
+
+      示例:
+         bizyair model ls
+         bizyair model ls -t LoRA --sort "Most Downloaded"
+         bizyair model ls --keyword test --base-model "FLUX.1 D"
+         bizyair model ls --open
+    model_remove_desc: |-
+      删除你上传的模型。支持通过 ID 或名称定位。
+
+      示例:
+         bizyair model rm 56391 -y
+         bizyair model rm -n test_5 -t Checkpoint -y
+    model_detail_desc: |-
+      按模型 ID 或名称查看模型详情。
+
+      示例:
+         bizyair model detail 56391
+         bizyair model detail test_5 -t Checkpoint
+    model_public_desc: |-
+      切换模型所有版本的公开/私有状态。不指定 --public 时自动切换。
+
+      示例:
+         bizyair model public 56391 -y                        # 自动切换
+         bizyair model public 56391 --public true -y           # 强制公开
+         bizyair model public -n test_5 -t LoRA -y             # 按名称
+    upgrade_desc: |-
+      检查并安装 CLI 更新。
+
+      示例:
+         bizyair upgrade --check
+         bizyair upgrade
+  args:
+    id_or_name: "[<id|name>]"
   whoami:
     id_label: "ID"
     name_label: "名称"
@@ -407,10 +439,11 @@ cli:
     base: "上传模型对应的 Base Model，例如：{{.Models}}"
     file: "从 YAML 配置文件批量上传"
     keyword: "按名称关键词筛选模型"
+    sort: "排序方式，可选：{{.Sorts}}"
+    base_model: "按基座模型筛选"
     page: "页码（从 1 开始）"
     page_size: "每页模型数量"
     open: "在浏览器中打开“我的模型”而非打印表格"
-    version_ids: "要更新的版本 ID（逗号分隔）"
     yes: "跳过确认并立即执行"
     check: "仅检查更新，不执行升级"
     force: "强制升级，即使版本相同"
@@ -442,7 +475,10 @@ cli:
     ls_header_type: "类型"
     ls_header_versions: "版本"
     ls_header_public: "公开"
-    ls_header_updated: "更新时间"
+    ls_header_public_yes: "公开"
+    ls_header_public_no: "私有"
+    ls_header_used: "使用量"
+    ls_header_downloads: "下载量"
     ls_count: "已列出 {{.Count}} 个模型。"
     rm_confirm: "确认删除模型 {{.ID}}？[y/N] "
     rm_canceled: "已取消。"
@@ -453,13 +489,10 @@ cli:
     not_found: "未找到模型“{{.ID}}”。"
   public:
     usage: "切换模型公开状态"
-    name_flag: "模型名称"
-    type_flag: "模型类型"
-    public_flag: "设置公开状态（true/false）"
-    not_found: "未找到模型“{{.Name}}”（类型：{{.Type}}）。"
+    public_flag: "设置公开状态（true/false），不指定则自动切换"
     success: "公开状态已更新。"
-    version_ids_required: "必须指定 --version-ids（逗号分隔的版本 ID）。"
-    version_ids_invalid: "无效的 --version-ids 值：{{.Value}}"
+    id_or_name_required: "请提供模型 ID 或名称。"
+    no_versions: "该模型没有版本。"
     confirm: "将 {{.Count}} 个版本设为公开={{.Public}}？[y/N] "
     canceled: "已取消。"
   rm:
@@ -532,6 +565,7 @@ error:
     key_load_failed: "无法从 {{.Path}} 加载 API Key：{{.Cause}}"
   model:
     detail_missing: "未获取到模型详情。"
+    batch_public_failed: "{{.Msg}}（失败版本 ID：{{.IDs}}）"
     not_found_named: "未找到模型“{{.Name}}”。"
   base_models:
     fetch_failed: "获取 Base Model 列表失败：{{.Cause}}"

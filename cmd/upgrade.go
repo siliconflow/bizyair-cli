@@ -8,6 +8,7 @@ import (
 
 	"github.com/siliconflow/bizyair-cli/internal/i18n"
 	"github.com/siliconflow/bizyair-cli/lib"
+	"github.com/siliconflow/bizyair-cli/lib/format"
 	"github.com/siliconflow/bizyair-cli/meta"
 	"github.com/urfave/cli/v2"
 )
@@ -41,8 +42,8 @@ func Upgrade(c *cli.Context) error {
 			percentage := float64(downloaded) / float64(total) * 100
 			fmt.Printf("\r%s", i18n.T("cli.upgrade.download_progress", map[string]any{
 				"Percentage": fmt.Sprintf("%.1f", percentage),
-				"Downloaded": formatBytes(downloaded),
-				"Total":      formatBytes(total),
+				"Downloaded": format.FormatBytes(downloaded),
+				"Total":      format.FormatBytes(total),
 			}))
 		},
 	}
@@ -82,18 +83,4 @@ func canceledUpgradeExitError() error {
 		i18n.NewError("cli.upgrade.canceled", nil, context.Canceled),
 		meta.InterruptedExitCode,
 	)
-}
-
-// formatBytes 格式化字节数
-func formatBytes(bytes int64) string {
-	const unit = 1024
-	if bytes < unit {
-		return fmt.Sprintf("%d B", bytes)
-	}
-	div, exp := int64(unit), 0
-	for n := bytes / unit; n >= unit; n /= unit {
-		div *= unit
-		exp++
-	}
-	return fmt.Sprintf("%.1f %cB", float64(bytes)/float64(div), "KMGTPE"[exp])
 }

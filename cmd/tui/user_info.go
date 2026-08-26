@@ -228,7 +228,7 @@ func (m mainModel) renderCredits(credits []*lib.CreditItem, total int, giftAmt, 
 	if outerW < 18 {
 		outerW = 18
 	}
-	panelH := innerH - 6
+	panelH := innerH - 13
 	if panelH < 8 {
 		panelH = 8
 	}

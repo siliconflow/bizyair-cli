@@ -21,16 +21,10 @@ func RemoveModel(c *cli.Context) error {
 	setLogVerbose(args.Verbose)
 	logArguments(args)
 
-	apiKey := args.ApiKey
-	if apiKey == "" {
-		var err error
-		apiKey, err = lib.NewSfFolder().GetKey()
-		if err != nil {
-			return cli.Exit(err, meta.LoadError)
-		}
+	_, client, err := ResolveClient(args)
+	if err != nil {
+		return cli.Exit(err, meta.LoadError)
 	}
-	args.ApiKey = apiKey // 回写：resolveModelID 读 args.ApiKey 调 ListModels 做名称解析
-	client := lib.NewClient(args.BaseDomain, apiKey)
 
 	var modelID int64
 	idStr := c.Args().First()

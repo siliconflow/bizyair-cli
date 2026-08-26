@@ -75,7 +75,7 @@ func TestLocalizedHelpCommand(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(output, "与模型交互") || !strings.Contains(output, "命令:") {
+	if !strings.Contains(output, "管理你的模型") || !strings.Contains(output, "命令:") {
 		t.Fatalf("help command was not localized:\n%s", output)
 	}
 }

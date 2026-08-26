@@ -8,47 +8,27 @@ import (
 	"github.com/siliconflow/bizyair-cli/lib/actions"
 )
 
-func fetchMyModelsList(api lib.BizyAPI, input myModelsInputs) myModelsDoneMsg {
-	ctx := context.Background()
-
-	var modelTypes []string
-	if input.typeFilter != "" {
-		modelTypes = []string{input.typeFilter}
-	} else {
-		for _, t := range []string{"Checkpoint", "LoRA", "Controlnet", "VAE", "UNet", "Upscaler", "Detection", "Other"} {
-			modelTypes = append(modelTypes, t)
-		}
-	}
-
+func fetchMyModelsList(api lib.BizyAPI, apiKey, baseDomain string, input myModelsInputs) myModelsDoneMsg {
 	var baseModels []string
 	if input.baseModelFilter != "" {
 		baseModels = []string{input.baseModelFilter}
 	}
 
-	sort := input.sortBy
-	if sort == "" {
-		sort = "Recently"
+	result := actions.ListModels(api, actions.ListModelsInput{
+		Context:    context.Background(),
+		ApiKey:     apiKey,
+		BaseDomain: baseDomain,
+		ModelType:  input.typeFilter,
+		BaseModels: baseModels,
+		Keyword:    input.search.Value(),
+		Sort:       input.sortBy,
+		Current:    1,
+		PageSize:   100,
+	})
+	if result.Error != nil {
+		return myModelsDoneMsg{err: result.Error}
 	}
-
-	resp, err := api.ListModelContext(
-		ctx,
-		1,
-		100,
-		input.searchQuery,
-		sort,
-		modelTypes,
-		baseModels,
-	)
-	if err != nil {
-		return myModelsDoneMsg{
-			err: lib.WithStep(i18n.T("step.list_models"), err),
-		}
-	}
-
-	return myModelsDoneMsg{
-		models: resp.Data.List,
-		total:  resp.Data.Total,
-	}
+	return myModelsDoneMsg{models: result.Models, total: result.Total}
 }
 
 func fetchModelDetail(api lib.BizyAPI, modelId int64) modelDetailDoneMsg {

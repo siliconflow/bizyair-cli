@@ -2,6 +2,7 @@ package tui
 
 import (
 	"github.com/charmbracelet/bubbles/list"
+	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/siliconflow/bizyair-cli/lib"
 )
@@ -234,7 +235,7 @@ type myModelsInputs struct {
 	sortOpts []filterOption
 	bmOpts   []filterOption
 
-	searchQuery  string
+	search       textinput.Model
 	searchActive bool
 }
 

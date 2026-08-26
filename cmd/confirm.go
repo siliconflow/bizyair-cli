@@ -46,24 +46,3 @@ func resolveModelID(c *cli.Context, client *lib.Client, args *config.Argument, i
 	}
 	return 0, i18n.NewError("cli.detail.not_found", map[string]any{"ID": idStr}, nil)
 }
-
-// parseVersionIDs 解析逗号分隔的版本 ID 列表，过滤空段并校验数字。
-func parseVersionIDs(s string) ([]int64, error) {
-	parts := strings.Split(s, ",")
-	ids := make([]int64, 0, len(parts))
-	for _, p := range parts {
-		p = strings.TrimSpace(p)
-		if p == "" {
-			continue
-		}
-		id, err := strconv.ParseInt(p, 10, 64)
-		if err != nil {
-			return nil, i18n.NewError("cli.public.version_ids_invalid", map[string]any{"Value": s}, err)
-		}
-		ids = append(ids, id)
-	}
-	if len(ids) == 0 {
-		return nil, i18n.NewError("cli.public.version_ids_required", nil, nil)
-	}
-	return ids, nil
-}

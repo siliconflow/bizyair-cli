@@ -217,3 +217,10 @@ type BaseModelTypeItem struct {
 	Label string `json:"label,omitempty"`
 	Value string `json:"value,omitempty"`
 }
+
+// 批量更新公开状态响应
+type BatchUpdatePublicResp struct {
+	ErrMsg    string  `json:"err_msg,omitempty"`
+	ErrCnMsg  string  `json:"err_cn_msg,omitempty"`
+	FailedIDs []int64 `json:"failed_ids,omitempty"`
+}

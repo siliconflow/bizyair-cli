@@ -118,6 +118,7 @@ type mainModel struct {
 	myModelsTable      tablev2.Model
 	modelDetail        *lib.BizyModelDetail
 	deleteConfirmModel *lib.BizyModelInfo
+	myModelsLoaded     bool
 	program            *tea.Program
 }
 
@@ -329,6 +330,12 @@ func newMainModelWithContext(ctx context.Context, baseDomain string) mainModel {
 		framePadX:      2,
 		framePadY:      1,
 	}
+	m.myModelsInputs.search = textinput.New()
+	m.myModelsInputs.search.Prompt = "> "
+	m.myModelsInputs.search.PromptStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("#FBBF24"))
+	m.myModelsInputs.search.TextStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("#E5E7EB"))
+	m.myModelsInputs.search.Placeholder = i18n.T("tui.my_models.search_placeholder", nil)
+	m.myModelsInputs.search.PlaceholderStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("#6B7280"))
 	if key, err := lib.NewSfFolder().GetKey(); err == nil && key != "" {
 		m.loggedIn = true
 		m.apiKey = key
@@ -464,6 +471,10 @@ func (m mainModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					case actionLsModel:
 						m.running = true
 						m.step = mainStepMyModelsList
+						if len(m.baseModelTypes) == 0 && !m.loadingBaseModelTypes {
+							m.loadingBaseModelTypes = true
+							return m, tea.Batch(m.fetchMyModels(), loadBaseModelTypes(m.ctx, m.baseDomain, m.apiKey))
+						}
 						return m, m.fetchMyModels()
 					case actionUserInfo:
 						m.step = mainStepUserInfo
@@ -608,6 +619,7 @@ func (m mainModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		m.myModels = msg.models
 		m.myModelsTotal = msg.total
+		m.myModelsLoaded = true
 		m.extractMyModelsFilterOptions()
 		m.updateMyModelsTable()
 		if m.step != mainStepModelDetail {
@@ -636,7 +648,7 @@ func (m mainModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.myModelsInputs.typeFilter = ""
 		m.myModelsInputs.sortBy = ""
 		m.myModelsInputs.baseModelFilter = ""
-		m.myModelsInputs.searchQuery = ""
+		m.myModelsInputs.search.SetValue("")
 		m.myModelsInputs.searchActive = false
 		m.running = true
 		return m, m.fetchMyModels()
@@ -726,15 +738,16 @@ func (m mainModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case baseModelTypesLoadedMsg:
 		m.loadingBaseModelTypes = false
 		if msg.err != nil {
-			// 如果加载失败，使用本地硬编码的列表作为后备
 			bases := make([]string, 0, len(meta.SupportedBaseModels))
 			for k := range meta.SupportedBaseModels {
 				bases = append(bases, k)
 			}
 			sort.Strings(bases)
+			m.baseModelTypes = make([]*lib.BaseModelTypeItem, 0, len(bases))
 			bItems := []list.Item{}
 			for _, b := range bases {
 				bItems = append(bItems, listItem{title: b})
+				m.baseModelTypes = append(m.baseModelTypes, &lib.BaseModelTypeItem{Label: b, Value: b})
 			}
 			m.baseList.SetItems(bItems)
 			return m, nil

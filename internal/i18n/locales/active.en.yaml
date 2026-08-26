@@ -1,5 +1,13 @@
 app:
   summary: "A CLI tool for BizyAir."
+  quick_start: |-
+    BizyAir CLI manages model files on BizyAir, with both an interactive TUI and command-line modes.
+
+    Quick start:
+       bizyair                           # Launch interactive TUI
+       bizyair login                     # Authenticate with API key
+       bizyair upload -n mymodel ...     # Upload a model
+       bizyair model ls                  # List your models
   language: "Language for this run (en or zh-CN)."
   version_format: |-
     Version: {{.Version}}
@@ -58,54 +66,31 @@ tui:
     col_public_yes: "Public"
     col_public_no: "Private"
     key_search: "Search"
-    key_type: "Type"
-    key_sort: "Sort"
-    key_delete: "Delete"
-    key_detail: "Detail"
-    key_public: "Toggle Public"
-    key_reset: "Reset"
-    filter_all: "All Types"
-    filter_checkpoint: "Checkpoint"
-    filter_lora: "LoRA"
-    filter_controlnet: "ControlNet"
-    filter_vae: "VAE"
-    filter_unet: "UNet"
-    filter_upscale: "Upscaler"
-    filter_detection: "Detection"
-    filter_other: "Other"
-    sort_recent: "Recently"
-    sort_name: "Name"
-    sort_type: "Type"
+    sort_recently: "Recently"
+    sort_most_liked: "Most Liked"
+    sort_most_downloaded: "Most Downloaded"
+    sort_most_used: "Most Used"
+    sort_most_forked: "Most Forked"
     type_all: "All"
     search_placeholder: "Search by name..."
     empty: "No models found."
+    no_match: "No matching models"
+    showing_count: "Showing {{.Count}} model(s)"
     delete_confirm: "Delete model '{{.Name}}'? This action cannot be undone."
     delete_hint: "Enter: Confirm | Esc: Cancel"
-    delete_success: "Model deleted successfully."
     detail_title: "Model Detail"
-    detail_name: "Name: {{.Name}}"
-    detail_type: "Type: {{.Type}}"
-    detail_base_model: "Base Model: {{.BaseModel}}"
-    detail_versions: "Versions: {{.Count}}"
+    detail_name: "Name"
+    detail_type: "Type"
+    detail_versions: "Versions"
     detail_versions_header: "Versions:"
     detail_version: "Version"
     detail_public_status: "Public"
-    detail_created: "Created: {{.Date}}"
-    detail_updated: "Updated: {{.Date}}"
-    detail_cover: "Cover"
-    detail_intro: "Introduction"
-    version_label: "Version: {{.Version}}"
-    version_size: "Size: {{.Size}}"
-    version_status: "Status: {{.Status}}"
-    version_public: "Public: {{.Public}}"
-    version_private: "Private: {{.Private}}"
-    toggle_public_success: "Public status updated."
-    toggle_public_fail: "Failed to update public status: {{.Error}}"
+    detail_created: "Created"
+    version_size: "File Size"
     filter_type_title: "Select Type"
     filter_sort_title: "Select Sort"
     filter_base_model_title: "Select Base Model"
-    filter_base_model: "Base Model"
-    hint_list: "<↑/k> Up\n<↓/j> Down\n<Enter> Detail\n<t> Type\n<s> Sort\n<b> Base\n</> Search\n<r> Reset\n<Esc> Back"
+    hint_list: "<↑/k> Up\n<↓/j> Down\n<Enter> Detail\n<t> Type\n<s> Sort\n<b> Base\n</> Search\n<Enter> Submit Search\n<r> Reset\n<Esc> Back"
     hint_detail: "<d> Delete\n<p> Toggle Public\n<Esc> Back"
   choice:
     base_model: "Choose a Base Model (required)"
@@ -333,7 +318,7 @@ cli:
     login: "Log in to BizyAir"
     logout: "Log out"
     upload: "Upload model files to BizyAir"
-    model: "Interact with models: {ls, rm, detail, public}"
+    model: "Manage your models"
     model_list: "List your models"
     model_remove: "Remove one of your models"
     upgrade: "Check for and install CLI updates"
@@ -342,6 +327,53 @@ cli:
     wallet: "Show wallet balance"
     credits: "Show balance details and expiration"
     day_cost: "Show today's spending"
+    login_desc: |-
+      Log in to BizyAir using an API key.
+
+      Examples:
+         bizyair login
+         bizyair login -k $SF_API_KEY
+    upload_desc: |-
+      Upload model files to BizyAir. Supports single-file and YAML batch upload.
+
+      Examples:
+         bizyair upload -n mymodel -t LoRA -p model.safetensors -b "FLUX.1 D" --cover cover.jpg --intro "desc"
+         bizyair upload -f config.yaml
+    model_list_desc: |-
+      List your models on BizyAir.
+
+      Examples:
+         bizyair model ls
+         bizyair model ls -t LoRA --sort "Most Downloaded"
+         bizyair model ls --keyword test --base-model "FLUX.1 D"
+         bizyair model ls --open
+    model_remove_desc: |-
+      Remove your model. Supports ID or name.
+
+      Examples:
+         bizyair model rm 56391 -y
+         bizyair model rm -n test_5 -t Checkpoint -y
+    model_detail_desc: |-
+      Show model detail by ID or name.
+
+      Examples:
+         bizyair model detail 56391
+         bizyair model detail test_5 -t Checkpoint
+    model_public_desc: |-
+      Toggle public status of all model versions. Auto-toggles when --public is not specified.
+
+      Examples:
+         bizyair model public 56391 -y                        # Auto-toggle
+         bizyair model public 56391 --public true -y           # Force public
+         bizyair model public -n test_5 -t LoRA -y             # By name
+    upgrade_desc: |-
+      Check for and install CLI updates.
+
+      Examples:
+         bizyair upgrade --check
+         bizyair upgrade
+  args:
+    id_or_name: "[<id|name>]"
   whoami:
     id_label: "ID"
     name_label: "Name"
@@ -407,10 +439,11 @@ cli:
     base: "Base model for the uploaded model. Examples: {{.Models}}"
     file: "Batch upload from a YAML configuration file"
     keyword: "Filter models by name keyword"
+    sort: "Sort order, options: {{.Sorts}}"
+    base_model: "Filter by base model"
     page: "Page number (starts at 1)"
     page_size: "Number of models per page"
     open: "Open My Models in a browser instead of printing a table"
-    version_ids: "Comma-separated version IDs to update"
     yes: "Skip confirmation and apply immediately"
     check: "Check for updates without installing"
     force: "Install even when the versions match"
@@ -442,7 +475,10 @@ cli:
     ls_header_type: "Type"
     ls_header_versions: "Versions"
     ls_header_public: "Public"
-    ls_header_updated: "Updated"
+    ls_header_public_yes: "Public"
+    ls_header_public_no: "Private"
+    ls_header_used: "Used"
+    ls_header_downloads: "Downloads"
     ls_count: "{{.Count}} model(s) listed."
     rm_confirm: "Delete model {{.ID}}? [y/N] "
     rm_canceled: "Aborted."
@@ -453,13 +489,10 @@ cli:
     not_found: "Model '{{.ID}}' not found."
   public:
     usage: "Toggle model public status"
-    name_flag: "Model name"
-    type_flag: "Model type"
-    public_flag: "Set public status (true/false)"
-    not_found: "Model '{{.Name}}' (type: {{.Type}}) not found."
+    public_flag: "Set public status (true/false), auto-toggle if not specified"
     success: "Public status updated successfully."
-    version_ids_required: "--version-ids is required (comma-separated version IDs)."
-    version_ids_invalid: "Invalid --version-ids value: {{.Value}}"
+    id_or_name_required: "Model ID or name is required."
+    no_versions: "This model has no versions."
     confirm: "Set {{.Count}} version(s) public={{.Public}}? [y/N] "
     canceled: "Aborted."
   rm:
@@ -538,6 +571,7 @@ error:
     key_load_failed: "Could not load the API key from {{.Path}}: {{.Cause}}"
   model:
     detail_missing: "No model details were returned."
+    batch_public_failed: "{{.Msg}} (failed version IDs: {{.IDs}})"
     not_found_named: "Model '{{.Name}}' was not found."
   base_models:
     fetch_failed: "Could not retrieve the base model list: {{.Cause}}"

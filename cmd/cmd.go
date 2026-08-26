@@ -34,10 +34,11 @@ func Init() *cli.App {
 	fileFlag := cli.StringFlag{Name: "file", Aliases: []string{"f"}, Usage: i18n.T("cli.flag.file"), Destination: &globalArgs.FilePath}
 	// model 子命令专用 flag
 	keywordFlag := cli.StringFlag{Name: "keyword", Usage: i18n.T("cli.flag.keyword")}
-	pageFlag := cli.IntFlag{Name: "page", Usage: i18n.T("cli.flag.page")}
-	pageSizeFlag := cli.IntFlag{Name: "page-size", Usage: i18n.T("cli.flag.page_size")}
+	sortFlag := cli.StringFlag{Name: "sort", Usage: i18n.T("cli.flag.sort", map[string]any{"Sorts": "Recently, Most Liked, Most Downloaded, Most Used, Most Forked"}), Value: "Recently"}
+	baseModelFilterFlag := cli.StringFlag{Name: "base-model", Aliases: []string{"bm"}, Usage: i18n.T("cli.flag.base_model")}
+	pageFlag := cli.IntFlag{Name: "page", Usage: i18n.T("cli.flag.page"), Value: 1}
+	pageSizeFlag := cli.IntFlag{Name: "page-size", Usage: i18n.T("cli.flag.page_size"), Value: 100}
 	openFlag := cli.BoolFlag{Name: "open", Usage: i18n.T("cli.flag.open")}
-	versionIDsFlag := cli.StringFlag{Name: "version-ids", Aliases: []string{"vid"}, Usage: i18n.T("cli.flag.version_ids")}
 	yesFlag := cli.BoolFlag{Name: "yes", Aliases: []string{"y"}, Usage: i18n.T("cli.flag.yes")}
 
 	configureCLIHelp()
@@ -45,6 +46,7 @@ func Init() *cli.App {
 	app := cli.NewApp()
 	app.Name = meta.Name
 	app.Usage = i18n.T("app.summary")
+	app.Description = i18n.T("app.quick_start")
 	app.Version = meta.Version
 	app.HideHelpCommand = true
 	app.OnUsageError = localizedUsageError
@@ -73,8 +75,9 @@ func Init() *cli.App {
 	// Commands
 	app.Commands = []*cli.Command{
 		{
-			Name:  meta.CmdLogin,
-			Usage: i18n.T("cli.command.login"),
+			Name:        meta.CmdLogin,
+			Usage:       i18n.T("cli.command.login"),
+			Description: i18n.T("cli.command.login_desc"),
 			Flags: []cli.Flag{
 				&apiKeyFlag,
 			},
@@ -87,8 +90,9 @@ func Init() *cli.App {
 			Action: Logout,
 		},
 		{
-			Name:  meta.CmdUpload,
-			Usage: i18n.T("cli.command.upload"),
+			Name:        meta.CmdUpload,
+			Usage:       i18n.T("cli.command.upload"),
+			Description: i18n.T("cli.command.upload_desc"),
 			Flags: []cli.Flag{
 				&fileFlag,
 				&typeFlag,
@@ -116,11 +120,14 @@ func Init() *cli.App {
 			},
 			Subcommands: []*cli.Command{
 				{
-					Name:  meta.CmdLs,
-					Usage: i18n.T("cli.command.model_list"),
+					Name:        meta.CmdLs,
+					Usage:       i18n.T("cli.command.model_list"),
+					Description: i18n.T("cli.command.model_list_desc"),
 					Flags: []cli.Flag{
 						&typeFlag,
 						&keywordFlag,
+						&sortFlag,
+						&baseModelFilterFlag,
 						&pageFlag,
 						&pageSizeFlag,
 						&openFlag,
@@ -128,8 +135,10 @@ func Init() *cli.App {
 					Action: ListModel,
 				},
 				{
-					Name:  meta.CmdRm,
-					Usage: i18n.T("cli.command.model_remove"),
+					Name:        meta.CmdRm,
+					Usage:       i18n.T("cli.command.model_remove"),
+					Description: i18n.T("cli.command.model_remove_desc"),
+					ArgsUsage:   i18n.T("cli.args.id_or_name"),
 					Flags: []cli.Flag{
 						&typeFlag,
 						&nameFlag,
@@ -138,19 +147,24 @@ func Init() *cli.App {
 					Action: RemoveModel,
 				},
 				{
-					Name:  meta.CmdDetail,
-					Usage: i18n.T("cli.detail.usage"),
+					Name:        meta.CmdDetail,
+					Usage:       i18n.T("cli.detail.usage"),
+					Description: i18n.T("cli.command.model_detail_desc"),
+					ArgsUsage:   i18n.T("cli.args.id_or_name"),
 					Flags: []cli.Flag{
 						&typeFlag,
 					},
 					Action: DetailModel,
 				},
 				{
-					Name:  meta.CmdPublic,
-					Usage: i18n.T("cli.public.usage"),
+					Name:        meta.CmdPublic,
+					Usage:       i18n.T("cli.public.usage"),
+					Description: i18n.T("cli.command.model_public_desc"),
+					ArgsUsage:   i18n.T("cli.args.id_or_name"),
 					Flags: []cli.Flag{
-						&versionIDsFlag,
-						&cli.BoolFlag{
+						&typeFlag,
+						&nameFlag,
+						&cli.StringFlag{
 							Name:    "public",
 							Aliases: []string{"pub"},
 							Usage:   i18n.T("cli.public.public_flag"),
@@ -162,8 +176,9 @@ func Init() *cli.App {
 			},
 		},
 		{
-			Name:  meta.CmdUpgrade,
-			Usage: i18n.T("cli.command.upgrade"),
+			Name:        meta.CmdUpgrade,
+			Usage:       i18n.T("cli.command.upgrade"),
+			Description: i18n.T("cli.command.upgrade_desc"),
 			Flags: []cli.Flag{
 				&cli.BoolFlag{
 					Name:    "check",

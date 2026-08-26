@@ -3,10 +3,12 @@ package cmd
 import (
 	"fmt"
 	"os"
+	"strconv"
 
 	"github.com/siliconflow/bizyair-cli/internal/i18n"
 	"github.com/siliconflow/bizyair-cli/lib"
 	"github.com/siliconflow/bizyair-cli/lib/actions"
+	"github.com/siliconflow/bizyair-cli/lib/format"
 	"github.com/siliconflow/bizyair-cli/meta"
 	"github.com/urfave/cli/v2"
 )
@@ -23,22 +25,18 @@ func DetailModel(c *cli.Context) error {
 		return cli.Exit(i18n.NewError("cli.detail.id_required", nil, nil), meta.LoadError)
 	}
 
-	if args.Type != "" {
-		if err := lib.ValidateModelType(args.Type); err != nil {
-			return cli.Exit(err, meta.LoadError)
+	if _, err := strconv.ParseInt(idStr, 10, 64); err != nil {
+		if args.Type != "" {
+			if verr := lib.ValidateModelType(args.Type); verr != nil {
+				return cli.Exit(verr, meta.LoadError)
+			}
 		}
 	}
 
-	apiKey := args.ApiKey
-	if apiKey == "" {
-		var err error
-		apiKey, err = lib.NewSfFolder().GetKey()
-		if err != nil {
-			return cli.Exit(err, meta.LoadError)
-		}
+	_, client, err := ResolveClient(args)
+	if err != nil {
+		return cli.Exit(err, meta.LoadError)
 	}
-	args.ApiKey = apiKey // 回写：resolveModelID 读 args.ApiKey 调 ListModels 做名称解析
-	client := lib.NewClient(args.BaseDomain, apiKey)
 
 	modelID, err := resolveModelID(c, client, args, idStr)
 	if err != nil {
@@ -64,7 +62,7 @@ func DetailModel(c *cli.Context) error {
 		for _, v := range detail.Versions {
 			fmt.Fprintln(os.Stdout, i18n.T("cli.model.detail_version", map[string]any{
 				"Version":   v.Version,
-				"Size":      formatBytes(v.FileSize),
+				"Size":      format.FormatBytes(v.FileSize),
 				"Status":    versionStatusText(v.Available),
 				"BaseModel": v.BaseModel,
 				"Public":    v.Public,

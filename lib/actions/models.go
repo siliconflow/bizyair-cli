@@ -112,3 +112,15 @@ func ToggleModelPublicContext(ctx context.Context, api lib.BizyAPI, versionIDs [
 	}
 	return nil
 }
+
+// ExtractVersionIDs 从模型详情中提取所有版本 ID。
+func ExtractVersionIDs(detail *lib.BizyModelDetail) []int64 {
+	if detail == nil {
+		return nil
+	}
+	ids := make([]int64, 0, len(detail.Versions))
+	for _, v := range detail.Versions {
+		ids = append(ids, v.Id)
+	}
+	return ids
+}

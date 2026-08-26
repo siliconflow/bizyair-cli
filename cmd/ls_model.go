@@ -39,15 +39,10 @@ func ListModel(c *cli.Context) error {
 		return nil
 	}
 
-	apiKey := args.ApiKey
-	if apiKey == "" {
-		var err error
-		apiKey, err = lib.NewSfFolder().GetKey()
-		if err != nil {
-			return cli.Exit(err, meta.LoadError)
-		}
+	apiKey, client, err := ResolveClient(args)
+	if err != nil {
+		return cli.Exit(err, meta.LoadError)
 	}
-	client := lib.NewClient(args.BaseDomain, apiKey)
 
 	listInput := actions.ListModelsInput{
 		Context:    c.Context,
@@ -55,8 +50,12 @@ func ListModel(c *cli.Context) error {
 		BaseDomain: args.BaseDomain,
 		ModelType:  args.Type,
 		Keyword:    c.String("keyword"),
+		Sort:       c.String("sort"),
 		Current:    c.Int("page"),
 		PageSize:   c.Int("page-size"),
+	}
+	if bm := c.String("base-model"); bm != "" {
+		listInput.BaseModels = []string{bm}
 	}
 	listResult := actions.ListModels(client, listInput)
 	if listResult.Error != nil {
@@ -76,31 +75,37 @@ func ListModel(c *cli.Context) error {
 }
 
 func printModelTable(w io.Writer, models []*lib.BizyModelInfo) {
-	// 固定列显示宽度（CJK 字符按 runewidth 双宽测量）
-	colW := []int{8, 20, 12, 8, 8, 10}
+	colW := []int{8, 20, 12, 8, 8, 8, 8}
 	headers := []string{
 		i18n.T("cli.model.ls_header_id", nil),
 		i18n.T("cli.model.ls_header_name", nil),
 		i18n.T("cli.model.ls_header_type", nil),
 		i18n.T("cli.model.ls_header_versions", nil),
 		i18n.T("cli.model.ls_header_public", nil),
-		i18n.T("cli.model.ls_header_updated", nil),
+		i18n.T("cli.model.ls_header_used", nil),
+		i18n.T("cli.model.ls_header_downloads", nil),
 	}
 	fmt.Fprintln(w, joinCells(headers, colW))
 	for _, m := range models {
-		publicCount := 0
+		allPublic := len(m.Versions) > 0
 		for _, v := range m.Versions {
-			if v.Public {
-				publicCount++
+			if !v.Public {
+				allPublic = false
+				break
 			}
+		}
+		publicLabel := i18n.T("cli.model.ls_header_public_no", nil)
+		if allPublic && len(m.Versions) > 0 {
+			publicLabel = i18n.T("cli.model.ls_header_public_yes", nil)
 		}
 		cells := []string{
 			strconv.Itoa(int(m.Id)),
 			m.Name,
 			m.Type,
 			strconv.Itoa(len(m.Versions)),
-			fmt.Sprintf("%d/%d", publicCount, len(m.Versions)),
-			m.UpdatedAt,
+			publicLabel,
+			strconv.Itoa(m.Counter.UsedCount),
+			strconv.Itoa(m.Counter.DownloadedCount),
 		}
 		fmt.Fprintln(w, joinCells(cells, colW))
 	}
