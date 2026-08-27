@@ -299,7 +299,6 @@ tui:
     price_short: "价格"
     price_title: "价格表"
     no_price: "暂无价格表。"
-    
   task_model:
     hint: "Enter 选择 | Esc 返回"
     url_placeholder: "输入 {{.Type}} URL（http/https）..."
@@ -323,7 +322,6 @@ tui:
     generating_title: "任务生成中..."
     cancel_hint: "按 X 取消"
     status_label: "状态"
-
 
 browser:
   opened: "已在浏览器中打开。"
