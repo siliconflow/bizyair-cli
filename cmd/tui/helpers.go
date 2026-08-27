@@ -392,6 +392,14 @@ func (m *mainModel) getContextualHint() string {
 		return i18n.T("tui.my_models.hint_list", nil)
 	case mainStepModelDetail:
 		return i18n.T("tui.my_models.hint_detail", nil)
+	case mainStepModelzoo:
+		return i18n.T("tui.modelzoo.hint_list", nil)
+	case mainStepModelzooDetail:
+		return i18n.T("tui.modelzoo.hint_detail", nil)
+	case mainStepPriceView:
+		return i18n.T("tui.hint.return_menu", nil)
+	case mainStepTaskModel:
+		return i18n.T("tui.task_model.hint", nil)
 	case mainStepOutput:
 		return i18n.T("tui.hint.return_menu", nil)
 	}

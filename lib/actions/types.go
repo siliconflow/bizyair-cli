@@ -137,3 +137,39 @@ type DayCostResult struct {
 	Records []*lib.CostByTimeResult
 	Error   error
 }
+
+// ModelzooEndpointsResult 模型广场端点列表（合并列表+价格表）
+type ModelzooEndpointsResult struct {
+	Models []lib.ModelzooModelFlat
+	Error  error
+}
+
+// ModelzooTagsResult 模型广场能力标签
+type ModelzooTagsResult struct {
+	Tags  []lib.ModelzooTag
+	Error error
+}
+
+// ModelzooEndpointDetailResult 端点详情
+type ModelzooEndpointDetailResult struct {
+	Detail *lib.ModelzooEndpointDetail
+	Error  error
+}
+
+// PriceTableResult 价格表查询结果
+type PriceTableResult struct {
+	PriceTable *lib.PriceTable
+	Error      error
+}
+
+// CreateTaskResult 任务创建结果
+type CreateTaskResult struct {
+	RequestID string
+	Error     error
+}
+
+// TaskStatusResult 任务状态查询结果
+type TaskStatusResult struct {
+	Status *lib.ModelZooTaskStatusResp
+	Error  error
+}

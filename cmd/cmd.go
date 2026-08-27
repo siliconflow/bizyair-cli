@@ -40,6 +40,10 @@ func Init() *cli.App {
 	pageSizeFlag := cli.IntFlag{Name: "page-size", Usage: i18n.T("cli.flag.page_size"), Value: 100}
 	openFlag := cli.BoolFlag{Name: "open", Usage: i18n.T("cli.flag.open")}
 	yesFlag := cli.BoolFlag{Name: "yes", Aliases: []string{"y"}, Usage: i18n.T("cli.flag.yes")}
+	billingUnitFlag := cli.StringFlag{Name: "billing-unit", Aliases: []string{"bu"}, Usage: i18n.T("cli.flag.billing_unit")}
+	showDeprecatedFlag := cli.BoolFlag{Name: "show-deprecated", Usage: i18n.T("cli.flag.show_deprecated")}
+	modelzooParamFlag := cli.StringSliceFlag{Name: "param", Usage: i18n.T("cli.flag.param"), Destination: &cli.StringSlice{}}
+	modelzooImageFlag := cli.StringSliceFlag{Name: "image", Usage: i18n.T("cli.flag.image"), Destination: &cli.StringSlice{}}
 
 	configureCLIHelp()
 
@@ -172,6 +176,59 @@ func Init() *cli.App {
 						&yesFlag,
 					},
 					Action: PublicModel,
+				},
+			},
+		},
+		{
+			Name:  meta.CmdModelzoo,
+			Usage: i18n.T("cli.command.modelzoo"),
+			Action: func(c *cli.Context) error {
+				if c.Args().Present() {
+					return i18n.NewError("cli.error.unknown_command", map[string]any{"Command": c.Args().First()}, nil)
+				}
+				return cli.ShowSubcommandHelp(c)
+			},
+			Subcommands: []*cli.Command{
+				{
+					Name:        meta.CmdLs,
+					Usage:       i18n.T("cli.command.modelzoo_list"),
+					Description: i18n.T("cli.command.modelzoo_list_desc"),
+					Flags: []cli.Flag{
+						&keywordFlag,
+						&sortFlag,
+						&billingUnitFlag,
+						&showDeprecatedFlag,
+					},
+					Action: ModelzooList,
+				},
+				{
+					Name:        meta.CmdDetail,
+					Usage:       i18n.T("cli.command.modelzoo_detail"),
+					Description: i18n.T("cli.command.modelzoo_detail_desc"),
+					ArgsUsage:   i18n.T("cli.args.endpoint"),
+					Flags:       []cli.Flag{&apiKeyFlag, &baseDomainFlag},
+					Action:      ModelzooDetail,
+				},
+				{
+					Name:        meta.CmdPrice,
+					Usage:       i18n.T("cli.command.modelzoo_price"),
+					Description: i18n.T("cli.command.modelzoo_price_desc"),
+					ArgsUsage:   i18n.T("cli.args.endpoint"),
+					Flags:       []cli.Flag{&apiKeyFlag, &baseDomainFlag},
+					Action:      ModelzooPrice,
+				},
+				{
+					Name:        meta.CmdRun,
+					Usage:       i18n.T("cli.command.modelzoo_run"),
+					Description: i18n.T("cli.command.modelzoo_run_desc"),
+					ArgsUsage:   i18n.T("cli.args.endpoint"),
+					Flags: []cli.Flag{
+						&modelzooParamFlag,
+						&modelzooImageFlag,
+						&apiKeyFlag,
+						&baseDomainFlag,
+					},
+					Action: ModelzooRun,
 				},
 			},
 		},

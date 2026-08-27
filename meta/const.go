@@ -22,6 +22,10 @@ const (
 	CmdPlan    = "plan"
 	CmdWallet  = "wallet"
 	CmdDayCost = "day-cost"
+
+	CmdModelzoo = "modelzoo"
+	CmdPrice    = "price"
+	CmdRun      = "run"
 )
 
 const (

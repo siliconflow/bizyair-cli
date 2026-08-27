@@ -224,3 +224,171 @@ type BatchUpdatePublicResp struct {
 	ErrCnMsg  string  `json:"err_cn_msg,omitempty"`
 	FailedIDs []int64 `json:"failed_ids,omitempty"`
 }
+
+// ---- ModelZoo 数据模型 ----
+
+// ModelzooModelFlat 模型广场扁平化模型（含价格表）
+type ModelzooModelFlat struct {
+	Endpoint        string      `json:"endpoint,omitempty"`
+	DisplayName     string      `json:"display_name,omitempty"`
+	Manufacturer    string      `json:"manufacturer,omitempty"`
+	ModelName       string      `json:"model_name,omitempty"`
+	BillingUnit     string      `json:"billing_unit,omitempty"`
+	MinCredits      int64       `json:"min_credits,omitempty"`
+	Category        string      `json:"category,omitempty"`
+	IndicativePrice bool        `json:"indicative_price,omitempty"`
+	PriceTable      *PriceTable `json:"price_table,omitempty"`
+	Series          string      `json:"series,omitempty"`
+	ModelVersion    string      `json:"model_version,omitempty"`
+	Tags            []string    `json:"tags,omitempty"`
+	Description     string      `json:"description,omitempty"`
+	Deprecated      bool        `json:"deprecated,omitempty"`
+	IconURL         string      `json:"icon_url,omitempty"`
+	SimplePriceText string      `json:"simple_price_text,omitempty"`
+	SubCategory     string      `json:"sub_category,omitempty"`
+}
+
+// ModelzooTag 能力标签
+type ModelzooTag struct {
+	ID  int64  `json:"id,omitempty"`
+	Tag string `json:"tag,omitempty"`
+}
+
+// ModelzooTagsResp 标签列表响应
+type ModelzooTagsResp struct {
+	Tags []ModelzooTag `json:"tags,omitempty"`
+}
+
+// PriceTable 价格表
+type PriceTable struct {
+	Columns []PriceTableColumn `json:"columns,omitempty"`
+	Cells   [][]PriceTableCell `json:"cells,omitempty"`
+}
+
+// PriceTableColumn 价格表列定义
+type PriceTableColumn struct {
+	FieldLabel string `json:"field_label,omitempty"`
+	FieldName  string `json:"field_name,omitempty"`
+}
+
+// PriceTableCell 价格表单元格
+type PriceTableCell struct {
+	ValueStr string  `json:"value_str,omitempty"`
+	UnitName string  `json:"unit_name,omitempty"`
+	UnitKey  string  `json:"unit_key,omitempty"`
+	Amount   float64 `json:"amount,omitempty"`
+}
+
+// ModelzooEndpointDetail 端点详情（含输入参数列表）
+type ModelzooEndpointDetail struct {
+	Endpoint     string               `json:"endpoint,omitempty"`
+	DisplayName  string               `json:"display_name,omitempty"`
+	Description  string               `json:"description,omitempty"`
+	Manufacturer string               `json:"manufacturer,omitempty"`
+	Category     string               `json:"category,omitempty"`
+	Edition      string               `json:"edition,omitempty"`
+	BillingUnit  string               `json:"billing_unit,omitempty"`
+	MinCredits   int64                `json:"min_credits,omitempty"`
+	InputParams  []ModelzooInputParam `json:"input_params,omitempty"`
+}
+
+// ModelzooInputParam 输入参数定义
+type ModelzooInputParam struct {
+	VariableName string                `json:"variable_name,omitempty"`
+	VariableType string                `json:"variable_type,omitempty"`
+	FieldName    string                `json:"field_name,omitempty"`
+	FieldType    string                `json:"field_type,omitempty"`
+	FieldValue   any                   `json:"field_value,omitempty"`
+	FieldLabel   string                `json:"field_label,omitempty"`
+	Required     bool                  `json:"required,omitempty"`
+	Sort         int                   `json:"sort,omitempty"`
+	FieldTooltip string                `json:"field_tooltip,omitempty"`
+	FieldOptions *ModelzooFieldOptions `json:"field_options,omitempty"`
+}
+
+// ParamKey 返回参数键名（优先 FieldName，回退 VariableName）
+func (p ModelzooInputParam) ParamKey() string {
+	if p.FieldName != "" {
+		return p.FieldName
+	}
+	return p.VariableName
+}
+
+// ModelzooFieldOptions 字段选项（枚举/像素/宽高比）
+type ModelzooFieldOptions struct {
+	Values         []any    `json:"values,omitempty"`
+	Options        []any    `json:"options,omitempty"`
+	Choices        []any    `json:"choices,omitempty"`
+	MinPixels      *int     `json:"min_pixels,omitempty"`
+	MaxPixels      *int     `json:"max_pixels,omitempty"`
+	MinAspectRatio *float64 `json:"min_aspect_ratio,omitempty"`
+	MaxAspectRatio *float64 `json:"max_aspect_ratio,omitempty"`
+}
+
+// EnumValues 返回可选枚举值
+func (o ModelzooFieldOptions) EnumValues() []any {
+	if len(o.Values) > 0 {
+		return o.Values
+	}
+	if len(o.Options) > 0 {
+		return o.Options
+	}
+	return o.Choices
+}
+
+// ModelzooListItem POST /v1/modelzoo/list 返回的单个模型
+type ModelzooListItem struct {
+	Id            int64   `json:"id"`
+	DisplayName   string  `json:"display_name"`
+	Description   string  `json:"description"`
+	Category      string  `json:"category"`
+	ModelName     string  `json:"model_name"`
+	Endpoint      string  `json:"endpoint"`
+	Status        string  `json:"status"`
+	CreatedAt     string  `json:"created_at"`
+	UpdatedAt     string  `json:"updated_at"`
+	Owner         string  `json:"owner"`
+	Manufacturer  string  `json:"manufacturer"`
+	IconURL       string  `json:"icon_url"`
+	BackgroundURL string  `json:"background_url"`
+	Edition       string  `json:"edition"`
+	MinCredits    int64   `json:"min_credits"`
+	DiscountRate  float64 `json:"discount_rate"`
+}
+
+// ModelzooListResp 模型广场列表响应
+type ModelzooListResp struct {
+	List     []ModelzooListItem `json:"list"`
+	Total    int                `json:"total"`
+	Current  int                `json:"current"`
+	PageSize int                `json:"page_size"`
+}
+
+// ModelzooPriceTableFlatResp 扁平价格表响应
+type ModelzooPriceTableFlatResp struct {
+	Models []ModelzooModelFlat `json:"models,omitempty"`
+}
+
+// ---- ModelZoo 任务模型 ----
+
+// ModelZooTaskResp 任务创建响应
+type ModelZooTaskResp struct {
+	RequestID string `json:"request_id,omitempty"`
+}
+
+// ModelZooTaskStatusResp 任务状态查询响应
+type ModelZooTaskStatusResp struct {
+	RequestID string `json:"request_id,omitempty"`
+	Status    string `json:"status,omitempty"`
+	Outputs   any    `json:"outputs,omitempty"`
+}
+
+// ModelZoo 任务状态常量
+const (
+	TaskStatusSuccess      = "Success"
+	TaskStatusFailed       = "Failed"
+	TaskStatusRunning      = "Running"
+	TaskStatusQueued       = "Queued"
+	TaskStatusCancelled    = "Cancelled"
+	TaskStatusTransferring = "Transferring"
+)

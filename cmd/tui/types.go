@@ -19,6 +19,10 @@ const (
 	mainStepUserInfo
 	mainStepMyModelsList
 	mainStepModelDetail
+	mainStepModelzoo
+	mainStepModelzooDetail
+	mainStepPriceView
+	mainStepTaskModel
 )
 
 type actionKind string
@@ -35,6 +39,8 @@ const (
 	actionWallet      actionKind = "wallet"
 	actionCredits     actionKind = "credits"
 	actionDayCost     actionKind = "day_cost"
+	actionModelzoo    actionKind = "modelzoo"
+	actionTask        actionKind = "task"
 )
 
 // 上传步骤
@@ -266,3 +272,95 @@ type modelPublicToggledMsg struct {
 
 // myModelsResizeIdleMsg 窗口尺寸调整停止（防抖期结束）后触发列表重置
 type myModelsResizeIdleMsg struct{}
+
+// --- ModelZoo messages ---
+
+type modelzooEndpointsDoneMsg struct {
+	models []lib.ModelzooModelFlat
+	err    error
+}
+
+type modelzooTagsDoneMsg struct {
+	tags []lib.ModelzooTag
+	err  error
+}
+
+type endpointDetailDoneMsg struct {
+	detail *lib.ModelzooEndpointDetail
+	err    error
+}
+
+type taskCreatedMsg struct {
+	requestID string
+	err       error
+}
+
+type taskStatusMsg struct {
+	status *lib.ModelZooTaskStatusResp
+	err    error
+}
+
+type taskCancelledMsg struct {
+	err error
+}
+
+// --- ModelZoo filter ---
+
+type modelzooFilterMode int
+
+const (
+	modelzooFilterNone modelzooFilterMode = iota
+	modelzooFilterSeries
+	modelzooFilterManufacturer
+	modelzooFilterCapability
+	modelzooFilterVersion
+)
+
+type modelzooInputs struct {
+	search       textinput.Model
+	searchActive bool
+
+	models     []lib.ModelzooModelFlat
+	filtered   []lib.ModelzooModelFlat
+	detail     *lib.ModelzooEndpointDetail
+
+	seriesOpts       []filterOption
+	manufacturerOpts []filterOption
+	capabilityOpts   []filterOption
+	versionOpts      []filterOption
+
+	seriesFilter       string
+	manufacturerFilter string
+	capabilityFilter   string
+	versionFilter      string
+
+	filterMode modelzooFilterMode
+	filterList list.Model
+}
+
+// --- Task model ---
+
+type taskModelStep int
+
+const (
+	taskModelSelect taskModelStep = iota
+	taskModelParamPoll
+	taskModelPolling
+	taskModelResult
+)
+
+type taskModelInputs struct {
+	step       taskModelStep
+	models     []lib.ModelzooModelFlat
+	detail     *lib.ModelzooEndpointDetail
+	params     map[string]any
+	paramOrder []string
+	endpoint   string
+
+	currentParamIdx int
+	requestID       string
+	lastPollStatus  string
+
+	paramSelectList list.Model
+	paramText       textinput.Model
+}

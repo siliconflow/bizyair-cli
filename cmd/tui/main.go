@@ -2,6 +2,7 @@ package tui
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"sort"
 	"strings"
@@ -124,6 +125,16 @@ type mainModel struct {
 	myModelsLoaded     bool
 	program            *tea.Program
 	lastResizeAt        time.Time
+
+	// ModelZoo
+	modelzoo            modelzooInputs
+	modelzooTable       tablev2.Model
+	modelzooLoaded      bool
+	modelzooDetailScroll int
+	endpointDetail     *lib.ModelzooEndpointDetail
+	priceTable         *lib.PriceTable
+	priceTableView     tablev2.Model
+	taskModel          taskModelInputs
 }
 
 func newMainModel() mainModel {
@@ -149,6 +160,7 @@ func newMainModelWithContext(ctx context.Context, baseDomain string) mainModel {
 		menuEntry{listItem{title: i18n.T("tui.menu.upload", nil), desc: i18n.T("tui.menu.upload_desc", nil)}, actionUpload},
 		menuEntry{listItem{title: i18n.T("tui.menu.user_info", nil), desc: i18n.T("tui.menu.user_info_desc", nil)}, actionUserInfo},
 		menuEntry{listItem{title: i18n.T("tui.menu.models", nil), desc: i18n.T("tui.menu.models_desc", nil)}, actionLsModel},
+		menuEntry{listItem{title: i18n.T("tui.menu.modelzoo", nil), desc: i18n.T("tui.menu.modelzoo_desc", nil)}, actionModelzoo},
 		menuEntry{listItem{title: i18n.T("tui.menu.logout", nil), desc: i18n.T("tui.menu.logout_desc", nil)}, actionLogout},
 		menuEntry{listItem{title: i18n.T("tui.menu.exit", nil), desc: i18n.T("tui.menu.exit_desc", nil)}, actionExit},
 	}
@@ -340,6 +352,12 @@ func newMainModelWithContext(ctx context.Context, baseDomain string) mainModel {
 	m.myModelsInputs.search.TextStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("#E5E7EB"))
 	m.myModelsInputs.search.Placeholder = i18n.T("tui.my_models.search_placeholder", nil)
 	m.myModelsInputs.search.PlaceholderStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("#6B7280"))
+	m.modelzoo.search = textinput.New()
+	m.modelzoo.search.Prompt = "> "
+	m.modelzoo.search.PromptStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("#FBBF24"))
+	m.modelzoo.search.TextStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("#E5E7EB"))
+	m.modelzoo.search.Placeholder = i18n.T("tui.modelzoo.search_placeholder", nil)
+	m.modelzoo.search.PlaceholderStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("#6B7280"))
 	if key, err := lib.NewSfFolder().GetKey(); err == nil && key != "" {
 		m.loggedIn = true
 		m.apiKey = key
@@ -421,6 +439,18 @@ func (m mainModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.step == mainStepMyModelsList || m.step == mainStepModelDetail {
 			return m.handleMyModelsKey(msg)
 		}
+		if m.step == mainStepModelzoo {
+			return updateModelzoo(&m, msg)
+		}
+		if m.step == mainStepModelzooDetail {
+			return updateModelzooDetail(&m, msg)
+		}
+		if m.step == mainStepTaskModel {
+			return updateTaskModel(&m, msg)
+		}
+		if m.step == mainStepPriceView {
+			return m, updatePriceView(&m, msg)
+		}
 		switch msg.String() {
 		case "ctrl+c":
 			// 如果正在上传，保持取消上传逻辑
@@ -484,6 +514,13 @@ func (m mainModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 							return m, tea.Batch(m.fetchMyModels(), loadBaseModelTypes(m.ctx, m.baseDomain, m.apiKey))
 						}
 						return m, m.fetchMyModels()
+					case actionModelzoo:
+						m.step = mainStepModelzoo
+						m.running = true
+						return m, tea.Batch(
+							fetchModelzooEndpoints(m.getAPI(), "", "", "", false),
+							fetchModelzooTags(m.getAPI()),
+						)
 					case actionUserInfo:
 						m.step = mainStepUserInfo
 						return m, nil
@@ -503,7 +540,6 @@ func (m mainModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 			}
 		case "esc":
-			// 如果在退出确认界面，Esc 取消退出
 			if m.confirmingExit {
 				m.confirmingExit = false
 				return m, nil
@@ -522,6 +558,18 @@ func (m mainModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return m, nil
 			case mainStepUserInfo:
 				m.step = mainStepMenu
+				return m, nil
+			case mainStepModelzoo:
+				m.step = mainStepMenu
+				return m, nil
+			case mainStepModelzooDetail:
+				m.step = mainStepModelzoo
+				return m, nil
+			case mainStepPriceView:
+				m.step = mainStepModelzoo
+				return m, nil
+			case mainStepTaskModel:
+				m.step = mainStepModelzoo
 				return m, nil
 			}
 		default:
@@ -682,6 +730,84 @@ func (m mainModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		}
 		m.updateMyModelsTable()
+		return m, nil
+	case modelzooEndpointsDoneMsg:
+		m.running = false
+		if msg.err != nil {
+			m.err = msg.err
+			m.step = mainStepMenu
+			return m, nil
+		}
+		m.modelzoo.models = msg.models
+		m.modelzooLoaded = true
+		m.extractModelzooFilterOptions()
+		m.applyModelzooFilters()
+		if m.step == mainStepTaskModel {
+			m.taskModel.models = msg.models
+		}
+		if m.step != mainStepModelzooDetail && m.step != mainStepTaskModel {
+			m.step = mainStepModelzoo
+		}
+		return m, nil
+	case modelzooTagsDoneMsg:
+		return m, nil
+	case endpointDetailDoneMsg:
+		m.running = false
+		if msg.err != nil {
+			m.err = msg.err
+			return m, nil
+		}
+		m.endpointDetail = msg.detail
+		if m.step == mainStepTaskModel {
+			m.taskModel.detail = msg.detail
+			m.taskModel.currentParamIdx = 0
+			m.taskModel.params = make(map[string]any)
+			return m, m.initCurrentParamInput()
+		}
+		m.modelzoo.detail = msg.detail
+		m.step = mainStepModelzooDetail
+		return m, nil
+	case taskCreatedMsg:
+		m.running = false
+		if msg.err != nil {
+			m.err = msg.err
+			return m, nil
+		}
+		m.taskModel.requestID = msg.requestID
+		m.taskModel.step = taskModelPolling
+		m.running = true
+		return m, pollTaskStatus(m.getAPI(), msg.requestID)
+	case taskStatusMsg:
+		m.running = false
+		if msg.err != nil {
+			m.err = msg.err
+			return m, nil
+		}
+		if msg.status == nil {
+			m.running = true
+			return m, pollTaskStatus(m.getAPI(), m.taskModel.requestID)
+		}
+		m.taskModel.lastPollStatus = msg.status.Status
+		switch msg.status.Status {
+		case lib.TaskStatusSuccess, lib.TaskStatusFailed, lib.TaskStatusCancelled:
+			m.taskModel.step = taskModelResult
+			m.step = mainStepOutput
+			m.output = fmt.Sprintf("%s: %s\n%s: %s",
+				i18n.T("cli.task.request_id_label", nil), m.taskModel.requestID,
+				i18n.T("tui.task_model.status_label", nil), msg.status.Status)
+			return m, nil
+		default:
+			m.running = true
+			return m, pollTaskStatus(m.getAPI(), m.taskModel.requestID)
+		}
+	case taskCancelledMsg:
+		m.running = false
+		if msg.err != nil {
+			m.err = msg.err
+			return m, nil
+		}
+		m.taskModel.step = taskModelResult
+		m.taskModel.lastPollStatus = lib.TaskStatusCancelled
 		return m, nil
 	case uploadStartMsg:
 		m.uploadCh = msg.ch
@@ -946,6 +1072,14 @@ func (m mainModel) View() string {
 		return m.renderFrame(header + "\n" + panel.Render(m.renderMyModelsView()))
 	case mainStepModelDetail:
 		return m.renderFrame(header + "\n" + panel.Render(m.renderModelDetailView()))
+	case mainStepModelzoo:
+		return m.renderFrame(header + "\n" + panel.Render(m.renderModelzooView()))
+	case mainStepModelzooDetail:
+		return m.renderFrame(header + "\n" + panel.Render(m.renderModelzooDetailView()))
+	case mainStepPriceView:
+		return m.renderFrame(header + "\n" + panel.Render(m.renderPriceView()))
+	case mainStepTaskModel:
+		return m.renderFrame(header + "\n" + panel.Render(m.renderTaskModelView()))
 	default:
 		if m.running {
 			spin := m.sp.View()

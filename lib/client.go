@@ -39,6 +39,16 @@ type BizyAPI interface {
 	GetWalletContext(ctx context.Context) (*Response[WalletResp], error)
 	GetCreditsContext(ctx context.Context, current, pageSize, expireDays int) (*Response[CreditsListResp], error)
 	GetDayCostContext(ctx context.Context, date string) (*Response[DayCostResp], error)
+
+	// ModelZoo
+	GetModelzooListContext(ctx context.Context, current, pageSize int, keyword, sort string) (*Response[ModelzooListResp], error)
+	GetModelzooPriceTableFlatContext(ctx context.Context, keyword, billingUnit, sort string, showDeprecated bool) (*Response[ModelzooPriceTableFlatResp], error)
+	GetModelzooTagsContext(ctx context.Context) (*Response[ModelzooTagsResp], error)
+	GetModelzooEndpointDetailContext(ctx context.Context, endpoint string) (*Response[ModelzooEndpointDetail], error)
+	GetModelzooPriceTableContext(ctx context.Context, endpoint string) (*Response[PriceTable], error)
+	CreateModelZooTaskContext(ctx context.Context, endpoint string, params map[string]any) (*Response[ModelZooTaskResp], error)
+	GetModelZooTaskStatusContext(ctx context.Context, requestID string) (*Response[ModelZooTaskStatusResp], error)
+	CancelModelZooTaskContext(ctx context.Context, requestID string) error
 }
 
 // Client bizyair client
@@ -424,6 +434,133 @@ func (c *Client) GetDayCostContext(ctx context.Context, date string) (*Response[
 		return nil, handleError(body, statusCode)
 	}
 	return handleResponse[DayCostResp](body)
+}
+
+func (c *Client) GetModelzooListContext(ctx context.Context, current, pageSize int, keyword, sort string) (*Response[ModelzooListResp], error) {
+	serverURL := joinEndpoint(c.Endpoints.Meta, "/v1/modelzoo/list")
+	body, statusCode, err := c.doPost(ctx, serverURL, map[string]any{
+		"current":   current,
+		"page_size": pageSize,
+		"keyword":   keyword,
+		"sort":      sort,
+	}, c.authHeader())
+	if err != nil {
+		return nil, err
+	}
+	if statusCode != http.StatusOK {
+		return nil, handleError(body, statusCode)
+	}
+	return handleResponse[ModelzooListResp](body)
+}
+
+func (c *Client) GetModelzooPriceTableFlatContext(ctx context.Context, keyword, billingUnit, sort string, showDeprecated bool) (*Response[ModelzooPriceTableFlatResp], error) {
+	serverURL := joinEndpoint(c.Endpoints.Meta, "/v1/modelzoo/price_table_flat")
+	query := url.Values{}
+	if keyword != "" {
+		query.Set("keyword", keyword)
+	}
+	if billingUnit != "" {
+		query.Set("billing_unit", billingUnit)
+	}
+	if sort != "" {
+		query.Set("sort", sort)
+	}
+	query.Set("show_deprecated", fmt.Sprintf("%v", showDeprecated))
+	if len(query) > 0 {
+		serverURL = serverURL + "?" + query.Encode()
+	}
+	body, statusCode, err := c.doGet(ctx, serverURL, nil, c.authHeader())
+	if err != nil {
+		return nil, err
+	}
+	if statusCode != http.StatusOK {
+		return nil, handleError(body, statusCode)
+	}
+	return handleResponse[ModelzooPriceTableFlatResp](body)
+}
+
+func (c *Client) GetModelzooTagsContext(ctx context.Context) (*Response[ModelzooTagsResp], error) {
+	serverURL := joinEndpoint(c.Endpoints.Meta, "/v1/modelzoo/tags")
+	body, statusCode, err := c.doGet(ctx, serverURL, nil, c.authHeader())
+	if err != nil {
+		return nil, err
+	}
+	if statusCode != http.StatusOK {
+		return nil, handleError(body, statusCode)
+	}
+	return handleResponse[ModelzooTagsResp](body)
+}
+
+func (c *Client) GetModelzooEndpointDetailContext(ctx context.Context, endpoint string) (*Response[ModelzooEndpointDetail], error) {
+	serverURL := joinEndpoint(c.Endpoints.Meta, fmt.Sprintf("/v1/modelzoo/detail/%s", url.PathEscape(endpoint)))
+	body, statusCode, err := c.doGet(ctx, serverURL, nil, c.authHeader())
+	if err != nil {
+		return nil, err
+	}
+	if statusCode != http.StatusOK {
+		return nil, handleError(body, statusCode)
+	}
+	return handleResponse[ModelzooEndpointDetail](body)
+}
+
+func (c *Client) GetModelzooPriceTableContext(ctx context.Context, endpoint string) (*Response[PriceTable], error) {
+	serverURL := joinEndpoint(c.Endpoints.Meta, fmt.Sprintf("/v1/modelzoo/price_table/%s", url.PathEscape(endpoint)))
+	body, statusCode, err := c.doGet(ctx, serverURL, nil, c.authHeader())
+	if err != nil {
+		return nil, err
+	}
+	if statusCode != http.StatusOK {
+		return nil, handleError(body, statusCode)
+	}
+	return handleResponse[PriceTable](body)
+}
+
+func (c *Client) CreateModelZooTaskContext(ctx context.Context, endpoint string, params map[string]any) (*Response[ModelZooTaskResp], error) {
+	serverURL := joinEndpoint(c.Endpoints.API, fmt.Sprintf("/v1/modelzoo/tasks/openapi/%s", url.PathEscape(endpoint)))
+	body, statusCode, err := c.doPost(ctx, serverURL, params, c.authHeader())
+	if err != nil {
+		return nil, err
+	}
+	if statusCode != http.StatusOK {
+		return nil, handleError(body, statusCode)
+	}
+	return handleResponse[ModelZooTaskResp](body)
+}
+
+func (c *Client) GetModelZooTaskStatusContext(ctx context.Context, requestID string) (*Response[ModelZooTaskStatusResp], error) {
+	serverURL := joinEndpoint(c.Endpoints.API, fmt.Sprintf("/v1/modelzoo/tasks/%s", url.PathEscape(requestID)))
+	body, statusCode, err := c.doGet(ctx, serverURL, nil, c.authHeader())
+	if err != nil {
+		return nil, err
+	}
+	if statusCode != http.StatusOK {
+		return nil, handleError(body, statusCode)
+	}
+	return handleResponse[ModelZooTaskStatusResp](body)
+}
+
+func (c *Client) CancelModelZooTaskContext(ctx context.Context, requestID string) error {
+	serverURL := joinEndpoint(c.Endpoints.API, "/v1/modelzoo/tasks/cancel")
+	body, statusCode, err := c.doPost(ctx, serverURL, map[string]any{"request_id": requestID}, c.authHeader())
+	if err != nil {
+		return err
+	}
+	if statusCode == http.StatusNotFound {
+		taskURL := joinEndpoint(c.Endpoints.API, "/v1/modelzoo/tasks/"+url.PathEscape(requestID))
+		body2, statusCode2, err2 := c.doDelete(ctx, taskURL, nil, c.authHeader())
+		if err2 != nil {
+			return err2
+		}
+		if statusCode2 == http.StatusNotFound {
+			_ = body2
+			return nil
+		}
+		return handleError(body2, statusCode2)
+	}
+	if statusCode != http.StatusOK {
+		return handleError(body, statusCode)
+	}
+	return nil
 }
 
 func (c *Client) authHeader() map[string]string {
