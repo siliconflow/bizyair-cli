@@ -38,7 +38,7 @@ func ModelzooDetail(c *cli.Context) error {
 	fmt.Fprintln(os.Stdout, i18n.T("cli.modelzoo.detail_title", nil))
 	fmt.Fprintln(os.Stdout, i18n.T("cli.modelzoo.detail_endpoint", map[string]any{"Endpoint": d.Endpoint}))
 	fmt.Fprintln(os.Stdout, i18n.T("cli.modelzoo.detail_name", map[string]any{"Name": d.DisplayName}))
-	fmt.Fprintln(os.Stdout, i18n.T("cli.modelzoo.detail_manufacturer", map[string]any{"Manufacturer": d.Manufacturer}))
+	fmt.Fprintln(os.Stdout, i18n.T("cli.modelzoo.detail_manufacturer", map[string]any{"Manufacturer": i18n.APITranslate("manufacturer", d.Manufacturer)}))
 	fmt.Fprintln(os.Stdout, i18n.T("cli.modelzoo.detail_category", map[string]any{"Category": d.Category}))
 	if d.BillingUnit != "" {
 		fmt.Fprintln(os.Stdout, i18n.T("cli.modelzoo.detail_billing_unit", map[string]any{"Unit": d.BillingUnit}))

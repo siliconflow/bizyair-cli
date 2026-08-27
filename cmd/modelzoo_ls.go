@@ -53,9 +53,9 @@ func printModelzooTable(w io.Writer, models []lib.ModelzooModelFlat) {
 		cells := []string{
 			dashIfEmpty(m.DisplayName),
 			m.Endpoint,
-			dashIfEmpty(m.Manufacturer),
+			dashIfEmpty(i18n.APITranslate("manufacturer", m.Manufacturer)),
 			dashIfEmpty(m.Category),
-			dashIfEmpty(m.ModelVersion),
+			dashIfEmpty(i18n.APITranslate("version", m.ModelVersion)),
 			fmt.Sprintf("%d", m.MinCredits),
 		}
 		fmt.Fprintln(w, joinCells(cells, colW))

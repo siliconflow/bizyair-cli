@@ -299,6 +299,7 @@ tui:
     price_short: "价格"
     price_title: "价格表"
     no_price: "暂无价格表。"
+    
   task_model:
     hint: "Enter 选择 | Esc 返回"
     url_placeholder: "输入 {{.Type}} URL（http/https）..."
@@ -322,6 +323,7 @@ tui:
     generating_title: "任务生成中..."
     cancel_hint: "按 X 取消"
     status_label: "状态"
+
 
 browser:
   opened: "已在浏览器中打开。"
@@ -392,6 +394,15 @@ cli:
     wallet: "显示钱包余额"
     credits: "显示余额明细和过期信息"
     day_cost: "显示今日消费"
+    modelzoo: "浏览模型广场"
+    modelzoo_list: "列出模型广场端点"
+    modelzoo_list_desc: "浏览可用模型端点（支持筛选）"
+    modelzoo_detail: "显示端点详情"
+    modelzoo_detail_desc: "显示模型广场端点的详细信息"
+    modelzoo_price: "显示端点价格"
+    modelzoo_price_desc: "显示模型广场端点的价格表"
+    modelzoo_run: "运行端点任务"
+    modelzoo_run_desc: "向模型广场端点提交任务并轮询结果"
     login_desc: |-
       登录到 BizyAir。使用 API Key 认证。
 
@@ -439,6 +450,7 @@ cli:
          bizyair upgrade
   args:
     id_or_name: "[<id|name>]"
+    endpoint: "<endpoint>"
   whoami:
     id_label: "ID"
     name_label: "名称"
@@ -512,6 +524,10 @@ cli:
     yes: "跳过确认并立即执行"
     check: "仅检查更新，不执行升级"
     force: "强制升级，即使版本相同"
+    billing_unit: "计费单位筛选"
+    show_deprecated: "显示已弃用的端点"
+    param: "任务参数 (key=value)"
+    image: "图片 URL 参数 (key=url)"
   login:
     api_key_required: "API Key 不能为空；请使用 --api_key 或环境变量 {{.Env}} 设置。"
     success: "登录成功。"
@@ -547,6 +563,56 @@ cli:
     ls_count: "已列出 {{.Count}} 个模型。"
     rm_confirm: "确认删除模型 {{.ID}}？[y/N] "
     rm_canceled: "已取消。"
+  modelzoo:
+    ls_empty: "未找到模型。"
+    ls_title: "模型广场"
+    ls_count: "共 {{.Count}} 个模型"
+    ls_header_name: "名称"
+    ls_header_endpoint: "端点"
+    ls_header_manufacturer: "厂商"
+    ls_header_category: "能力"
+    ls_header_version: "版本"
+    ls_header_min_credits: "最低积分"
+    detail_title: "端点详情"
+    detail_endpoint: "端点：{{.Endpoint}}"
+    detail_name: "名称：{{.Name}}"
+    detail_manufacturer: "厂商：{{.Manufacturer}}"
+    detail_category: "能力：{{.Category}}"
+    detail_billing_unit: "计费单位：{{.Unit}}"
+    detail_min_credits: "最低积分：{{.Credits}}"
+    detail_description: "描述：{{.Desc}}"
+    detail_params_header: "输入参数："
+    detail_param_line: "  {{.Name}} ({{.Label}}) [{{.Type}}]{{.Required}}"
+    param_required: "（必填）"
+    endpoint_required: "必须提供端点名。"
+    detail_not_found: "未找到端点 {{.Endpoint}}。"
+    price_empty: "暂无价格表。"
+    price_title: "价格表：{{.Endpoint}}"
+    run:
+      endpoint_label: "端点"
+      name_label: "名称"
+      desc_label: "描述"
+      params_hint: "必填参数："
+      param_hint_line: "  {{.Name}} ({{.Label}}) [{{.Type}}]{{.Required}}"
+      request_id_label: "请求 ID"
+      polling_status: "轮询中..."
+      status_label: "状态"
+      status_success: "成功"
+      status_failed: "失败"
+      status_running: "运行中"
+      status_queued: "排队中"
+      status_cancelled: "已取消"
+      status_transferring: "传输中"
+      type_number: "数值"
+      type_boolean: "布尔"
+      type_media: "媒体"
+      type_string: "字符串"
+      error:
+        param_format: "无效参数格式：{{.Param}}（应为 key=value）"
+        boolean_invalid: "{{.Key}} 的布尔值无效：{{.Value}}"
+        url_invalid: "{{.Key}} 的 URL 无效（必须以 http:// 或 https:// 开头）"
+  task:
+    request_id_label: "请求 ID"
   detail:
     usage: "按 ID 或名称显示模型详情"
     id_flag: "模型 ID"
@@ -576,6 +642,7 @@ cli:
     intro_loaded: "已从文件读取 intro（版本 {{.Current}}/{{.Total}}）：{{.Path}}"
     intro_required: "版本 {{.Version}} 的模型介绍不能为空；请使用 --intro 或 --intro-path 提供。"
     start:
+      one: "开始上传 {{.Count}} 个文件（最大并发数：{{.Concurrency}}）。"
       other: "开始上传 {{.Count}} 个文件（最大并发数：{{.Concurrency}}）。"
     canceled: "上传已取消。"
     checkpoint_saved: "已上传的部分已保存为 checkpoint；再次上传相同文件时会自动续传。"
@@ -599,9 +666,11 @@ cli:
     normalize_failed: "规范化配置路径失败：{{.Cause}}"
     validation_failed: "配置验证失败：{{.Cause}}"
     start:
+      one: "开始批量上传，共 {{.Count}} 个模型。"
       other: "开始批量上传，共 {{.Count}} 个模型。"
     uploading_model: "[{{.Current}}/{{.Total}}] 正在上传模型：{{.Name}}（{{.Type}}）"
     version_count:
+      one: "  - 共 {{.Count}} 个版本"
       other: "  - 共 {{.Count}} 个版本"
     model_success: "✓ 模型“{{.Name}}”上传成功（{{.Success}}/{{.Total}} 个版本成功）。"
     model_failed: "✗ 模型“{{.Name}}”上传失败：{{.Cause}}"
@@ -609,10 +678,13 @@ cli:
     version_intro_failed: "读取版本 {{.Version}} 的介绍失败：{{.Cause}}"
     complete: "批量上传完成！"
     total:
+      one: "总计：{{.Count}} 个模型"
       other: "总计：{{.Count}} 个模型"
     succeeded:
+      one: "  ✓ 成功：{{.Count}} 个"
       other: "  ✓ 成功：{{.Count}} 个"
     failed_count:
+      one: "  ✗ 失败：{{.Count}} 个"
       other: "  ✗ 失败：{{.Count}} 个"
     failure_details: "失败详情："
 
@@ -713,6 +785,11 @@ error:
     latest_version_invalid: "最新版本号 {{.Version}} 无效：{{.Cause}}"
     install_and_rollback_failed: "安装失败（{{.Cause}}），且回滚失败（{{.Rollback}}）。"
     checksum_mismatch: "校验和不匹配（期望：{{.Expected}}，实际：{{.Actual}}）。"
+  version:
+    format: "版本号 {{.Version}} 无效，格式应为 v1.2.3。"
+    major: "主版本号无效：{{.Value}}"
+    minor: "次版本号无效：{{.Value}}"
+    patch: "修订版本号无效：{{.Value}}"
   oss:
     put_failed: "上传 OSS 对象 {{.Object}} 失败：{{.Cause}}"
     multipart_start_failed: "启动 {{.Object}} 的分片上传失败：{{.Cause}}"
@@ -790,6 +867,13 @@ step:
   wallet: "钱包"
   credits: "额度"
   day_cost: "日消费"
+  list_modelzoo_endpoints: "列出模型广场端点"
+  list_modelzoo_tags: "列出模型广场标签"
+  get_endpoint_detail: "获取端点详情"
+  get_price_table: "获取价格表"
+  create_task: "创建任务"
+  get_task_status: "获取任务状态"
+  cancel_task: "取消任务"
 
 config:
   yaml:
@@ -815,6 +899,7 @@ config:
 test:
   greeting: "你好，{{.Name}}！"
   files:
+    one: "{{.Count}} 个文件"
     other: "{{.Count}} 个文件"
 
 api:
@@ -824,4 +909,20 @@ api:
     frozen: "已冻结"
     pending: "待激活"
     inactive: "未激活"
+  manufacturer:
+    "116": "昆仑万维"
+    "117": "字节跳动"
+    "118": "阿里巴巴"
+    "119": "OpenAI"
+    "120": "谷歌"
+    "121": "硅基流动"
+    "122": "MiniMax"
+    "124": "xAI"
+    "125": "快手"
+    "128": "生数科技"
+    "131": "其他"
+  version:
+    official: "官方版"
+    economy: "渠道版"
+    channel: "渠道版"
 

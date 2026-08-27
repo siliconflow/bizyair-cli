@@ -688,6 +688,11 @@ cli:
 
 error:
   unknown: "Unknown error"
+  version:
+    format: "Version {{.Version}} is invalid; expected format v1.2.3."
+    major: "Invalid major version: {{.Value}}"
+    minor: "Invalid minor version: {{.Value}}"
+    patch: "Invalid patch version: {{.Value}}"
   config:
     base_domain_invalid: "Invalid BizyAir base domain {{.URL}}: {{.Cause}}"
     base_domain_absolute: "BizyAir base domain {{.URL}} must be an absolute HTTP(S) URL."
@@ -902,4 +907,20 @@ api:
     frozen: "Frozen"
     pending: "Pending"
     inactive: "Inactive"
+  manufacturer:
+    "116": "Kunlun"
+    "117": "ByteDance"
+    "118": "Alibaba"
+    "119": "OpenAI"
+    "120": "Google"
+    "121": "SiliconFlow"
+    "122": "MiniMax"
+    "124": "xAI"
+    "125": "Kuaishou"
+    "128": "ShengShu"
+    "131": "Other"
+  version:
+    official: "Official"
+    economy: "Economy"
+    channel: "Channel"
 
