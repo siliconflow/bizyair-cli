@@ -4,9 +4,7 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"strconv"
 
-	"github.com/charmbracelet/x/term"
 	"github.com/siliconflow/bizyair-cli/internal/i18n"
 	"github.com/siliconflow/bizyair-cli/lib"
 	"github.com/siliconflow/bizyair-cli/lib/actions"
@@ -41,58 +39,25 @@ func ModelzooList(c *cli.Context) error {
 }
 
 func printModelzooTable(w io.Writer, models []lib.ModelzooModelFlat) {
-	headers := []string{
-		i18n.T("cli.modelzoo.ls_header_name", nil),
-		i18n.T("cli.modelzoo.ls_header_endpoint", nil),
-		i18n.T("cli.modelzoo.ls_header_manufacturer", nil),
-		i18n.T("cli.modelzoo.ls_header_category", nil),
-		i18n.T("cli.modelzoo.ls_header_version", nil),
-	}
-	colW := equalColWidths(terminalWidth(), len(headers))
-	fmt.Fprintln(w, joinCells(headers, colW))
+	table := newTable(w, 5)
+	colWs := tableColumnWidths(5, terminalWidth())
+	table.Header(
+		truncateCell(i18n.T("cli.modelzoo.ls_header_name", nil), colWs[0]-cellPadWidth),
+		truncateCell(i18n.T("cli.modelzoo.ls_header_endpoint", nil), colWs[1]-cellPadWidth),
+		truncateCell(i18n.T("cli.modelzoo.ls_header_manufacturer", nil), colWs[2]-cellPadWidth),
+		truncateCell(i18n.T("cli.modelzoo.ls_header_category", nil), colWs[3]-cellPadWidth),
+		truncateCell(i18n.T("cli.modelzoo.ls_header_version", nil), colWs[4]-cellPadWidth),
+	)
 	for _, m := range models {
-		cells := []string{
-			dashIfEmpty(m.DisplayName),
-			m.Endpoint,
-			dashIfEmpty(i18n.APITranslate("manufacturer", m.Manufacturer)),
-			dashIfEmpty(m.Category),
-			dashIfEmpty(i18n.APITranslate("version", m.ModelVersion)),
-		}
-		fmt.Fprintln(w, joinCells(cells, colW))
+		table.Append([]string{
+			truncateCell(dashIfEmpty(m.DisplayName), colWs[0]-cellPadWidth),
+			truncateCell(m.Endpoint, colWs[1]-cellPadWidth),
+			truncateCell(dashIfEmpty(i18n.APITranslate("manufacturer", m.Manufacturer)), colWs[2]-cellPadWidth),
+			truncateCell(dashIfEmpty(m.Category), colWs[3]-cellPadWidth),
+			truncateCell(dashIfEmpty(i18n.APITranslate("version", m.ModelVersion)), colWs[4]-cellPadWidth),
+		})
 	}
-}
-
-func terminalWidth() int {
-	if w, _, err := term.GetSize(os.Stdout.Fd()); err == nil && w > 0 {
-		return w
-	}
-	if c := os.Getenv("COLUMNS"); c != "" {
-		if w, err := strconv.Atoi(c); err == nil && w > 0 {
-			return w
-		}
-	}
-	return 120
-}
-
-func equalColWidths(available, n int) []int {
-	if n <= 0 {
-		return nil
-	}
-	gapTotal := n - 1
-	per := (available - gapTotal) / n
-	rem := (available - gapTotal) % n
-	const minW = 8
-	if per < minW {
-		per, rem = minW, 0
-	}
-	colW := make([]int, n)
-	for i := range colW {
-		colW[i] = per
-		if i < rem {
-			colW[i]++
-		}
-	}
-	return colW
+	table.Render()
 }
 
 func dashIfEmpty(s string) string {

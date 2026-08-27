@@ -75,17 +75,17 @@ func ListModel(c *cli.Context) error {
 }
 
 func printModelTable(w io.Writer, models []*lib.BizyModelInfo) {
-	colW := []int{8, 20, 12, 8, 8, 8, 8}
-	headers := []string{
-		i18n.T("cli.model.ls_header_id", nil),
-		i18n.T("cli.model.ls_header_name", nil),
-		i18n.T("cli.model.ls_header_type", nil),
-		i18n.T("cli.model.ls_header_versions", nil),
-		i18n.T("cli.model.ls_header_public", nil),
-		i18n.T("cli.model.ls_header_used", nil),
-		i18n.T("cli.model.ls_header_downloads", nil),
-	}
-	fmt.Fprintln(w, joinCells(headers, colW))
+	table := newTable(w, 7)
+	colWs := tableColumnWidths(7, terminalWidth())
+	table.Header(
+		truncateCell(i18n.T("cli.model.ls_header_id", nil), colWs[0]-cellPadWidth),
+		truncateCell(i18n.T("cli.model.ls_header_name", nil), colWs[1]-cellPadWidth),
+		truncateCell(i18n.T("cli.model.ls_header_type", nil), colWs[2]-cellPadWidth),
+		truncateCell(i18n.T("cli.model.ls_header_versions", nil), colWs[3]-cellPadWidth),
+		truncateCell(i18n.T("cli.model.ls_header_public", nil), colWs[4]-cellPadWidth),
+		truncateCell(i18n.T("cli.model.ls_header_used", nil), colWs[5]-cellPadWidth),
+		truncateCell(i18n.T("cli.model.ls_header_downloads", nil), colWs[6]-cellPadWidth),
+	)
 	for _, m := range models {
 		allPublic := len(m.Versions) > 0
 		for _, v := range m.Versions {
@@ -98,17 +98,17 @@ func printModelTable(w io.Writer, models []*lib.BizyModelInfo) {
 		if allPublic && len(m.Versions) > 0 {
 			publicLabel = i18n.T("cli.model.ls_header_public_yes", nil)
 		}
-		cells := []string{
-			strconv.Itoa(int(m.Id)),
-			m.Name,
-			m.Type,
-			strconv.Itoa(len(m.Versions)),
-			publicLabel,
-			strconv.Itoa(m.Counter.UsedCount),
-			strconv.Itoa(m.Counter.DownloadedCount),
-		}
-		fmt.Fprintln(w, joinCells(cells, colW))
+		table.Append([]string{
+			truncateCell(strconv.Itoa(int(m.Id)), colWs[0]-cellPadWidth),
+			truncateCell(m.Name, colWs[1]-cellPadWidth),
+			truncateCell(m.Type, colWs[2]-cellPadWidth),
+			truncateCell(strconv.Itoa(len(m.Versions)), colWs[3]-cellPadWidth),
+			truncateCell(publicLabel, colWs[4]-cellPadWidth),
+			truncateCell(strconv.Itoa(m.Counter.UsedCount), colWs[5]-cellPadWidth),
+			truncateCell(strconv.Itoa(m.Counter.DownloadedCount), colWs[6]-cellPadWidth),
+		})
 	}
+	table.Render()
 }
 
 // joinCells 将每列填充到 colW[i] 显示宽度后用空格拼接。
