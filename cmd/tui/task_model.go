@@ -109,13 +109,6 @@ func fieldValueDisplay(v any) string {
 	}
 }
 
-// fieldValueOneLine 将参数值规范为单行显示并按宽度截断，
-// 避免长文本（如 prompt）占用过多行影响其他参数输入。
-func fieldValueOneLine(v any, maxW int) string {
-	s := strings.NewReplacer("\r\n", " ", "\r", " ", "\n", " ").Replace(fieldValueDisplay(v))
-	return truncateLine(s, maxW)
-}
-
 // variableTypeDisplayName 返回变量类型的显示名称。
 func variableTypeDisplayName(t string) string {
 	switch t {
@@ -520,35 +513,7 @@ func (m *mainModel) renderTaskModelView() string {
 				b.WriteString("\n")
 			} else {
 				b.WriteString("\n\n")
-			}
-
-			// 已填参数汇总
-			if len(m.taskModel.params) > 0 {
-				b.WriteString(m.hintStyle.Render(i18n.T("tui.task_model.filled_params", nil)))
-				b.WriteString("\n")
-				maxFilledW := 0
-				for _, prevP := range m.taskModel.detail.InputParams {
-					if _, ok := m.taskModel.params[prevP.ParamKey()]; ok {
-						if w := lipgloss.Width(i18n.APITranslate("param_label", prevP.FieldLabel)); w > maxFilledW {
-							maxFilledW = w
-						}
-					}
-				}
-				filledStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("252"))
-				innerW, _ := m.innerSize()
-				valMaxW := innerW - maxFilledW - 5
-				if valMaxW < 8 {
-					valMaxW = 8
-				}
-				for _, prevP := range m.taskModel.detail.InputParams {
-					if val, ok := m.taskModel.params[prevP.ParamKey()]; ok {
-						prevLabel := i18n.APITranslate("param_label", prevP.FieldLabel)
-						line := fmt.Sprintf("  ✓ %s: %s\n", prevLabel, fieldValueOneLine(val, valMaxW))
-						b.WriteString(filledStyle.Render(line))
-					}
-				}
-				b.WriteString("\n")
-			}
+}
 		}
 
 	case taskModelOutputName:

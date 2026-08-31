@@ -40,32 +40,14 @@ func ModelzooRun(c *cli.Context) error {
 		return cli.Exit(i18n.NewError("cli.modelzoo.detail_not_found", map[string]any{"Endpoint": endpoint}, nil), meta.ServerError)
 	}
 
-	fmt.Fprintf(os.Stdout, "%s: %s\n", i18n.T("cli.modelzoo.run.endpoint_label", nil), detail.Endpoint)
-	fmt.Fprintf(os.Stdout, "%s: %s\n", i18n.T("cli.modelzoo.run.name_label", nil), detail.DisplayName)
-	if detail.Description != "" {
-		fmt.Fprintf(os.Stdout, "%s: %s\n", i18n.T("cli.modelzoo.run.desc_label", nil), detail.Description)
-	}
-
 	params, err := buildRunParams(c, detail.InputParams)
 	if err != nil {
 		return cli.Exit(err, meta.LoadError)
 	}
 
-	if len(params) == 0 && hasRequiredParams(detail.InputParams) {
-		fmt.Fprintln(os.Stdout, i18n.T("cli.modelzoo.run.params_hint", nil))
-		for _, p := range detail.InputParams {
-			req := ""
-			if p.Required {
-				req = i18n.T("cli.modelzoo.param_required", nil)
-			}
-			fmt.Fprintln(os.Stdout, i18n.T("cli.modelzoo.run.param_hint_line", map[string]any{
-				"Name":     p.ParamKey(),
-				"Label":    p.FieldLabel,
-				"Type":     p.VariableType,
-				"Required": req,
-			}))
-		}
-		return nil
+	applyFieldDefaults(params, detail.InputParams)
+	if missing := missingRequiredParams(detail.InputParams, params); len(missing) > 0 {
+		return cli.Exit(missingParamsError(missing), meta.LoadError)
 	}
 
 	taskResult := actions.CreateTask(c.Context, client, endpoint, params)
@@ -156,13 +138,57 @@ func buildRunParams(c *cli.Context, inputParams []lib.ModelzooInputParam) (map[s
 	return params, nil
 }
 
-func hasRequiredParams(inputParams []lib.ModelzooInputParam) bool {
+// applyFieldDefaults 为未填写的参数补入 API 默认值（对齐 TUI 的 applyFieldDefaults）。
+func applyFieldDefaults(params map[string]any, inputParams []lib.ModelzooInputParam) {
 	for _, p := range inputParams {
-		if p.Required {
-			return true
+		key := p.ParamKey()
+		if _, ok := params[key]; !ok && p.FieldValue != nil {
+			params[key] = p.FieldValue
 		}
 	}
-	return false
+}
+
+// missingRequiredParams 返回仍未填写的必填参数。
+func missingRequiredParams(inputParams []lib.ModelzooInputParam, params map[string]any) []lib.ModelzooInputParam {
+	missing := make([]lib.ModelzooInputParam, 0)
+	for _, p := range inputParams {
+		if !p.Required {
+			continue
+		}
+		key := p.ParamKey()
+		val, ok := params[key]
+		if ok && val != nil && val != "" {
+			continue
+		}
+		missing = append(missing, p)
+	}
+	return missing
+}
+
+// missingParamsError 构建缺失必填参数的错误信息（含参数明细与用法提示）。
+func missingParamsError(missing []lib.ModelzooInputParam) error {
+	names := make([]string, 0, len(missing))
+	for _, p := range missing {
+		names = append(names, p.ParamKey())
+	}
+	var b strings.Builder
+	b.WriteString(i18n.T("cli.modelzoo.run.error.missing_params", map[string]any{"Names": strings.Join(names, ", ")}))
+	b.WriteString("\n")
+	for _, p := range missing {
+		def := ""
+		if p.FieldValue != nil {
+			def = i18n.T("cli.modelzoo.run.error.default_value", map[string]any{"Value": fmt.Sprintf("%v", p.FieldValue)})
+		}
+		b.WriteString(i18n.T("cli.modelzoo.run.error.missing_param_line", map[string]any{
+			"Name":    p.ParamKey(),
+			"Label":   p.FieldLabel,
+			"Type":    variableTypeDisplayName(p.VariableType),
+			"Default": def,
+		}))
+		b.WriteString("\n")
+	}
+	b.WriteString(i18n.T("cli.modelzoo.run.error.usage_hint", nil))
+	return fmt.Errorf("%s", b.String())
 }
 
 func statusDisplayName(status string) string {

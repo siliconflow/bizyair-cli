@@ -325,7 +325,6 @@ tui:
     param_progress: "Parameter {{.Current}} of {{.Total}}"
     required_marker: " *"
     url_hint: "Enter {{.Type}} URL"
-    filled_params: "All required parameters filled."
     generating_title: "Generating..."
     cancel_hint: "Press X to cancel"
     status_label: "Status"
@@ -418,7 +417,12 @@ cli:
     modelzoo_price: "Show endpoint price"
     modelzoo_price_desc: "Display the price table for a Model Zoo endpoint"
     modelzoo_run: "Run endpoint task"
-    modelzoo_run_desc: "Submit a task to a Model Zoo endpoint and poll for results"
+    modelzoo_run_desc: |-
+      Submit a generation task to a Model Zoo endpoint using --param/--image flags and poll for results.
+
+      Examples:
+        bizyair modelzoo run <endpoint> --param "key=value" [--param "key=value" ...]
+        bizyair modelzoo run <endpoint> --image "key=url"
     login_desc: |-
       Log in to BizyAir using an API key.
 
@@ -613,11 +617,6 @@ cli:
     price_unit_per_image: "Per Image"
     price_unit_per_mtoken: "Per MTok"
     run:
-      endpoint_label: "Endpoint"
-      name_label: "Name"
-      desc_label: "Description"
-      params_hint: "Required parameters:"
-      param_hint_line: "  {{.Name}} ({{.Label}}) [{{.Type}}]{{.Required}}"
       request_id_label: "Request ID"
       polling_status: "Polling..."
       status_label: "Status"
@@ -635,6 +634,13 @@ cli:
         param_format: "Invalid parameter format: {{.Param}} (expected key=value)"
         boolean_invalid: "Invalid boolean value for {{.Key}}: {{.Value}}"
         url_invalid: "Invalid URL for {{.Key}} (must start with http:// or https://)"
+        missing_params: "Missing required parameters: {{.Names}}. Provide values via --param."
+        missing_param_line: "  {{.Name}} ({{.Label}}) [{{.Type}}]{{.Default}}"
+        default_value: " (default: {{.Value}})"
+        usage_hint: |-
+          Usage examples:
+             bizyair modelzoo run <endpoint> --param "key=value" [--param "key=value" ...]
+             bizyair modelzoo run <endpoint> --image "key=url"
   task:
     request_id_label: "Request ID"
   detail:

@@ -325,7 +325,6 @@ tui:
     param_progress: "第 {{.Current}} / {{.Total}} 个参数"
     required_marker: " *"
     url_hint: "输入 {{.Type}} URL"
-    filled_params: "所有必填参数已填写。"
     generating_title: "任务生成中..."
     cancel_hint: "按 X 取消"
     status_label: "状态"
@@ -418,7 +417,12 @@ cli:
     modelzoo_price: "显示端点价格"
     modelzoo_price_desc: "显示模型广场端点的价格表"
     modelzoo_run: "运行端点任务"
-    modelzoo_run_desc: "向模型广场端点提交任务并轮询结果"
+    modelzoo_run_desc: |-
+      通过 --param/--image 提供参数，向模型广场端点提交生成任务并轮询结果。
+
+      示例:
+         bizyair modelzoo run <端点> --param "key=value" [--param "key=value" ...]
+         bizyair modelzoo run <端点> --image "key=url"
     login_desc: |-
       登录到 BizyAir。使用 API Key 认证。
 
@@ -613,11 +617,6 @@ cli:
     price_unit_per_image: "按张计费"
     price_unit_per_mtoken: "按百万 Tokens 计费"
     run:
-      endpoint_label: "端点"
-      name_label: "名称"
-      desc_label: "描述"
-      params_hint: "必填参数："
-      param_hint_line: "  {{.Name}} ({{.Label}}) [{{.Type}}]{{.Required}}"
       request_id_label: "请求 ID"
       polling_status: "轮询中..."
       status_label: "状态"
@@ -635,6 +634,13 @@ cli:
         param_format: "无效参数格式：{{.Param}}（应为 key=value）"
         boolean_invalid: "{{.Key}} 的布尔值无效：{{.Value}}"
         url_invalid: "{{.Key}} 的 URL 无效（必须以 http:// 或 https:// 开头）"
+        missing_params: "缺少必填参数：{{.Names}}，请通过 --param 提供参数值。"
+        missing_param_line: "  {{.Name}} ({{.Label}}) [{{.Type}}]{{.Default}}"
+        default_value: "（默认值：{{.Value}}）"
+        usage_hint: |-
+          用法示例:
+             bizyair modelzoo run <端点> --param "key=value" [--param "key=value" ...]
+             bizyair modelzoo run <端点> --image "key=url"
   task:
     request_id_label: "请求 ID"
   detail:
