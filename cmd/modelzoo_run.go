@@ -3,7 +3,6 @@ package cmd
 import (
 	"fmt"
 	"os"
-	"reflect"
 	"strconv"
 	"strings"
 	"time"
@@ -11,6 +10,7 @@ import (
 	"github.com/siliconflow/bizyair-cli/internal/i18n"
 	"github.com/siliconflow/bizyair-cli/lib"
 	"github.com/siliconflow/bizyair-cli/lib/actions"
+	"github.com/siliconflow/bizyair-cli/lib/format"
 	"github.com/siliconflow/bizyair-cli/meta"
 	"github.com/urfave/cli/v2"
 )
@@ -89,7 +89,7 @@ func ModelzooRun(c *cli.Context) error {
 		case lib.TaskStatusSuccess:
 			fmt.Fprintf(os.Stdout, "\n%s: %s\n", i18n.T("cli.modelzoo.run.status_label", nil), statusDisplayName(status))
 			if statusResult.Status.Outputs != nil {
-				for _, u := range extractOutputURLs(statusResult.Status.Outputs) {
+				for _, u := range format.ExtractOutputURLs(statusResult.Status.Outputs) {
 					fmt.Fprintln(os.Stdout, u)
 				}
 			}
@@ -181,40 +181,6 @@ func statusDisplayName(status string) string {
 		return i18n.T("cli.modelzoo.run.status_transferring", nil)
 	default:
 		return status
-	}
-}
-
-func extractOutputURLs(outputs any) []string {
-	var urls []string
-	extractURLsRecursive(reflect.ValueOf(outputs), &urls)
-	return urls
-}
-
-func extractURLsRecursive(v reflect.Value, urls *[]string) {
-	if !v.IsValid() {
-		return
-	}
-
-	switch v.Kind() {
-	case reflect.String:
-		s := v.String()
-		if strings.HasPrefix(s, "http://") || strings.HasPrefix(s, "https://") {
-			*urls = append(*urls, s)
-		}
-	case reflect.Map:
-		for _, key := range v.MapKeys() {
-			extractURLsRecursive(v.MapIndex(key), urls)
-		}
-	case reflect.Slice, reflect.Array:
-		for i := 0; i < v.Len(); i++ {
-			extractURLsRecursive(v.Index(i), urls)
-		}
-	case reflect.Interface:
-		extractURLsRecursive(v.Elem(), urls)
-	case reflect.Struct:
-		for i := 0; i < v.NumField(); i++ {
-			extractURLsRecursive(v.Field(i), urls)
-		}
 	}
 }
 

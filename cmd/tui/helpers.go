@@ -512,14 +512,9 @@ func (m *mainModel) renderStyledHint(hint string) string {
 	return strings.Join(rows, "\n")
 }
 
-// renderKeyValueTable 渲染"标签 │ 值"两列表格：
-// 标签列按内容自适应并限制在 maxW 的三分之一内，值列占剩余宽度，
-// 行间以横线分隔，超宽内容由 truncateLine 截断。
-func renderKeyValueTable(labels, values []string, maxW int) string {
-	if len(labels) == 0 || len(labels) != len(values) {
-		return ""
-	}
-
+// keyValueColLayout 计算"标签 │ 值"两列表格的列宽布局。
+// 返回值：标签列宽、分隔符宽、值列宽、标签内容宽、值内容宽。
+func keyValueColLayout(maxW int, labels []string) (labelColW, sepW, valueColW, labelContentW, valueContentW int) {
 	maxLabelW := 0
 	for _, l := range labels {
 		if w := lipgloss.Width(l); w > maxLabelW {
@@ -528,11 +523,11 @@ func renderKeyValueTable(labels, values []string, maxW int) string {
 	}
 
 	sep := " │ "
-	sepW := lipgloss.Width(sep)
+	sepW = lipgloss.Width(sep)
 	hPad := 2
 
 	availW := maxW
-	labelColW := maxLabelW + hPad
+	labelColW = maxLabelW + hPad
 	maxLabelColW := availW / 3
 	if maxLabelColW < 12 {
 		maxLabelColW = 12
@@ -541,13 +536,26 @@ func renderKeyValueTable(labels, values []string, maxW int) string {
 		labelColW = maxLabelColW
 	}
 
-	valueColW := availW - labelColW - sepW
+	valueColW = availW - labelColW - sepW
 	if valueColW < 12 {
 		valueColW = 12
 	}
 
-	labelContentW := labelColW - hPad
-	valueContentW := valueColW - hPad
+	labelContentW = labelColW - hPad
+	valueContentW = valueColW - hPad
+	return
+}
+
+// renderKeyValueTable 渲染"标签 │ 值"两列表格：
+// 标签列按内容自适应并限制在 maxW 的三分之一内，值列占剩余宽度，
+// 行间以横线分隔，超宽内容由 truncateLine 截断。
+func renderKeyValueTable(labels, values []string, maxW int) string {
+	if len(labels) == 0 || len(labels) != len(values) {
+		return ""
+	}
+
+	labelColW, sepW, valueColW, labelContentW, valueContentW := keyValueColLayout(maxW, labels)
+	sep := " │ "
 
 	labelStyle := lipgloss.NewStyle().
 		Foreground(lipgloss.Color("#22D3EE")).

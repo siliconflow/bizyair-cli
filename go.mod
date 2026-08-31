@@ -6,6 +6,7 @@ require (
 	charm.land/bubbles/v2 v2.2.0
 	charm.land/lipgloss/v2 v2.0.5
 	github.com/aliyun/alibabacloud-oss-go-sdk-v2 v1.3.0
+	github.com/atotto/clipboard v0.1.4
 	github.com/charmbracelet/bubbles v0.21.0
 	github.com/charmbracelet/bubbletea v1.3.10
 	github.com/charmbracelet/lipgloss v1.1.1-0.20250404203927-76690c660834
@@ -25,7 +26,6 @@ require (
 
 require (
 	charm.land/bubbletea/v2 v2.0.8 // indirect
-	github.com/atotto/clipboard v0.1.4 // indirect
 	github.com/aymanbagabas/go-osc52/v2 v2.0.1 // indirect
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect
 	github.com/charmbracelet/colorprofile v0.4.3 // indirect

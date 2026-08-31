@@ -43,9 +43,10 @@ type BizyAPI interface {
 	// ModelZoo
 	GetModelzooListContext(ctx context.Context, current, pageSize int, keyword, sort string) (*Response[ModelzooListResp], error)
 	GetModelzooPriceTableFlatContext(ctx context.Context, keyword, billingUnit, sort string, showDeprecated bool) (*Response[ModelzooPriceTableFlatResp], error)
-	GetModelzooTagsContext(ctx context.Context) (*Response[ModelzooTagsResp], error)
+GetModelzooTagsContext(ctx context.Context) (*Response[ModelzooTagsResp], error)
+	GetModelzooCategoriesContext(ctx context.Context, keyword string, showDeprecated bool) (*Response[ModelzooCategoriesResp], error)
 	GetModelzooEndpointDetailContext(ctx context.Context, endpoint string) (*Response[ModelzooEndpointDetail], error)
-	GetModelzooPriceTableContext(ctx context.Context, endpoint string) (*Response[PriceTable], error)
+GetModelzooPriceTableContext(ctx context.Context, endpoint string) (*Response[ModelzooPriceTableResp], error)
 	CreateModelZooTaskContext(ctx context.Context, endpoint string, params map[string]any) (*Response[ModelZooTaskResp], error)
 	GetModelZooTaskStatusContext(ctx context.Context, requestID string) (*Response[ModelZooTaskStatusResp], error)
 	CancelModelZooTaskContext(ctx context.Context, requestID string) error
@@ -491,6 +492,26 @@ func (c *Client) GetModelzooTagsContext(ctx context.Context) (*Response[Modelzoo
 	return handleResponse[ModelzooTagsResp](body)
 }
 
+func (c *Client) GetModelzooCategoriesContext(ctx context.Context, keyword string, showDeprecated bool) (*Response[ModelzooCategoriesResp], error) {
+	serverURL := joinEndpoint(c.Endpoints.Meta, "/v1/modelzoo/categories")
+	query := url.Values{}
+	if keyword != "" {
+		query.Set("keyword", keyword)
+	}
+	query.Set("show_deprecated", fmt.Sprintf("%v", showDeprecated))
+	if len(query) > 0 {
+		serverURL = serverURL + "?" + query.Encode()
+	}
+	body, statusCode, err := c.doGet(ctx, serverURL, nil, c.authHeader())
+	if err != nil {
+		return nil, err
+	}
+	if statusCode != http.StatusOK {
+		return nil, handleError(body, statusCode)
+	}
+	return handleResponse[ModelzooCategoriesResp](body)
+}
+
 func (c *Client) GetModelzooEndpointDetailContext(ctx context.Context, endpoint string) (*Response[ModelzooEndpointDetail], error) {
 	serverURL := joinEndpoint(c.Endpoints.Meta, fmt.Sprintf("/v1/modelzoo/detail/%s", url.PathEscape(endpoint)))
 	body, statusCode, err := c.doGet(ctx, serverURL, nil, c.authHeader())
@@ -503,7 +524,7 @@ func (c *Client) GetModelzooEndpointDetailContext(ctx context.Context, endpoint 
 	return handleResponse[ModelzooEndpointDetail](body)
 }
 
-func (c *Client) GetModelzooPriceTableContext(ctx context.Context, endpoint string) (*Response[PriceTable], error) {
+func (c *Client) GetModelzooPriceTableContext(ctx context.Context, endpoint string) (*Response[ModelzooPriceTableResp], error) {
 	serverURL := joinEndpoint(c.Endpoints.Meta, fmt.Sprintf("/v1/modelzoo/price_table/%s", url.PathEscape(endpoint)))
 	body, statusCode, err := c.doGet(ctx, serverURL, nil, c.authHeader())
 	if err != nil {
@@ -512,7 +533,7 @@ func (c *Client) GetModelzooPriceTableContext(ctx context.Context, endpoint stri
 	if statusCode != http.StatusOK {
 		return nil, handleError(body, statusCode)
 	}
-	return handleResponse[PriceTable](body)
+	return handleResponse[ModelzooPriceTableResp](body)
 }
 
 func (c *Client) CreateModelZooTaskContext(ctx context.Context, endpoint string, params map[string]any) (*Response[ModelZooTaskResp], error) {

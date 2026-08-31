@@ -85,22 +85,16 @@ func (m *mainModel) updateModelzooTable() {
 	m.modelzooTable = t
 }
 
-// extractModelzooFilterOptions 从全量模型数据提取四维过滤选项。
 func (m *mainModel) extractModelzooFilterOptions() {
-	m.recalculateModelzooFilterCounts(m.modelzoo.models)
-}
-
-// recalculateModelzooFilterCounts 统计各过滤维度的模型数量。
-func (m *mainModel) recalculateModelzooFilterCounts(source []lib.ModelzooModelFlat) {
 	seriesCount := make(map[string]int)
 	mfrCount := make(map[string]int)
 	capCount := make(map[string]int)
 	verCount := make(map[string]int)
 
-	for _, model := range source {
+	for _, model := range m.modelzoo.models {
 		series := model.Series
 		if series == "" {
-			series = extractSeriesFromEndpoint(model.Endpoint)
+			series = lib.SeriesFromEndpoint(model.Endpoint)
 		}
 		if series != "" {
 			seriesCount[series]++
@@ -118,11 +112,37 @@ func (m *mainModel) recalculateModelzooFilterCounts(source []lib.ModelzooModelFl
 
 	m.modelzoo.seriesOpts = translateFilterOptions(sortedFilterOptions(seriesCount), "series")
 	m.modelzoo.manufacturerOpts = translateFilterOptions(sortedFilterOptions(mfrCount), "manufacturer")
-	m.modelzoo.capabilityOpts = translateFilterOptions(sortedFilterOptions(capCount), "capability")
 	m.modelzoo.versionOpts = translateFilterOptions(sortedFilterOptions(verCount), "version")
+
+	// 能力选项优先使用权威的 categories 接口（类别树，含 api_count），
+	// 未加载或为空时回退到按 model.Category 统计。
+	capOpts := sortedFilterOptions(capCount)
+	if len(m.modelzoo.categories) > 0 {
+		catOpts := make([]filterOption, 0, len(m.modelzoo.categories))
+		for _, c := range m.modelzoo.categories {
+			if c.Category != "" {
+				catOpts = append(catOpts, filterOption{label: c.Category, value: c.Category, count: c.APICount})
+			}
+		}
+		if len(catOpts) > 0 {
+			capOpts = catOpts
+		}
+	}
+	m.modelzoo.capabilityOpts = translateFilterOptions(capOpts, "capability")
 }
 
-// sortedFilterOptions 将计数 map 转为过滤选项并按数量降序排列。
+func hasModelzooTag(model lib.ModelzooModelFlat, tag string) bool {
+	if tag == "" {
+		return false
+	}
+	for _, t := range model.Tags {
+		if strings.EqualFold(t, tag) {
+			return true
+		}
+	}
+	return strings.EqualFold(model.Category, tag)
+}
+
 func sortedFilterOptions(counts map[string]int) []filterOption {
 	opts := make([]filterOption, 0, len(counts))
 	for val, cnt := range counts {
@@ -145,70 +165,6 @@ func translateFilterOptions(opts []filterOption, domain string) []filterOption {
 	return opts
 }
 
-// extractSeriesFromEndpoint 根据端点前缀推断模型所属系列。
-func extractSeriesFromEndpoint(endpoint string) string {
-	if endpoint == "" {
-		return ""
-	}
-	parts := strings.SplitN(endpoint, "/", 2)
-	prefix := parts[0]
-
-	switch {
-	case strings.HasPrefix(prefix, "nano-banana"):
-		return "nano_banana"
-	case strings.HasPrefix(prefix, "gemini-omni"):
-		return "gemini_omni"
-	case strings.HasPrefix(prefix, "gemini-vision"):
-		return "gemini_vision"
-	case strings.HasPrefix(prefix, "gemini-"):
-		return "gemini"
-	case strings.HasPrefix(prefix, "google-veo"):
-		return "veo"
-	case strings.HasPrefix(prefix, "gpt-image"):
-		return "gpt_image"
-	case strings.HasPrefix(prefix, "seedream"):
-		return "seedream"
-	case strings.HasPrefix(prefix, "seedance"):
-		return "seedance"
-	case strings.HasPrefix(prefix, "dreamactor"):
-		return "dream_actor"
-	case strings.HasPrefix(prefix, "wan-2-7-image"):
-		return "wan_image"
-	case strings.HasPrefix(prefix, "wan-image"):
-		return "wan_image"
-	case strings.HasPrefix(prefix, "wan-video"), strings.HasPrefix(prefix, "wan-"):
-		return "wan_video"
-	case strings.HasPrefix(prefix, "qwen-image"):
-		return "qwen_image"
-	case strings.HasPrefix(prefix, "happyhorse"):
-		return "happy_horse"
-	case strings.HasPrefix(prefix, "hailuo"):
-		return "hailuo"
-	case strings.HasPrefix(prefix, "kling"):
-		return "kling"
-	case strings.HasPrefix(prefix, "grok-2-image"), strings.HasPrefix(prefix, "grok-image"):
-		return "grok_image"
-	case strings.HasPrefix(prefix, "grok-imagine"):
-		return "grok_video"
-	case strings.HasPrefix(prefix, "vidu"):
-		return "vidu"
-	case strings.HasPrefix(prefix, "skyreels"):
-		return "skyreels"
-	case strings.HasPrefix(prefix, "mureka"):
-		return "mureka"
-	case strings.HasPrefix(prefix, "pixal3d"), strings.HasPrefix(prefix, "tripo3d"):
-		return "3d_generation"
-	case strings.HasPrefix(prefix, "minimax"):
-		return "minimax"
-	case strings.HasPrefix(prefix, "siliconflow"):
-		return "siliconflow"
-	}
-
-	s := strings.TrimSuffix(prefix, "-official")
-	s = strings.TrimSuffix(s, "-channel")
-	return s
-}
-
 // applyModelzooFilters 按当前过滤条件及搜索关键字筛选模型列表。
 func (m *mainModel) applyModelzooFilters() {
 	filtered := m.modelzoo.models
@@ -218,7 +174,7 @@ func (m *mainModel) applyModelzooFilters() {
 		for _, model := range filtered {
 			series := model.Series
 			if series == "" {
-				series = extractSeriesFromEndpoint(model.Endpoint)
+				series = lib.SeriesFromEndpoint(model.Endpoint)
 			}
 			if strings.EqualFold(series, m.modelzoo.seriesFilter) {
 				keep = append(keep, model)
@@ -240,7 +196,7 @@ func (m *mainModel) applyModelzooFilters() {
 	if m.modelzoo.capabilityFilter != "" {
 		var keep []lib.ModelzooModelFlat
 		for _, model := range filtered {
-			if strings.EqualFold(model.Category, m.modelzoo.capabilityFilter) {
+			if hasModelzooTag(model, m.modelzoo.capabilityFilter) {
 				keep = append(keep, model)
 			}
 		}
@@ -274,7 +230,6 @@ func (m *mainModel) applyModelzooFilters() {
 
 	m.modelzoo.filtered = filtered
 	m.updateModelzooTable()
-	m.recalculateModelzooFilterCounts(filtered)
 }
 
 // updateModelzoo 处理模型广场列表页面的消息与按键。
@@ -358,9 +313,7 @@ func updateModelzoo(m *mainModel, msg tea.Msg) (mainModel, tea.Cmd) {
 		case "p":
 			idx := m.modelzooTable.Cursor()
 			if idx >= 0 && idx < len(m.modelzoo.filtered) && m.modelzoo.filtered[idx].Endpoint != "" {
-				m.buildPriceTableView(m.modelzoo.filtered[idx].PriceTable)
-				m.step = mainStepPriceView
-				return *m, nil
+				return *m, m.openPriceView(m.modelzoo.filtered[idx].Endpoint)
 			}
 		case "t":
 			idx := m.modelzooTable.Cursor()
@@ -376,6 +329,9 @@ func updateModelzoo(m *mainModel, msg tea.Msg) (mainModel, tea.Cmd) {
 				m.running = true
 				return *m, fetchEndpointDetail(m.getAPI(), m.modelzoo.filtered[idx].Endpoint)
 			}
+		case "esc":
+			m.step = mainStepMenu
+			return *m, nil
 		}
 	}
 
@@ -497,9 +453,7 @@ func updateModelzooDetail(m *mainModel, msg tea.Msg) (mainModel, tea.Cmd) {
 			}
 		case "p":
 			if m.endpointDetail != nil {
-				m.buildPriceTableView(modelzooPriceTableFor(m.modelzoo.models, m.endpointDetail.Endpoint))
-				m.step = mainStepPriceView
-				return *m, nil
+				return *m, m.openPriceView(m.endpointDetail.Endpoint)
 			}
 		case "esc":
 			m.step = mainStepModelzoo
@@ -586,11 +540,6 @@ func (m *mainModel) renderModelzooDetailView() string {
 		b.WriteString(pb.String())
 	}
 
-	b.WriteString("\n\n")
-	bottomLabelStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("241"))
-	b.WriteString(detailKeyStyle().Render("T") + " " + bottomLabelStyle.Render(i18n.T("tui.modelzoo.key_task", nil)) + "  " +
-		detailKeyStyle().Render("P") + " " + bottomLabelStyle.Render(i18n.T("tui.modelzoo.key_price", nil)) + "  " +
-		detailKeyStyle().Render(i18n.T("tui.modelzoo.key_esc", nil)) + " " + bottomLabelStyle.Render(i18n.T("tui.modelzoo.key_back", nil)))
 	return b.String()
 }
 
@@ -603,9 +552,13 @@ func (m *mainModel) renderModelzooView() string {
 		return m.renderStyledHint(i18n.T("tui.modelzoo.no_models", nil))
 	}
 
-	var b strings.Builder
+	var bar string
+	if m.modelzoo.searchActive {
+		bar = m.modelzoo.search.View()
+	} else {
+		bar = m.renderModelzooFilterBar()
+	}
 
-	// Title
 	title := lipgloss.NewStyle().
 		Foreground(lipgloss.Color("#60A5FA")).
 		Bold(true).
@@ -613,19 +566,16 @@ func (m *mainModel) renderModelzooView() string {
 	if m.running {
 		title += " " + m.sp.View()
 	}
+
+	// 过滤选择器激活时只渲染 title + filterbar + list，与 my_models 保持一致
+	if m.modelzoo.filterMode != modelzooFilterNone {
+		return lipgloss.JoinVertical(lipgloss.Left, title, bar, m.modelzoo.filterList.View())
+	}
+
+	var b strings.Builder
 	b.WriteString(title)
 	b.WriteString("\n\n")
-
-	// Search bar
-	if m.modelzoo.searchActive {
-		b.WriteString(m.modelzoo.search.View())
-	} else {
-		b.WriteString(m.modelzoo.search.View())
-	}
-	b.WriteString("\n")
-
-	// Filter bar
-	b.WriteString(m.renderModelzooFilterBar())
+	b.WriteString(bar)
 	b.WriteString("\n")
 
 	// Count
@@ -636,9 +586,7 @@ func (m *mainModel) renderModelzooView() string {
 	b.WriteString("\n")
 
 	// Content
-	if m.modelzoo.filterMode != modelzooFilterNone {
-		b.WriteString(m.modelzoo.filterList.View())
-	} else if total == 0 {
+	if total == 0 {
 		b.WriteString(i18n.T("tui.modelzoo.no_models", nil))
 	} else {
 		b.WriteString(renderTable(m.modelzooTable))
@@ -666,12 +614,17 @@ func (m *mainModel) renderModelzooFilterBar() string {
 	if m.modelzoo.versionFilter != "" {
 		verDisplay = i18n.APITranslate("version", m.modelzoo.versionFilter)
 	}
+	searchDisplay := allLabel
+	if sq := m.modelzoo.search.Value(); sq != "" {
+		searchDisplay = sq
+	}
 
 	items := []filterBarItem{
 		{label: i18n.T("tui.modelzoo.filter_series", nil), value: seriesDisplay, active: m.modelzoo.seriesFilter != ""},
 		{label: i18n.T("tui.modelzoo.filter_manufacturer", nil), value: mfrDisplay, active: m.modelzoo.manufacturerFilter != ""},
 		{label: i18n.T("tui.modelzoo.filter_capability", nil), value: capDisplay, active: m.modelzoo.capabilityFilter != ""},
 		{label: i18n.T("tui.modelzoo.filter_version", nil), value: verDisplay, active: m.modelzoo.versionFilter != ""},
+		{label: i18n.T("tui.modelzoo.key_search", nil), value: searchDisplay, active: m.modelzoo.search.Value() != ""},
 	}
 
 	style := lipgloss.NewStyle().Foreground(lipgloss.Color("#E5E7EB"))

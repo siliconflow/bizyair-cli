@@ -41,13 +41,16 @@ func ListModelzooEndpoints(ctx context.Context, api lib.BizyAPI, keyword, billin
 				IconURL:      item.IconURL,
 				Description:  item.Description,
 				ModelVersion: item.Edition,
+				Series:       lib.SeriesFromEndpoint(item.Endpoint), // 推荐优先取价格表接口字段,此处先以 endpoint 兜底
 			}
 			if pm, ok := priceByEndpoint[item.Endpoint]; ok {
 				flat.BillingUnit = pm.BillingUnit
-				flat.PriceTable = pm.PriceTable
+				flat.PriceTables = pm.PriceTables
 				flat.SimplePriceText = pm.SimplePriceText
 				flat.IndicativePrice = pm.IndicativePrice
-				flat.Series = pm.Series
+				if pm.Series != "" {
+					flat.Series = pm.Series
+				}
 				if flat.ModelVersion == "" {
 					flat.ModelVersion = pm.ModelVersion
 				}
@@ -85,6 +88,25 @@ func ListModelzooTags(ctx context.Context, api lib.BizyAPI) ModelzooTagsResult {
 	}
 }
 
+func ListModelzooCategories(ctx context.Context, api lib.BizyAPI) ModelzooCategoriesResult {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	resp, err := api.GetModelzooCategoriesContext(ctx, "", false)
+	if err != nil {
+		return ModelzooCategoriesResult{
+			Error: lib.WithStep(i18n.T("step.list_modelzoo_categories", nil), err),
+		}
+	}
+	var categories []lib.ModelzooCategoryItem
+	if resp != nil {
+		categories = resp.Data.List
+	}
+	return ModelzooCategoriesResult{
+		Categories: categories,
+	}
+}
+
 func GetEndpointDetail(ctx context.Context, api lib.BizyAPI, endpoint string) ModelzooEndpointDetailResult {
 	if ctx == nil {
 		ctx = context.Background()
@@ -114,12 +136,12 @@ func GetPriceTable(ctx context.Context, api lib.BizyAPI, endpoint string) PriceT
 			Error: lib.WithStep(i18n.T("step.get_price_table", nil), err),
 		}
 	}
-	var pt *lib.PriceTable
+	var pts []lib.PriceTable
 	if resp != nil {
-		pt = &resp.Data
+		pts = resp.Data.PriceTables
 	}
 	return PriceTableResult{
-		PriceTable: pt,
+		PriceTables: pts,
 	}
 }
 

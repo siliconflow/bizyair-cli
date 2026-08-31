@@ -150,6 +150,12 @@ type ModelzooTagsResult struct {
 	Error error
 }
 
+// ModelzooCategoriesResult 模型广场类别树
+type ModelzooCategoriesResult struct {
+	Categories []lib.ModelzooCategoryItem
+	Error      error
+}
+
 // ModelzooEndpointDetailResult 端点详情
 type ModelzooEndpointDetailResult struct {
 	Detail *lib.ModelzooEndpointDetail
@@ -158,8 +164,8 @@ type ModelzooEndpointDetailResult struct {
 
 // PriceTableResult 价格表查询结果
 type PriceTableResult struct {
-	PriceTable *lib.PriceTable
-	Error      error
+	PriceTables []lib.PriceTable
+	Error       error
 }
 
 // CreateTaskResult 任务创建结果

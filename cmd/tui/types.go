@@ -2,6 +2,7 @@ package tui
 
 import (
 	"github.com/charmbracelet/bubbles/list"
+	"github.com/charmbracelet/bubbles/textarea"
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/siliconflow/bizyair-cli/lib"
@@ -285,9 +286,20 @@ type modelzooTagsDoneMsg struct {
 	err  error
 }
 
+type modelzooCategoriesDoneMsg struct {
+	categories []lib.ModelzooCategoryItem
+	err        error
+}
+
 type endpointDetailDoneMsg struct {
 	detail *lib.ModelzooEndpointDetail
 	err    error
+}
+
+type priceTableDoneMsg struct {
+	pts      []lib.PriceTable
+	endpoint string
+	err      error
 }
 
 type taskCreatedMsg struct {
@@ -303,6 +315,9 @@ type taskStatusMsg struct {
 type taskCancelledMsg struct {
 	err error
 }
+
+// clearCopyFeedbackMsg 复制成功提示自动消失的消息。
+type clearCopyFeedbackMsg struct{}
 
 // --- ModelZoo filter ---
 
@@ -324,6 +339,8 @@ type modelzooInputs struct {
 	filtered   []lib.ModelzooModelFlat
 	detail     *lib.ModelzooEndpointDetail
 
+	tags             []lib.ModelzooTag
+	categories       []lib.ModelzooCategoryItem
 	seriesOpts       []filterOption
 	manufacturerOpts []filterOption
 	capabilityOpts   []filterOption
@@ -345,6 +362,7 @@ type taskModelStep int
 const (
 	taskModelSelect taskModelStep = iota
 	taskModelParamPoll
+	taskModelOutputName
 	taskModelPolling
 	taskModelResult
 )
@@ -361,6 +379,13 @@ type taskModelInputs struct {
 	requestID       string
 	lastPollStatus  string
 
+	usingSelect bool
+	usingTA     bool
+	paramRules  []lib.ModelzooValidationRule
+	paramError  error
+
 	paramSelectList list.Model
-	paramText       textinput.Model
+	paramInputs     map[string]textinput.Model
+	taParam         textarea.Model
+	outputNameInput textinput.Model
 }

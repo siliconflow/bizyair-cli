@@ -23,10 +23,24 @@ func fetchModelzooTags(api lib.BizyAPI) tea.Cmd {
 	}
 }
 
+func fetchModelzooCategories(api lib.BizyAPI) tea.Cmd {
+	return func() tea.Msg {
+		result := actions.ListModelzooCategories(context.Background(), api)
+		return modelzooCategoriesDoneMsg{categories: result.Categories, err: result.Error}
+	}
+}
+
 func fetchEndpointDetail(api lib.BizyAPI, endpoint string) tea.Cmd {
 	return func() tea.Msg {
 		result := actions.GetEndpointDetail(context.Background(), api, endpoint)
 		return endpointDetailDoneMsg{detail: result.Detail, err: result.Error}
+	}
+}
+
+func fetchPriceTable(api lib.BizyAPI, endpoint string) tea.Cmd {
+	return func() tea.Msg {
+		result := actions.GetPriceTable(context.Background(), api, endpoint)
+		return priceTableDoneMsg{pts: result.PriceTables, endpoint: endpoint, err: result.Error}
 	}
 }
 

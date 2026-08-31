@@ -237,7 +237,7 @@ type ModelzooModelFlat struct {
 	MinCredits      int64       `json:"min_credits,omitempty"`
 	Category        string      `json:"category,omitempty"`
 	IndicativePrice bool        `json:"indicative_price,omitempty"`
-	PriceTable      *PriceTable `json:"price_table,omitempty"`
+	PriceTables     []PriceTable `json:"price_tables,omitempty"`
 	Series          string      `json:"series,omitempty"`
 	ModelVersion    string      `json:"model_version,omitempty"`
 	Tags            []string    `json:"tags,omitempty"`
@@ -259,10 +259,26 @@ type ModelzooTagsResp struct {
 	Tags []ModelzooTag `json:"tags,omitempty"`
 }
 
-// PriceTable 价格表
+// ModelzooCategoryItem 类别树中的单个类别
+type ModelzooCategoryItem struct {
+	Category string `json:"category,omitempty"`
+	APICount int    `json:"api_count,omitempty"`
+}
+
+// ModelzooCategoriesResp 类别树响应
+type ModelzooCategoriesResp struct {
+	List []ModelzooCategoryItem `json:"list,omitempty"`
+}
+
+// PriceTable 单个计价表（按定价分组，如 Input/Output）
 type PriceTable struct {
-	Columns []PriceTableColumn `json:"columns,omitempty"`
-	Cells   [][]PriceTableCell `json:"cells,omitempty"`
+	Columns       []PriceTableColumn `json:"columns,omitempty"`
+	CellsV2       [][]string         `json:"cells_v2,omitempty"`
+	PricingName   string             `json:"pricing_name,omitempty"`
+	PricingValues []string           `json:"pricing_values,omitempty"`
+	Remarks       []string           `json:"remarks,omitempty"`
+	UnitName      string             `json:"unit_name,omitempty"`
+	Sort          int                `json:"sort,omitempty"`
 }
 
 // PriceTableColumn 价格表列定义
@@ -271,12 +287,17 @@ type PriceTableColumn struct {
 	FieldName  string `json:"field_name,omitempty"`
 }
 
-// PriceTableCell 价格表单元格
-type PriceTableCell struct {
-	ValueStr string  `json:"value_str,omitempty"`
-	UnitName string  `json:"unit_name,omitempty"`
-	UnitKey  string  `json:"unit_key,omitempty"`
-	Amount   float64 `json:"amount,omitempty"`
+// ModelzooPriceTableResp 每端点价格表响应
+type ModelzooPriceTableResp struct {
+	Benefit     *PriceBenefit `json:"benefit,omitempty"`
+	PriceTables []PriceTable  `json:"price_tables,omitempty"`
+}
+
+// PriceBenefit 限流信息
+type PriceBenefit struct {
+	RPD int `json:"rpd,omitempty"`
+	RPH int `json:"rph,omitempty"`
+	RPM int `json:"rpm,omitempty"`
 }
 
 // ModelzooEndpointDetail 端点详情（含输入参数列表）

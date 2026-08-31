@@ -10,6 +10,7 @@ import (
 
 	tablev2 "charm.land/bubbles/v2/table"
 
+	"github.com/atotto/clipboard"
 	"github.com/charmbracelet/bubbles/list"
 	"github.com/charmbracelet/bubbles/progress"
 	"github.com/charmbracelet/bubbles/spinner"
@@ -20,6 +21,7 @@ import (
 	"github.com/siliconflow/bizyair-cli/cmd/tui/filepicker"
 	"github.com/siliconflow/bizyair-cli/internal/i18n"
 	"github.com/siliconflow/bizyair-cli/lib"
+	"github.com/siliconflow/bizyair-cli/lib/format"
 	"github.com/siliconflow/bizyair-cli/meta"
 	"github.com/urfave/cli/v2"
 )
@@ -124,17 +126,21 @@ type mainModel struct {
 	publicConfirmNew   bool
 	myModelsLoaded     bool
 	program            *tea.Program
-	lastResizeAt        time.Time
+	lastResizeAt       time.Time
 
 	// ModelZoo
-	modelzoo            modelzooInputs
-	modelzooTable       tablev2.Model
-	modelzooLoaded      bool
+	modelzoo             modelzooInputs
+	modelzooTable        tablev2.Model
+	modelzooLoaded       bool
 	modelzooDetailScroll int
-	endpointDetail     *lib.ModelzooEndpointDetail
-	priceTable         *lib.PriceTable
-	priceTableView     tablev2.Model
-	taskModel          taskModelInputs
+	endpointDetail       *lib.ModelzooEndpointDetail
+	priceTables          []lib.PriceTable
+	priceTableContent    string
+	taskModel            taskModelInputs
+
+	// 任务结果输出与复制反馈
+	outputURLs   []string
+	copyFeedback string
 }
 
 func newMainModel() mainModel {
@@ -423,6 +429,13 @@ func (m mainModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		m.filepicker.SetHeight(pickerHeight)
 
+		m.syncListSizes()
+		if m.step == mainStepModelzoo && m.modelzooLoaded {
+			m.updateModelzooTable()
+		}
+		if m.step == mainStepPriceView && len(m.priceTables) > 0 {
+			m.buildPriceTableContent(m.priceTables)
+		}
 		m.lastResizeAt = time.Now()
 		if m.step == mainStepMyModelsList {
 			return m, m.waitForResizeIdle()
@@ -452,6 +465,14 @@ func (m mainModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, updatePriceView(&m, msg)
 		}
 		switch msg.String() {
+		case "ctrl+y":
+			if m.step == mainStepOutput && m.taskModel.step == taskModelResult && len(m.outputURLs) > 0 {
+				return m, m.copyResultURLs()
+			}
+		case "ctrl+u":
+			if m.step == mainStepOutput && m.taskModel.step == taskModelResult && m.taskModel.requestID != "" {
+				return m, m.copyRequestID()
+			}
 		case "ctrl+c":
 			// 如果正在上传，保持取消上传逻辑
 			if m.running && m.currentAction == actionUpload && m.cancelFn != nil {
@@ -520,6 +541,7 @@ func (m mainModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 						return m, tea.Batch(
 							fetchModelzooEndpoints(m.getAPI(), "", "", "", false),
 							fetchModelzooTags(m.getAPI()),
+							fetchModelzooCategories(m.getAPI()),
 						)
 					case actionUserInfo:
 						m.step = mainStepUserInfo
@@ -532,6 +554,8 @@ func (m mainModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.step = m.returnStep
 				m.output = ""
 				m.err = nil
+				m.outputURLs = nil
+				m.copyFeedback = ""
 				m.resetUploadState()
 				return m, nil
 			case mainStepUserInfo:
@@ -554,6 +578,8 @@ func (m mainModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.step = m.returnStep
 				m.output = ""
 				m.err = nil
+				m.outputURLs = nil
+				m.copyFeedback = ""
 				m.resetUploadState()
 				return m, nil
 			case mainStepUserInfo:
@@ -750,6 +776,22 @@ func (m mainModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 	case modelzooTagsDoneMsg:
+		if msg.err == nil {
+			m.modelzoo.tags = msg.tags
+		}
+		if m.modelzooLoaded {
+			m.extractModelzooFilterOptions()
+			m.applyModelzooFilters()
+		}
+		return m, nil
+	case modelzooCategoriesDoneMsg:
+		if msg.err == nil {
+			m.modelzoo.categories = msg.categories
+		}
+		if m.modelzooLoaded {
+			m.extractModelzooFilterOptions()
+			m.applyModelzooFilters()
+		}
 		return m, nil
 	case endpointDetailDoneMsg:
 		m.running = false
@@ -766,6 +808,16 @@ func (m mainModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		m.modelzoo.detail = msg.detail
 		m.step = mainStepModelzooDetail
+		return m, nil
+	case priceTableDoneMsg:
+		m.running = false
+		if msg.err != nil {
+			m.err = msg.err
+			return m, nil
+		}
+		m.priceTables = msg.pts
+		m.buildPriceTableContent(msg.pts)
+		m.step = mainStepPriceView
 		return m, nil
 	case taskCreatedMsg:
 		m.running = false
@@ -795,6 +847,14 @@ func (m mainModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.output = fmt.Sprintf("%s: %s\n%s: %s",
 				i18n.T("cli.task.request_id_label", nil), m.taskModel.requestID,
 				i18n.T("tui.task_model.status_label", nil), msg.status.Status)
+			m.outputURLs = nil
+			m.copyFeedback = ""
+			if msg.status.Status == lib.TaskStatusSuccess && msg.status.Outputs != nil {
+				m.outputURLs = format.ExtractOutputURLs(msg.status.Outputs)
+				if len(m.outputURLs) > 0 {
+					m.output += "\n" + i18n.T("tui.task_model.result_url_label", nil) + ":\n" + strings.Join(m.outputURLs, "\n")
+				}
+			}
 			return m, nil
 		default:
 			m.running = true
@@ -808,6 +868,9 @@ func (m mainModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		m.taskModel.step = taskModelResult
 		m.taskModel.lastPollStatus = lib.TaskStatusCancelled
+		return m, nil
+	case clearCopyFeedbackMsg:
+		m.copyFeedback = ""
 		return m, nil
 	case uploadStartMsg:
 		m.uploadCh = msg.ch
@@ -1067,7 +1130,15 @@ func (m mainModel) View() string {
 			body += i18n.T("tui.status.error", map[string]any{"Error": m.err})
 			return m.renderFrame(header + "\n" + panel.Render(m.titleStyle.Render(i18n.T("tui.status.done_with_errors", nil))+"\n\n"+body+"\n\n"+m.hintStyle.Render(i18n.T("tui.hint.enter_menu", nil))))
 		}
-		return m.renderFrame(header + "\n" + panel.Render(m.titleStyle.Render(m.outputTitle())+"\n\n"+m.output+"\n\n"+m.hintStyle.Render(i18n.T("tui.hint.enter_menu", nil))))
+		hint := i18n.T("tui.hint.enter_menu", nil)
+		feedback := ""
+		if m.taskModel.step == taskModelResult {
+			hint = i18n.T("tui.task_model.result_hint", nil)
+			if m.copyFeedback != "" {
+				feedback = "\n\n" + m.renderStyledHint(m.copyFeedback)
+			}
+		}
+		return m.renderFrame(header + "\n" + panel.Render(m.titleStyle.Render(m.outputTitle())+"\n\n"+m.output+feedback+"\n\n"+m.renderStyledHint(hint)))
 	case mainStepMyModelsList:
 		return m.renderFrame(header + "\n" + panel.Render(m.renderMyModelsView()))
 	case mainStepModelDetail:
@@ -1130,8 +1201,25 @@ func (m *mainModel) syncListSizes() {
 	if m.myModelsInputs.filterMode != myModelsFilterNone {
 		m.myModelsInputs.filterList.SetSize(lw, h)
 	}
-}
+	if m.modelzoo.filterMode != modelzooFilterNone {
+		m.modelzoo.filterList.SetSize(lw, h)
+	}
 
+	// 创建任务参数输入控件：枚举选择列表 / 多行文本域 / URL 输入框
+	if m.taskModel.usingSelect && len(m.taskModel.paramSelectList.Items()) > 0 {
+		m.taskModel.paramSelectList.SetSize(lw-4, m.paramInputHeight())
+	}
+	if m.taskModel.usingTA {
+		m.taskModel.taParam.SetWidth(lw - 4)
+		m.taskModel.taParam.SetHeight(m.paramInputHeight())
+	}
+	for k, ti := range m.taskModel.paramInputs {
+		if w := lw - 4; w > 10 {
+			ti.Width = w
+		}
+		m.taskModel.paramInputs[k] = ti
+	}
+}
 
 const myModelsResizeIdleDelay = 400 * time.Millisecond
 
@@ -1157,6 +1245,32 @@ func (m *mainModel) myModelsResetOnIdle() (tea.Model, tea.Cmd) {
 	m.myModelsInputs.searchActive = false
 	m.running = true
 	return m, m.fetchMyModels()
+}
+
+// copyResultURLs 将任务结果 URL（全部，换行拼接）复制到剪贴板，并返回清除反馈的命令。
+func (m *mainModel) copyResultURLs() tea.Cmd {
+	text := strings.Join(m.outputURLs, "\n")
+	m.copyFeedback = writeClipboard(text, i18n.T("tui.task_model.copied_result", nil))
+	return m.feedbackClearCmd()
+}
+
+// copyRequestID 将任务 ID 复制到剪贴板，并返回清除反馈的命令。
+func (m *mainModel) copyRequestID() tea.Cmd {
+	m.copyFeedback = writeClipboard(m.taskModel.requestID, i18n.T("tui.task_model.copied_request_id", nil))
+	return m.feedbackClearCmd()
+}
+
+// writeClipboard 写入剪贴板；成功返回 okMsg，失败返回失败提示。
+func writeClipboard(text, okMsg string) string {
+	if err := clipboard.WriteAll(text); err != nil {
+		return i18n.T("tui.task_model.copy_failed", map[string]any{"Cause": err.Error()})
+	}
+	return okMsg
+}
+
+// feedbackClearCmd 返回延迟清除复制反馈的命令。
+func (m *mainModel) feedbackClearCmd() tea.Cmd {
+	return tea.Tick(2*time.Second, func(time.Time) tea.Msg { return clearCopyFeedbackMsg{} })
 }
 
 func MainTUI(c *cli.Context) error {
