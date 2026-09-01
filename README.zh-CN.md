@@ -23,6 +23,7 @@ BizyAir CLI 是用于管理 BizyAir 上模型文件的命令行工具。它提�
 - 📊 **实时进度显示** - 上传速率、进度条实时更新
 - 🔄 **自动升级** - 一键升级到最新版本，支持版本检查和安全回滚
 - 📂 **我的模型管理** - 列表查看、筛选、搜索、详情、删除、切换公开状态
+- 🧩 **模型广场** - 浏览生成模型端点，按能力/厂商/系列/版本筛选，查看详情与价格表，运行任务
 - 👤 **用户信息** - 基础信息、订阅套餐、钱包余额、今日消费
 
 ## 发布版本
@@ -252,14 +253,15 @@ bizyair
 
 3. **选择功能**
 
-   - 上传模型：交互式收集参数并上传
+- 上传模型：交互式收集参数并上传
    - 我的模型：查看、筛选和管理你的模型
+   - 模型广场：浏览与筛选生成端点，查看详情/价格，运行生成任务
    - 用户信息：查看基础信息、套餐、钱包和消费
    - 退出登录：清除本地 API Key
    - 退出程序
 
 4. **上传模型**
-   - 按照界面提示逐步输入信息
+   - 按照界面提示逐步输入
    - 支持文件选择器或手动输入路径
    - 支持多版本上传
    - 自动显示上传进度和速率
@@ -440,7 +442,58 @@ bizyair model public -n mymodel -t LoRA -y
 - `d` 删除（需二次确认），`p` 切换公开状态（需二次确认）
 - `r` 重置所有筛选，`Esc` 返回
 
-#### 8. 查看用户信息
+#### 8. 模型广场（浏览端点、价格表与任务）
+
+模型广场用于浏览 BizyAir 上的生成端点（图像/视频/音频模型），支持按关键词、能力（类别/标签）、厂商、系列与版本筛选：
+
+```bash
+# 列出端点（筛选条件可选，可自由组合）
+bizyair modelzoo ls
+bizyair modelzoo ls --keyword "seedance"
+bizyair modelzoo ls --cap "Text to Video" --mfr 字节跳动
+bizyair modelzoo ls --series seedance --version official
+bizyair modelzoo ls --cap "Text to Image" --mfr 字节跳动 --series seedream --version channel
+bizyair modelzoo ls --sort "Most Liked" --show-deprecated --page 1 --page-size 50
+```
+
+筛选选项：
+
+- `--keyword`：按名称关键词筛选
+- `--cap, --capability`：按能力（类别/标签）筛选，如 `Text to Image`（能力值为接口原始英文）
+- `--mfr, --manufacturer`：按厂商筛选，如 `字节跳动`
+- `--series`：按系列筛选，如 `seedance`
+- `--version`：按版本筛选，如 `official` / `channel` / `self-hosted`
+- `--sort`：排序方式（Recently、Most Liked、Most Downloaded、Most Used、Most Forked）
+- `--show-deprecated`：同时显示已弃用端点
+- `--page`、`--page-size`：分页（默认为 1 和 50）
+
+带空格的值请使用双引号包裹（例如 `--cap "Text to Video"`）；所有筛选均忽略大小写，且原始 API 值与本地化展示值都可命中。
+
+端点级命令：
+
+```bash
+# 查看端点详情（输入参数、最低费用等）
+bizyair modelzoo detail nano-banana-2-official/text-to-image
+
+# 查看端点的价格表
+bizyair modelzoo price nano-banana-2-official/text-to-image
+
+# 运行生成任务，使用 --param key=value（可重复）提交输入
+bizyair modelzoo run nano-banana-2-official/text-to-image \
+  --param "prompt=一只可爱的猫" --param "resolution=0.5K"
+# 图像/视频端点也可用 --image key=url
+# bizyair modelzoo run <端点> --image "image_url=https://example.com/ref.png"
+```
+
+`modelzoo run` 每 0.5 秒轮询一次任务状态，结束时输出状态（含耗时）与结果 URL。
+
+在 TUI 中，从主菜单选择「模型广场」：
+
+- `/` 搜索，`s` 系列筛选，`m` 厂商筛选，`c` 能力筛选，`v` 版本筛选，`r` 重置
+- `Enter` 查看端点详情，`p` 查看价格表，`t` 对选中端点运行任务
+- 任务流程中逐个填写参数（选择 / 文本 / URL 输入，`Ctrl+S` 或 `Enter` 继续，`Esc` 返回），命名输出后等待结果
+
+#### 9. 查看用户信息
 
 ```bash
 bizyair whoami      # 显示当前用户身份
@@ -449,7 +502,7 @@ bizyair wallet      # 显示钱包余额
 bizyair day-cost    # 显示今日消费
 ```
 
-#### 9. 退出登录
+#### 10. 退出登录
 
 ```bash
 bizyair logout

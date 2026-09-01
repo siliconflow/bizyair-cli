@@ -2,7 +2,6 @@ package tui
 
 import (
 	"fmt"
-	"strconv"
 	"strings"
 
 	"github.com/charmbracelet/bubbles/list"
@@ -212,19 +211,11 @@ func (m *mainModel) saveCurrentParamValue() error {
 	if raw == "" {
 		return nil
 	}
-	switch p.VariableType {
-	case "number", "float":
-		f, _ := strconv.ParseFloat(raw, 64)
-		m.taskModel.params[p.ParamKey()] = f
-	case "integer":
-		i, _ := strconv.ParseInt(raw, 10, 64)
-		m.taskModel.params[p.ParamKey()] = i
-	case "boolean":
-		b, _ := strconv.ParseBool(raw)
-		m.taskModel.params[p.ParamKey()] = b
-	default:
-		m.taskModel.params[p.ParamKey()] = raw
+	v, err := lib.CoerceModelzooParamValue(p.VariableType, raw)
+	if err != nil {
+		return err
 	}
+	m.taskModel.params[p.ParamKey()] = v
 	return nil
 }
 
@@ -233,18 +224,9 @@ func (m *mainModel) validateTaskParams() error {
 	if m.taskModel.detail == nil {
 		return nil
 	}
-	for _, p := range m.taskModel.detail.InputParams {
-		if !p.Required {
-			continue
-		}
-		key := p.ParamKey()
-		val, exists := m.taskModel.params[key]
-		if !exists || val == nil || val == "" {
-			if p.FieldValue != nil {
-				continue
-			}
-			return fmt.Errorf("%s", i18n.T("tui.task_model.param_required", map[string]any{"Name": i18n.APITranslate("param_label", p.FieldLabel)}))
-		}
+	missing := lib.MissingModelzooRequiredParams(m.taskModel.detail.InputParams, m.taskModel.params)
+	if len(missing) > 0 {
+		return fmt.Errorf("%s", i18n.T("tui.task_model.param_required", map[string]any{"Name": i18n.APITranslate("param_label", missing[0].FieldLabel)}))
 	}
 	return nil
 }
@@ -254,12 +236,7 @@ func (m *mainModel) applyFieldDefaults() {
 	if m.taskModel.detail == nil {
 		return
 	}
-	for _, p := range m.taskModel.detail.InputParams {
-		key := p.ParamKey()
-		if _, exists := m.taskModel.params[key]; !exists && p.FieldValue != nil {
-			m.taskModel.params[key] = p.FieldValue
-		}
-	}
+	lib.ApplyModelzooFieldDefaults(m.taskModel.params, m.taskModel.detail.InputParams)
 }
 
 // advanceParam 前进到下一个参数；全部填完后校验必填项、补全默认值并进入输出命名步骤。
@@ -530,7 +507,7 @@ func (m *mainModel) renderTaskModelView() string {
 		b.WriteString(fmt.Sprintf("%s: %s\n", i18n.T("cli.task.request_id_label", nil), m.taskModel.requestID))
 		b.WriteString("\n")
 		if m.taskModel.lastPollStatus != "" {
-			b.WriteString(spin + " " + m.taskModel.lastPollStatus)
+			b.WriteString(spin + " " + lib.ModelzooStatusName(m.taskModel.lastPollStatus))
 		} else {
 			b.WriteString(spin + " " + i18n.T("tui.status.waiting_api", nil))
 		}
@@ -543,7 +520,7 @@ func (m *mainModel) renderTaskModelView() string {
 		b.WriteString(fmt.Sprintf("%s: %s\n", i18n.T("cli.task.request_id_label", nil), m.taskModel.requestID))
 		b.WriteString("\n")
 		if m.taskModel.lastPollStatus != "" {
-			b.WriteString(fmt.Sprintf("%s: %s\n", i18n.T("tui.task_model.status_label", nil), m.taskModel.lastPollStatus))
+			b.WriteString(fmt.Sprintf("%s: %s\n", i18n.T("tui.task_model.status_label", nil), lib.ModelzooStatusName(m.taskModel.lastPollStatus)))
 		}
 		b.WriteString(m.hintStyle.Render(i18n.T("tui.hint.return_menu", nil)))
 	}

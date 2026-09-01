@@ -1,8 +1,6 @@
 package tui
 
 import (
-	"fmt"
-	"strconv"
 	"strings"
 
 	tablev2 "charm.land/bubbles/v2/table"
@@ -12,6 +10,7 @@ import (
 	"github.com/charmbracelet/lipgloss"
 	"github.com/siliconflow/bizyair-cli/internal/i18n"
 	"github.com/siliconflow/bizyair-cli/lib"
+	"github.com/siliconflow/bizyair-cli/lib/format"
 )
 
 // modelzooPriceTablesFor 从内存里的模型列表里查找指定端点的缓存价格表。
@@ -37,65 +36,6 @@ func (m *mainModel) openPriceView(endpoint string) tea.Cmd {
 	return fetchPriceTable(m.getAPI(), endpoint)
 }
 
-// formatCreditsPrice 将价格数值格式化为美元显示：积分值（千分之一美元）换算。
-func formatCreditsPrice(val string) string {
-	trimmed := strings.TrimSpace(val)
-	if v, err := strconv.ParseFloat(trimmed, 64); err == nil {
-		return usdAmount(v)
-	}
-	parts := strings.SplitN(val, "*", 2)
-	if len(parts) == 2 {
-		if v, err := strconv.ParseFloat(strings.TrimSpace(parts[0]), 64); err == nil {
-			return usdAmount(v) + " *" + parts[1]
-		}
-	}
-	return val
-}
-
-// usdAmount 将积分值（千分之一美元）格式化为美元金额字符串。
-func usdAmount(credits float64) string {
-	return fmt.Sprintf("%s%g", i18n.T("common.currency_usd", nil), credits/1000.0)
-}
-
-// priceKindLabel 将计价组类型名称（Input/Output）翻译为本地化文本。
-func priceKindLabel(name string) string {
-	switch strings.ToUpper(strings.TrimSpace(name)) {
-	case "INPUT":
-		return i18n.T("tui.modelzoo.price_kind_input", nil)
-	case "OUTPUT":
-		return i18n.T("tui.modelzoo.price_kind_output", nil)
-	default:
-		return name
-	}
-}
-
-// tuiPriceUnitLabel 将计费单位（SECOND/CALL/IMAGE/MTOKEN 等）翻译为本地化文本。
-func tuiPriceUnitLabel(name string) string {
-	switch strings.ToUpper(strings.TrimSpace(name)) {
-	case "SECOND", "SECONDS", "S", "PER_SECOND", "每秒", "秒":
-		return i18n.T("tui.modelzoo.price_unit_per_second", nil)
-	case "CALL", "CALLS", "PER_CALL", "每次", "次":
-		return i18n.T("tui.modelzoo.price_unit_per_call", nil)
-	case "IMAGE", "IMAGES", "IMG", "PER_IMAGE", "每张", "张":
-		return i18n.T("tui.modelzoo.price_unit_per_image", nil)
-	case "MTOKEN", "MTOK", "MT", "PER_MTOKEN", "PER_MT", "百万TOKEN":
-		return i18n.T("tui.modelzoo.price_unit_per_mtoken", nil)
-	default:
-		return name
-	}
-}
-
-// priceTableColumnTitle 返回价格表参数列的显示标题（优先本地化标签，其次字段名）。
-func priceTableColumnTitle(col lib.PriceTableColumn) string {
-	if title := i18n.APITranslate("param_label", col.FieldLabel); title != "" {
-		return title
-	}
-	if col.FieldName != "" {
-		return col.FieldName
-	}
-	return "-"
-}
-
 // priceTableWidth 价格表在简介区块内的可用宽度。
 func (m *mainModel) priceTableWidth() int {
 	w := m.width - 33
@@ -106,47 +46,14 @@ func (m *mainModel) priceTableWidth() int {
 }
 
 // renderPriceTableContent 将单个价格表渲染为多列表格：每个参数一列，
-// 最后一列为价格（有备注时追加备注列）。列宽按内容自适应并填满可用宽度。
+// 最后一列为价格（有备注时追加备注列）。列数据与单元格构造复用 lib/format。
+// 列宽按内容自适应并填满可用宽度。
 func (m *mainModel) renderPriceTableContent(pt lib.PriceTable) string {
-	titles := make([]string, 0, len(pt.Columns)+2)
-	for _, col := range pt.Columns {
-		titles = append(titles, priceTableColumnTitle(col))
-	}
-	titles = append(titles, i18n.T("tui.modelzoo.price_value_header", nil))
-	if len(pt.Remarks) > 0 {
-		titles = append(titles, i18n.T("tui.modelzoo.price_remark_header", nil))
-	}
-
-	maxRow := len(pt.PricingValues)
-	if len(pt.CellsV2) > maxRow {
-		maxRow = len(pt.CellsV2)
-	}
-	if len(pt.Remarks) > maxRow {
-		maxRow = len(pt.Remarks)
-	}
-	rows := make([]tablev2.Row, 0, maxRow)
-	for r := 0; r < maxRow; r++ {
-		cells := make([]string, 0, len(titles))
-		for c := range pt.Columns {
-			cell := "-"
-			if r < len(pt.CellsV2) && c < len(pt.CellsV2[r]) {
-				cell = pt.CellsV2[r][c]
-			}
-			cells = append(cells, cell)
-		}
-		price := "-"
-		if r < len(pt.PricingValues) {
-			price = formatCreditsPrice(pt.PricingValues[r])
-		}
-		cells = append(cells, price)
-		if len(pt.Remarks) > 0 {
-			remark := "-"
-			if r < len(pt.Remarks) && strings.TrimSpace(pt.Remarks[r]) != "" {
-				remark = i18n.APITranslate("remark", pt.Remarks[r])
-			}
-			cells = append(cells, remark)
-		}
-		rows = append(rows, cells)
+	titles := format.PriceTableColumns(pt, false)
+	rowData := format.PriceTableRows(pt, false)
+	rows := make([]tablev2.Row, 0, len(rowData))
+	for _, r := range rowData {
+		rows = append(rows, r)
 	}
 
 	ideal := make([]int, len(titles))
@@ -202,18 +109,7 @@ func (m *mainModel) buildPriceTableContent(prices []lib.PriceTable) {
 	}
 	var groups []string
 	for _, pt := range prices {
-		title := priceKindLabel(pt.PricingName)
-		if unit := tuiPriceUnitLabel(pt.UnitName); unit != "" {
-			if title != "" {
-				title += "（" + unit + "）"
-			} else {
-				title = unit
-			}
-		}
-		if title == "" {
-			title = "-"
-		}
-		groups = append(groups, sectionCard(title, m.renderPriceTableContent(pt), m.width-19))
+		groups = append(groups, sectionCard(format.PriceGroupHeading(pt.PricingName, pt.UnitName), m.renderPriceTableContent(pt), m.width-19))
 	}
 	m.priceTableContent = strings.Join(groups, "\n\n")
 }

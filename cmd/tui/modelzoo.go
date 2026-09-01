@@ -17,13 +17,7 @@ import (
 
 // updateModelzooTable 从 filtered 列表重建表格。
 func (m *mainModel) updateModelzooTable() {
-	titles := []string{
-		i18n.T("tui.modelzoo.col_name", nil),
-		i18n.T("tui.modelzoo.col_endpoint", nil),
-		i18n.T("tui.modelzoo.col_manufacturer", nil),
-		i18n.T("tui.modelzoo.col_category", nil),
-		i18n.T("tui.modelzoo.col_version", nil),
-	}
+	titles := lib.ModelzooTableColumns()
 	ideal := make([]int, len(titles))
 	for i, t := range titles {
 		ideal[i] = lipglossv2.Width(t)
@@ -40,13 +34,7 @@ func (m *mainModel) updateModelzooTable() {
 
 	rows := make([]tablev2.Row, 0, len(m.modelzoo.filtered))
 	for _, model := range m.modelzoo.filtered {
-		cells := []string{
-			dash(model.DisplayName),
-			dash(model.Endpoint),
-			i18n.APITranslate("manufacturer", model.Manufacturer),
-			model.Category,
-			i18n.APITranslate("version", model.ModelVersion),
-		}
+		cells := lib.ModelzooTableRow(model)
 		for i, c := range cells {
 			if w := lipglossv2.Width(c); w > ideal[i] {
 				ideal[i] = w
@@ -131,18 +119,6 @@ func (m *mainModel) extractModelzooFilterOptions() {
 	m.modelzoo.capabilityOpts = translateFilterOptions(capOpts, "capability")
 }
 
-func hasModelzooTag(model lib.ModelzooModelFlat, tag string) bool {
-	if tag == "" {
-		return false
-	}
-	for _, t := range model.Tags {
-		if strings.EqualFold(t, tag) {
-			return true
-		}
-	}
-	return strings.EqualFold(model.Category, tag)
-}
-
 func sortedFilterOptions(counts map[string]int) []filterOption {
 	opts := make([]filterOption, 0, len(counts))
 	for val, cnt := range counts {
@@ -165,52 +141,22 @@ func translateFilterOptions(opts []filterOption, domain string) []filterOption {
 	return opts
 }
 
+// modelzooFilter 组装当前维度的筛选条件（能力/厂商/系列/版本）。
+func (m *mainModel) modelzooFilter() lib.ModelzooFilter {
+	return lib.ModelzooFilter{
+		Capability:   m.modelzoo.capabilityFilter,
+		Manufacturer: m.modelzoo.manufacturerFilter,
+		Series:       m.modelzoo.seriesFilter,
+		Version:      m.modelzoo.versionFilter,
+	}
+}
+
 // applyModelzooFilters 按当前过滤条件及搜索关键字筛选模型列表。
 func (m *mainModel) applyModelzooFilters() {
 	filtered := m.modelzoo.models
 
-	if m.modelzoo.seriesFilter != "" {
-		var keep []lib.ModelzooModelFlat
-		for _, model := range filtered {
-			series := model.Series
-			if series == "" {
-				series = lib.SeriesFromEndpoint(model.Endpoint)
-			}
-			if strings.EqualFold(series, m.modelzoo.seriesFilter) {
-				keep = append(keep, model)
-			}
-		}
-		filtered = keep
-	}
-
-	if m.modelzoo.manufacturerFilter != "" {
-		var keep []lib.ModelzooModelFlat
-		for _, model := range filtered {
-			if strings.EqualFold(model.Manufacturer, m.modelzoo.manufacturerFilter) {
-				keep = append(keep, model)
-			}
-		}
-		filtered = keep
-	}
-
-	if m.modelzoo.capabilityFilter != "" {
-		var keep []lib.ModelzooModelFlat
-		for _, model := range filtered {
-			if hasModelzooTag(model, m.modelzoo.capabilityFilter) {
-				keep = append(keep, model)
-			}
-		}
-		filtered = keep
-	}
-
-	if m.modelzoo.versionFilter != "" {
-		var keep []lib.ModelzooModelFlat
-		for _, model := range filtered {
-			if strings.EqualFold(model.ModelVersion, m.modelzoo.versionFilter) {
-				keep = append(keep, model)
-			}
-		}
-		filtered = keep
+	if !m.modelzooFilter().Empty() {
+		filtered = lib.FilterModelzooModels(filtered, m.modelzooFilter())
 	}
 
 	q := strings.ToLower(m.modelzoo.search.Value())

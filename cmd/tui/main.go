@@ -846,7 +846,7 @@ func (m mainModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.step = mainStepOutput
 			m.output = fmt.Sprintf("%s: %s\n%s: %s",
 				i18n.T("cli.task.request_id_label", nil), m.taskModel.requestID,
-				i18n.T("tui.task_model.status_label", nil), msg.status.Status)
+				i18n.T("tui.task_model.status_label", nil), lib.ModelzooStatusName(msg.status.Status))
 			m.outputURLs = nil
 			m.copyFeedback = ""
 			if msg.status.Status == lib.TaskStatusSuccess && msg.status.Outputs != nil {

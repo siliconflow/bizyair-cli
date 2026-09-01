@@ -19,6 +19,7 @@ BizyAir CLI manages model files on BizyAir. It provides both an interactive term
 - YAML batch uploads for multiple models and versions
 - Live progress, transfer rate, and per-version status
 - My Models module: list, filter, search, detail view, delete, and toggle public status
+- Model Zoo module: browse generation endpoints, filter by capability/manufacturer/series/version, view detail and price tables, and run tasks
 - User info module: whoami, plan overview, wallet balance, and daily spending
 - Built-in update checks, installation, and safe rollback
 - Standard English and Simplified Chinese interfaces
@@ -203,10 +204,11 @@ sudo bizyair upgrade
 3. Choose an action:
    - Upload model
    - My models
+   - Model Zoo
    - User info
    - Log out
    - Exit
-4. Follow the upload steps. You can select files or type paths, add multiple versions, and monitor progress and transfer speed. In **My Models**, you can browse, filter, search, view details, delete, and toggle public status without leaving the TUI.
+4. Follow the upload steps. You can select files or type paths, add multiple versions, and monitor progress and transfer speed. In **My Models**, you can browse, filter, search, view details, delete, and toggle public status. In **Model Zoo**, you can browse and filter generation endpoints, view detail and price tables, and run generation tasks without leaving the TUI.
 
 ### Option 2: command line
 
@@ -380,7 +382,58 @@ In the TUI, select **My Models** from the main menu to access an interactive tab
 - `d` delete (with confirmation), `p` toggle public (with confirmation)
 - `r` reset all filters, `Esc` back
 
-#### 8. View user info
+#### 8. Model Zoo (browse endpoints, prices, and run tasks)
+
+The Model Zoo lists generation endpoints (image/video/audio models) from BizyAir. It supports filtering by keyword, capability (category/tags), manufacturer, series, and version:
+
+```bash
+# List endpoints (filters are optional and combinable)
+bizyair modelzoo ls
+bizyair modelzoo ls --keyword "seedance"
+bizyair modelzoo ls --cap "Text to Video" --mfr ByteDance
+bizyair modelzoo ls --series seedance --version official
+bizyair modelzoo ls --cap "Text to Image" --manufacturer "ByteDance" --series "seedream" --version channel
+bizyair modelzoo ls --sort "Most Liked" --show-deprecated --page 1 --page-size 50
+```
+
+Filter options:
+
+- `--keyword`: filter by name keyword
+- `--cap, --capability`: filter by capability (category/tags), e.g. `Text to Image`
+- `--mfr, --manufacturer`: filter by manufacturer, e.g. `ByteDance`
+- `--series`: filter by model series, e.g. `seedance`
+- `--version`: filter by model version, e.g. `official` / `channel` / `self-hosted`
+- `--sort`: sort order (Recently, Most Liked, Most Downloaded, Most Used, Most Forked)
+- `--show-deprecated`: also show deprecated endpoints
+- `--page`, `--page-size`: pagination (defaults 1 and 50)
+
+Values containing spaces should be wrapped in double quotes (for example `--cap "Text to Video"`); all filters match case-insensitively and accept both raw API values and their translated display names.
+
+Endpoint-level commands:
+
+```bash
+# Show endpoint detail (input parameters, min cost range, etc.)
+bizyair modelzoo detail nano-banana-2-official/text-to-image
+
+# Show the price table of an endpoint
+bizyair modelzoo price nano-banana-2-official/text-to-image
+
+# Run a generation task; submit an input with --param key=value (repeatable)
+bizyair modelzoo run nano-banana-2-official/text-to-image \
+  --param "prompt=A cute cat" --param "resolution=0.5K"
+# Image/video endpoints may take --image key=url instead
+# bizyair modelzoo run <endpoint> --image "image_url=https://example.com/ref.png"
+```
+
+`modelzoo run` polls the task status every 0.5 seconds and prints the final status (with elapsed time) and the output URLs.
+
+In the TUI, choose **Model Zoo** from the main menu:
+
+- `/` search, `s` series filter, `m` manufacturer filter, `c` capability filter, `v` version filter, `r` reset
+- `Enter` show endpoint detail, `p` show price table, `t` run a task for the selected endpoint
+- In the task flow, fill each parameter (select / text / URL input; `Ctrl+S` or `Enter` to continue, `Esc` to go back), name the output, and wait for the result
+
+#### 9. View user info
 
 ```bash
 bizyair whoami      # Show current user identity
@@ -389,7 +442,7 @@ bizyair wallet      # Show wallet balance
 bizyair day-cost    # Show today's spending
 ```
 
-#### 9. Log out
+#### 10. Log out
 
 ```bash
 bizyair logout

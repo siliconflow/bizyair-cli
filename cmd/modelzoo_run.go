@@ -3,7 +3,6 @@ package cmd
 import (
 	"fmt"
 	"os"
-	"strconv"
 	"strings"
 	"time"
 
@@ -45,8 +44,8 @@ func ModelzooRun(c *cli.Context) error {
 		return cli.Exit(err, meta.LoadError)
 	}
 
-	applyFieldDefaults(params, detail.InputParams)
-	if missing := missingRequiredParams(detail.InputParams, params); len(missing) > 0 {
+	lib.ApplyModelzooFieldDefaults(params, detail.InputParams)
+	if missing := lib.MissingModelzooRequiredParams(detail.InputParams, params); len(missing) > 0 {
 		return cli.Exit(missingParamsError(missing), meta.LoadError)
 	}
 
@@ -85,7 +84,7 @@ func ModelzooRun(c *cli.Context) error {
 			printRunFailure(status, time.Since(start))
 			return nil
 		default:
-			printRunPolling(spinner[si%len(spinner)], statusDisplayName(status), time.Since(start))
+			printRunPolling(spinner[si%len(spinner)], lib.ModelzooStatusName(status), time.Since(start))
 			si++
 		}
 	}
@@ -101,7 +100,7 @@ func printRunPolling(frame, status string, elapsed time.Duration) {
 }
 
 func printRunSuccess(outputs any, elapsed time.Duration) {
-	fmt.Fprintf(os.Stdout, "%s %s\n", green(i18n.T("cli.icon.success", nil)), green(bold(i18n.T("cli.modelzoo.run.status_success", nil))))
+	fmt.Fprintf(os.Stdout, "%s %s\n", green(i18n.T("cli.icon.success", nil)), green(bold(lib.ModelzooStatusName(lib.TaskStatusSuccess))))
 	if elapsed > 0 {
 		fmt.Fprintln(os.Stdout, gray(i18n.T("cli.modelzoo.run.elapsed_label", nil))+gray(elapsedText(elapsed)))
 	}
@@ -115,7 +114,7 @@ func printRunSuccess(outputs any, elapsed time.Duration) {
 }
 
 func printRunFailure(status string, elapsed time.Duration) {
-	fmt.Fprintf(os.Stdout, "%s %s\n", red(i18n.T("cli.icon.failure", nil)), red(bold(statusDisplayName(status))))
+	fmt.Fprintf(os.Stdout, "%s %s\n", red(i18n.T("cli.icon.failure", nil)), red(bold(lib.ModelzooStatusName(status))))
 	if elapsed > 0 {
 		fmt.Fprintln(os.Stdout, gray(i18n.T("cli.modelzoo.run.elapsed_label", nil))+gray(elapsedText(elapsed)))
 	}
@@ -148,18 +147,16 @@ func buildRunParams(c *cli.Context, inputParams []lib.ModelzooInputParam) (map[s
 		vtype := paramTypeMap[key]
 		switch vtype {
 		case "number", "float", "integer":
-			f, err := strconv.ParseFloat(val, 64)
-			if err == nil {
-				params[key] = f
-			} else {
-				params[key] = val
+			params[key] = val
+			if v, err := lib.CoerceModelzooParamValue(vtype, val); err == nil {
+				params[key] = v
 			}
 		case "boolean":
-			b, err := strconv.ParseBool(val)
+			v, err := lib.CoerceModelzooParamValue(vtype, val)
 			if err != nil {
 				return nil, fmt.Errorf("%s", i18n.T("cli.modelzoo.run.error.boolean_invalid", map[string]any{"Key": key, "Value": val}))
 			}
-			params[key] = b
+			params[key] = v
 		default:
 			params[key] = val
 		}
@@ -182,32 +179,7 @@ func buildRunParams(c *cli.Context, inputParams []lib.ModelzooInputParam) (map[s
 	return params, nil
 }
 
-// applyFieldDefaults 为未填写的参数补入 API 默认值（对齐 TUI 的 applyFieldDefaults）。
-func applyFieldDefaults(params map[string]any, inputParams []lib.ModelzooInputParam) {
-	for _, p := range inputParams {
-		key := p.ParamKey()
-		if _, ok := params[key]; !ok && p.FieldValue != nil {
-			params[key] = p.FieldValue
-		}
-	}
-}
 
-// missingRequiredParams 返回仍未填写的必填参数。
-func missingRequiredParams(inputParams []lib.ModelzooInputParam, params map[string]any) []lib.ModelzooInputParam {
-	missing := make([]lib.ModelzooInputParam, 0)
-	for _, p := range inputParams {
-		if !p.Required {
-			continue
-		}
-		key := p.ParamKey()
-		val, ok := params[key]
-		if ok && val != nil && val != "" {
-			continue
-		}
-		missing = append(missing, p)
-	}
-	return missing
-}
 
 // missingParamsError 构建缺失必填参数的错误信息（含参数明细与用法提示）。
 func missingParamsError(missing []lib.ModelzooInputParam) error {
@@ -233,25 +205,6 @@ func missingParamsError(missing []lib.ModelzooInputParam) error {
 	}
 	b.WriteString(i18n.T("cli.modelzoo.run.error.usage_hint", nil))
 	return fmt.Errorf("%s", b.String())
-}
-
-func statusDisplayName(status string) string {
-	switch status {
-	case lib.TaskStatusSuccess:
-		return i18n.T("cli.modelzoo.run.status_success", nil)
-	case lib.TaskStatusFailed:
-		return i18n.T("cli.modelzoo.run.status_failed", nil)
-	case lib.TaskStatusRunning:
-		return i18n.T("cli.modelzoo.run.status_running", nil)
-	case lib.TaskStatusQueued:
-		return i18n.T("cli.modelzoo.run.status_queued", nil)
-	case lib.TaskStatusCancelled:
-		return i18n.T("cli.modelzoo.run.status_cancelled", nil)
-	case lib.TaskStatusTransferring:
-		return i18n.T("cli.modelzoo.run.status_transferring", nil)
-	default:
-		return status
-	}
 }
 
 func variableTypeDisplayName(vt string) string {
