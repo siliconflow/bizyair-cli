@@ -31,6 +31,21 @@ func APITranslate(domain, value string) string {
 	return translated
 }
 
+// APITranslateEnglish translates an API-returned value via the English catalog
+// (canonical labels), independent of the active display language. Useful to
+// match filter values typed in English while the terminal uses zh-CN.
+func APITranslateEnglish(domain, value string) string {
+	if value == "" {
+		return ""
+	}
+	key := "api." + domain + "." + normalizeAPIKey(value)
+	translated := EnglishText(key, nil)
+	if strings.HasPrefix(translated, "[missing translation:") {
+		return value
+	}
+	return translated
+}
+
 // normalizeAPIKey converts "Text To Image" → "text_to_image",
 // "3D Generation" → "3d_generation", etc.
 func normalizeAPIKey(s string) string {

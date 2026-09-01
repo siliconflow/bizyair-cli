@@ -80,5 +80,8 @@ func modelzooFilterValueMatch(raw, domain, want string) bool {
 	if strings.EqualFold(raw, want) {
 		return true
 	}
-	return strings.EqualFold(i18n.APITranslate(domain, raw), want)
+	if strings.EqualFold(i18n.APITranslate(domain, raw), want) {
+		return true
+	}
+	return strings.EqualFold(i18n.APITranslateEnglish(domain, raw), want)
 }

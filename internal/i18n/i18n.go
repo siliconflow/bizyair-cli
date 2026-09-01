@@ -93,6 +93,23 @@ func T(messageID string, templateData ...map[string]any) string {
 	return localize(messageID, nil, firstData(templateData))
 }
 
+// EnglishText localizes a message via the English catalog only, ignoring the
+// active display language. Used for cross-language matching (e.g. a filter
+// typed in English while the terminal runs in Chinese).
+func EnglishText(messageID string, templateData ...map[string]any) string {
+	ensureConfigured()
+	state.mu.RLock()
+	english := state.english
+	state.mu.RUnlock()
+	if message, err := english.Localize(&goi18n.LocalizeConfig{
+		MessageID:    messageID,
+		TemplateData: firstData(templateData),
+	}); err == nil {
+		return message
+	}
+	return "[missing translation: " + messageID + "]"
+}
+
 // TN localizes a plural message using CLDR plural rules.
 func TN(messageID string, count any, templateData ...map[string]any) string {
 	return localize(messageID, count, firstData(templateData))
