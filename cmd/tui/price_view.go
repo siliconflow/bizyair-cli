@@ -5,6 +5,9 @@ import (
 	"strconv"
 	"strings"
 
+	tablev2 "charm.land/bubbles/v2/table"
+	lipglossv2 "charm.land/lipgloss/v2"
+
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/siliconflow/bizyair-cli/internal/i18n"
@@ -82,35 +85,116 @@ func tuiPriceUnitLabel(name string) string {
 	}
 }
 
-// renderPriceTableWithHeader 渲染带表头的价格键值表：首行为列头
-// （参数组合 │ 价格），其下为分隔线与数据行，与 renderKeyValueTable 对齐。
-func renderPriceTableWithHeader(labels, values []string, maxW int) string {
-	if len(labels) == 0 || len(labels) != len(values) {
-		return ""
+// priceTableColumnTitle 返回价格表参数列的显示标题（优先本地化标签，其次字段名）。
+func priceTableColumnTitle(col lib.PriceTableColumn) string {
+	if title := i18n.APITranslate("param_label", col.FieldLabel); title != "" {
+		return title
 	}
-	labelColW, sepW, valueColW, labelContentW, valueContentW := keyValueColLayout(maxW, labels)
-	sep := " │ "
-
-	headerStyle := lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("#FBBF24"))
-	leftHeader := headerStyle.Padding(0, 1).Width(labelColW).
-		Render(truncateLine(i18n.T("tui.modelzoo.price_param_header", nil), labelContentW))
-	rightHeader := headerStyle.Padding(0, 1).Width(valueColW).
-		Render(truncateLine(i18n.T("tui.modelzoo.price_value_header", nil), valueContentW))
-	sepStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("#6B7280"))
-	sepCell := sepStyle.Render(sep)
-	headerRow := lipgloss.JoinHorizontal(lipgloss.Top, leftHeader, sepCell, rightHeader)
-
-	lineW := labelColW + sepW + valueColW
-	lineStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("#6B7280"))
-	line := lineStyle.Render(strings.Repeat("─", lineW))
-
-	body := renderKeyValueTable(labels, values, maxW)
-	return lipgloss.JoinVertical(lipgloss.Left, headerRow, line, body)
+	if col.FieldName != "" {
+		return col.FieldName
+	}
+	return "-"
 }
 
-// buildPriceTableContent 参照用户信息模块的键值表格展示方式渲染价格数据：
+// priceTableWidth 价格表在简介区块内的可用宽度。
+func (m *mainModel) priceTableWidth() int {
+	w := m.width - 33
+	if w < 20 {
+		w = 20
+	}
+	return w
+}
+
+// renderPriceTableContent 将单个价格表渲染为多列表格：每个参数一列，
+// 最后一列为价格（有备注时追加备注列）。列宽按内容自适应并填满可用宽度。
+func (m *mainModel) renderPriceTableContent(pt lib.PriceTable) string {
+	titles := make([]string, 0, len(pt.Columns)+2)
+	for _, col := range pt.Columns {
+		titles = append(titles, priceTableColumnTitle(col))
+	}
+	titles = append(titles, i18n.T("tui.modelzoo.price_value_header", nil))
+	if len(pt.Remarks) > 0 {
+		titles = append(titles, i18n.T("tui.modelzoo.price_remark_header", nil))
+	}
+
+	maxRow := len(pt.PricingValues)
+	if len(pt.CellsV2) > maxRow {
+		maxRow = len(pt.CellsV2)
+	}
+	if len(pt.Remarks) > maxRow {
+		maxRow = len(pt.Remarks)
+	}
+	rows := make([]tablev2.Row, 0, maxRow)
+	for r := 0; r < maxRow; r++ {
+		cells := make([]string, 0, len(titles))
+		for c := range pt.Columns {
+			cell := "-"
+			if r < len(pt.CellsV2) && c < len(pt.CellsV2[r]) {
+				cell = pt.CellsV2[r][c]
+			}
+			cells = append(cells, cell)
+		}
+		price := "-"
+		if r < len(pt.PricingValues) {
+			price = formatCreditsPrice(pt.PricingValues[r])
+		}
+		cells = append(cells, price)
+		if len(pt.Remarks) > 0 {
+			remark := "-"
+			if r < len(pt.Remarks) && strings.TrimSpace(pt.Remarks[r]) != "" {
+				remark = i18n.APITranslate("remark", pt.Remarks[r])
+			}
+			cells = append(cells, remark)
+		}
+		rows = append(rows, cells)
+	}
+
+	ideal := make([]int, len(titles))
+	for i, t := range titles {
+		ideal[i] = lipglossv2.Width(t)
+	}
+	for _, row := range rows {
+		for i, c := range row {
+			if w := lipglossv2.Width(c); w > ideal[i] {
+				ideal[i] = w
+			}
+		}
+	}
+
+	// 每个单元格有左右各 1 格内边距，列内容总宽需再扣除 2*nCols，
+	// 否则整行会超出视口宽度并导致末列被截断、各列错位。
+	nCols := len(titles)
+	if nCols == 0 {
+		return ""
+	}
+	contentW := m.priceTableWidth() - nCols*2
+	if contentW < nCols*4 {
+		contentW = nCols * 4
+	}
+	cols := fitColumnWidthsByContent(ideal, contentW, true)
+	for i, t := range titles {
+		cols[i].Title = t
+	}
+
+	tableW := contentW + nCols*2
+	height := len(rows) + 3
+	if height < 4 {
+		height = 4
+	}
+	tbl := tablev2.New(
+		tablev2.WithColumns(cols),
+		tablev2.WithRows(rows),
+		tablev2.WithWidth(tableW),
+		tablev2.WithHeight(height),
+		tablev2.WithFocused(false),
+	)
+	applyPriceTableStyles(&tbl)
+	return renderTable(tbl)
+}
+
+// buildPriceTableContent 渲染价格数据：
 // 每个计价组（PricingName + UnitName）为一个灰色圆角框区块，标题为黄色，
-// 区块内包含表头行与数据行；多组之间以空行分隔。
+// 区块内包含多列表格（每个参数一列）；多组之间以空行分隔。
 func (m *mainModel) buildPriceTableContent(prices []lib.PriceTable) {
 	if len(prices) == 0 {
 		m.priceTableContent = ""
@@ -118,37 +202,6 @@ func (m *mainModel) buildPriceTableContent(prices []lib.PriceTable) {
 	}
 	var groups []string
 	for _, pt := range prices {
-		var labels []string
-		var values []string
-		maxRow := len(pt.PricingValues)
-		if len(pt.CellsV2) > maxRow {
-			maxRow = len(pt.CellsV2)
-		}
-		if len(pt.Remarks) > maxRow {
-			maxRow = len(pt.Remarks)
-		}
-		if maxRow == 0 {
-			maxRow = 1
-		}
-		for r := 0; r < maxRow; r++ {
-			var params string
-			if r < len(pt.CellsV2) {
-				params = strings.Join(pt.CellsV2[r], " / ")
-			}
-			if params == "" {
-				params = "-"
-			}
-			price := "-"
-			if r < len(pt.PricingValues) {
-				price = formatCreditsPrice(pt.PricingValues[r])
-			}
-			labels = append(labels, params)
-			values = append(values, price)
-			if r < len(pt.Remarks) && strings.TrimSpace(pt.Remarks[r]) != "" {
-				labels = append(labels, i18n.T("tui.modelzoo.price_remark_header", nil))
-				values = append(values, pt.Remarks[r])
-			}
-		}
 		title := priceKindLabel(pt.PricingName)
 		if unit := tuiPriceUnitLabel(pt.UnitName); unit != "" {
 			if title != "" {
@@ -160,8 +213,7 @@ func (m *mainModel) buildPriceTableContent(prices []lib.PriceTable) {
 		if title == "" {
 			title = "-"
 		}
-		table := renderPriceTableWithHeader(labels, values, m.width-24)
-		groups = append(groups, sectionCard(title, table, m.width-19))
+		groups = append(groups, sectionCard(title, m.renderPriceTableContent(pt), m.width-19))
 	}
 	m.priceTableContent = strings.Join(groups, "\n\n")
 }

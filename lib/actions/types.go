@@ -141,6 +141,7 @@ type DayCostResult struct {
 // ModelzooEndpointsResult 模型广场端点列表（合并列表+价格表）
 type ModelzooEndpointsResult struct {
 	Models []lib.ModelzooModelFlat
+	Total  int
 	Error  error
 }
 

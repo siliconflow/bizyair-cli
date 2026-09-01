@@ -69,7 +69,7 @@ func (m *mainModel) updateModelzooTable() {
 	if tw < 20 {
 		tw = 20
 	}
-	h := m.height - 18
+	h := m.height - 20
 	if h < 4 {
 		h = 4
 	}
@@ -504,9 +504,6 @@ func (m *mainModel) renderModelzooDetailView() string {
 	b.WriteString(fmt.Sprintf("%s: %s\n",
 		infoLabelStyle.Render(i18n.T("tui.modelzoo.version_label", nil)+": "),
 		infoValueStyle.Render(i18n.APITranslate("version", d.Edition))))
-	b.WriteString(fmt.Sprintf("%s: %s\n",
-		infoLabelStyle.Render(i18n.T("tui.modelzoo.billing_unit_label", nil)+": "),
-		infoValueStyle.Render(i18n.APITranslate("billing_unit", d.BillingUnit))))
 	b.WriteString(fmt.Sprintf("%s: %s\n",
 		infoLabelStyle.Render(i18n.T("tui.modelzoo.min_credits_label", nil)+": "),
 		lipgloss.NewStyle().Foreground(lipgloss.Color("#FACC15")).Bold(true).Render(creditsToUSD(d.MinCredits))))

@@ -96,8 +96,8 @@ func priceRows(pt lib.PriceTable) [][]string {
 		row = append(row, val)
 		if len(pt.Remarks) > 0 {
 			remark := "-"
-			if r < len(pt.Remarks) {
-				remark = pt.Remarks[r]
+			if r < len(pt.Remarks) && strings.TrimSpace(pt.Remarks[r]) != "" {
+				remark = i18n.APITranslate("remark", pt.Remarks[r])
 			}
 			row = append(row, remark)
 		}

@@ -44,7 +44,7 @@ func ModelzooDetail(c *cli.Context) error {
 		fmt.Fprintln(os.Stdout, i18n.T("cli.modelzoo.detail_billing_unit", map[string]any{"Unit": d.BillingUnit}))
 	}
 	if d.MinCredits > 0 {
-		fmt.Fprintln(os.Stdout, i18n.T("cli.modelzoo.detail_min_credits", map[string]any{"Credits": d.MinCredits}))
+		fmt.Fprintln(os.Stdout, i18n.T("cli.modelzoo.detail_min_credits", map[string]any{"Cost": formatCredits(d.MinCredits)}))
 	}
 	if d.Description != "" {
 		fmt.Fprintln(os.Stdout, i18n.T("cli.modelzoo.detail_description", map[string]any{"Desc": d.Description}))

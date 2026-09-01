@@ -682,6 +682,22 @@ func applyTableStyles(t *tablev2.Model) {
 	t.SetStyles(s)
 }
 
+// applyPriceTableStyles 与 applyTableStyles 共用表头样式但关闭选中高亮：
+// 价格表展示的是信息而非可选项。注意 Selected 只能是中性样式：
+// 若给它加 Padding，被包裹的整行会多出左右空格，破坏各列对齐。
+func applyPriceTableStyles(t *tablev2.Model) {
+	s := tablev2.DefaultStyles()
+	s.Header = s.Header.
+		BorderStyle(lipglossv2.NormalBorder()).
+		BorderForeground(lipglossv2.Color("240")).
+		BorderBottom(true).
+		Bold(false).
+		Padding(0, 1)
+	s.Selected = lipglossv2.NewStyle()
+	s.Cell = s.Cell.Padding(0, 1)
+	t.SetStyles(s)
+}
+
 // renderTable 给表格视图套上灰色外框后输出。
 func renderTable(t tablev2.Model) string {
 	return tableFrame.Render(t.View())

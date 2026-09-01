@@ -40,7 +40,10 @@ func Init() *cli.App {
 	pageSizeFlag := cli.IntFlag{Name: "page-size", Usage: i18n.T("cli.flag.page_size"), Value: 100}
 	openFlag := cli.BoolFlag{Name: "open", Usage: i18n.T("cli.flag.open")}
 	yesFlag := cli.BoolFlag{Name: "yes", Aliases: []string{"y"}, Usage: i18n.T("cli.flag.yes")}
-	billingUnitFlag := cli.StringFlag{Name: "billing-unit", Aliases: []string{"bu"}, Usage: i18n.T("cli.flag.billing_unit")}
+	capabilityFlag := cli.StringFlag{Name: "capability", Aliases: []string{"cap"}, Usage: i18n.T("cli.flag.capability")}
+	manufacturerFlag := cli.StringFlag{Name: "manufacturer", Aliases: []string{"mfr"}, Usage: i18n.T("cli.flag.manufacturer")}
+	seriesFlag := cli.StringFlag{Name: "series", Usage: i18n.T("cli.flag.series")}
+	versionFilterFlag := cli.StringFlag{Name: "version", Usage: i18n.T("cli.flag.version")}
 	showDeprecatedFlag := cli.BoolFlag{Name: "show-deprecated", Usage: i18n.T("cli.flag.show_deprecated")}
 	modelzooParamFlag := cli.StringSliceFlag{Name: "param", Usage: i18n.T("cli.flag.param"), Destination: &cli.StringSlice{}}
 	modelzooImageFlag := cli.StringSliceFlag{Name: "image", Usage: i18n.T("cli.flag.image"), Destination: &cli.StringSlice{}}
@@ -196,8 +199,13 @@ func Init() *cli.App {
 					Flags: []cli.Flag{
 						&keywordFlag,
 						&sortFlag,
-						&billingUnitFlag,
+						&capabilityFlag,
+						&manufacturerFlag,
+						&seriesFlag,
+						&versionFilterFlag,
 						&showDeprecatedFlag,
+						&pageFlag,
+						&pageSizeFlag,
 					},
 					Action: ModelzooList,
 				},

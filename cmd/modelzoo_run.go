@@ -56,33 +56,77 @@ func ModelzooRun(c *cli.Context) error {
 	}
 
 	requestID := taskResult.RequestID
-	fmt.Fprintf(os.Stdout, "%s: %s\n", i18n.T("cli.modelzoo.run.request_id_label", nil), requestID)
-	fmt.Fprintln(os.Stdout, i18n.T("cli.modelzoo.run.polling_status", nil))
+	start := time.Now()
 
+	fmt.Fprintf(os.Stdout, "%s %s\n", gray(i18n.T("cli.modelzoo.run.endpoint_label", nil)), cyan(endpoint))
+	fmt.Fprintf(os.Stdout, "%s %s\n", gray(i18n.T("cli.modelzoo.run.request_id_label", nil)), requestID)
+	if stdoutIsTTY() {
+		fmt.Fprintln(os.Stdout)
+	}
+
+	spinner := []string{"|", "/", "-", "\\"}
+	si := 0
 	for {
-		time.Sleep(2 * time.Second)
+		time.Sleep(500 * time.Millisecond)
 		statusResult := actions.GetTaskStatus(c.Context, client, requestID)
 		if statusResult.Error != nil {
+			clearLine()
 			return cli.Exit(statusResult.Error, meta.ServerError)
 		}
 
 		status := statusResult.Status.Status
 		switch status {
 		case lib.TaskStatusSuccess:
-			fmt.Fprintf(os.Stdout, "\n%s: %s\n", i18n.T("cli.modelzoo.run.status_label", nil), statusDisplayName(status))
-			if statusResult.Status.Outputs != nil {
-				for _, u := range format.ExtractOutputURLs(statusResult.Status.Outputs) {
-					fmt.Fprintln(os.Stdout, u)
-				}
-			}
+			clearLine()
+			printRunSuccess(statusResult.Status.Outputs, time.Since(start))
 			return nil
 		case lib.TaskStatusFailed, lib.TaskStatusCancelled:
-			fmt.Fprintf(os.Stdout, "\n%s: %s\n", i18n.T("cli.modelzoo.run.status_label", nil), statusDisplayName(status))
+			clearLine()
+			printRunFailure(status, time.Since(start))
 			return nil
 		default:
-			fmt.Fprintf(os.Stdout, "%s ", statusDisplayName(status))
+			printRunPolling(spinner[si%len(spinner)], statusDisplayName(status), time.Since(start))
+			si++
 		}
 	}
+}
+
+func printRunPolling(frame, status string, elapsed time.Duration) {
+	line := yellow(frame) + " " + yellow(status) + gray(elapsedText(elapsed))
+	if stdoutIsTTY() {
+		os.Stdout.WriteString("\r\033[2K" + line)
+		return
+	}
+	fmt.Fprintln(os.Stdout, line)
+}
+
+func printRunSuccess(outputs any, elapsed time.Duration) {
+	fmt.Fprintf(os.Stdout, "%s %s\n", green(i18n.T("cli.icon.success", nil)), green(bold(i18n.T("cli.modelzoo.run.status_success", nil))))
+	if elapsed > 0 {
+		fmt.Fprintln(os.Stdout, gray(i18n.T("cli.modelzoo.run.elapsed_label", nil))+gray(elapsedText(elapsed)))
+	}
+	urls := format.ExtractOutputURLs(outputs)
+	if len(urls) > 0 {
+		fmt.Fprintf(os.Stdout, "%s\n", bold(i18n.T("cli.modelzoo.run.outputs_label", nil)))
+		for _, u := range urls {
+			fmt.Fprintf(os.Stdout, "  %s %s\n", cyan("•"), cyan(u))
+		}
+	}
+}
+
+func printRunFailure(status string, elapsed time.Duration) {
+	fmt.Fprintf(os.Stdout, "%s %s\n", red(i18n.T("cli.icon.failure", nil)), red(bold(statusDisplayName(status))))
+	if elapsed > 0 {
+		fmt.Fprintln(os.Stdout, gray(i18n.T("cli.modelzoo.run.elapsed_label", nil))+gray(elapsedText(elapsed)))
+	}
+}
+
+func elapsedText(d time.Duration) string {
+	s := int(d.Seconds())
+	if s < 1 {
+		s = 1
+	}
+	return fmt.Sprintf(" (%d s)", s)
 }
 
 func buildRunParams(c *cli.Context, inputParams []lib.ModelzooInputParam) (map[string]any, error) {

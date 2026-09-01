@@ -11,7 +11,7 @@ import (
 
 func fetchModelzooEndpoints(api lib.BizyAPI, keyword, billingUnit, sort string, showDeprecated bool) tea.Cmd {
 	return func() tea.Msg {
-		result := actions.ListModelzooEndpoints(context.Background(), api, keyword, billingUnit, sort, showDeprecated)
+		result := actions.ListModelzooEndpoints(context.Background(), api, keyword, billingUnit, sort, showDeprecated, 1, 500)
 		return modelzooEndpointsDoneMsg{models: result.Models, err: result.Error}
 	}
 }

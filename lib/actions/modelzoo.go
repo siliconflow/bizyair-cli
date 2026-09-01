@@ -7,11 +7,17 @@ import (
 	"github.com/siliconflow/bizyair-cli/lib"
 )
 
-func ListModelzooEndpoints(ctx context.Context, api lib.BizyAPI, keyword, billingUnit, sort string, showDeprecated bool) ModelzooEndpointsResult {
+func ListModelzooEndpoints(ctx context.Context, api lib.BizyAPI, keyword, billingUnit, sort string, showDeprecated bool, current, pageSize int) ModelzooEndpointsResult {
 	if ctx == nil {
 		ctx = context.Background()
 	}
-	listResp, err := api.GetModelzooListContext(ctx, 1, 500, keyword, sort)
+	if current < 1 {
+		current = 1
+	}
+	if pageSize < 1 {
+		pageSize = 50
+	}
+	listResp, err := api.GetModelzooListContext(ctx, current, pageSize, keyword, sort)
 	if err != nil {
 		return ModelzooEndpointsResult{
 			Error: lib.WithStep(i18n.T("step.list_modelzoo_endpoints", nil), err),
@@ -28,8 +34,10 @@ func ListModelzooEndpoints(ctx context.Context, api lib.BizyAPI, keyword, billin
 		}
 	}
 
+	total := 0
 	var models []lib.ModelzooModelFlat
 	if listResp != nil {
+		total = listResp.Data.Total
 		for _, item := range listResp.Data.List {
 			flat := lib.ModelzooModelFlat{
 				Endpoint:     item.Endpoint,
@@ -64,8 +72,12 @@ func ListModelzooEndpoints(ctx context.Context, api lib.BizyAPI, keyword, billin
 			models = append(models, flat)
 		}
 	}
+	if total < len(models) {
+		total = len(models)
+	}
 	return ModelzooEndpointsResult{
 		Models: models,
+		Total:  total,
 	}
 }
 
