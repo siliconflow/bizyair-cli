@@ -52,7 +52,6 @@ func ListModel(c *cli.Context) error {
 		Keyword:    c.String("keyword"),
 		Sort:       c.String("sort"),
 		Current:    c.Int("page"),
-		PageSize:   c.Int("page-size"),
 	}
 	if bm := c.String("base-model"); bm != "" {
 		listInput.BaseModels = []string{bm}

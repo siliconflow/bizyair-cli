@@ -37,8 +37,7 @@ func Init() *cli.App {
 	sortFlag := cli.StringFlag{Name: "sort", Usage: i18n.T("cli.flag.sort", map[string]any{"Sorts": "Recently, Most Liked, Most Downloaded, Most Used, Most Forked"}), Value: "Recently"}
 	baseModelFilterFlag := cli.StringFlag{Name: "base-model", Aliases: []string{"bm"}, Usage: i18n.T("cli.flag.base_model")}
 	pageFlag := cli.IntFlag{Name: "page", Usage: i18n.T("cli.flag.page"), Value: 1}
-	pageSizeFlag := cli.IntFlag{Name: "page-size", Usage: i18n.T("cli.flag.page_size"), Value: 100}
-	openFlag := cli.BoolFlag{Name: "open", Usage: i18n.T("cli.flag.open")}
+	openFlag := cli.BoolFlag{Name: "open", Usage: i18n.T("cli.flag.open"), DisableDefaultText: true}
 	yesFlag := cli.BoolFlag{Name: "yes", Aliases: []string{"y"}, Usage: i18n.T("cli.flag.yes")}
 
 	configureCLIHelp()
@@ -129,7 +128,6 @@ func Init() *cli.App {
 						&sortFlag,
 						&baseModelFilterFlag,
 						&pageFlag,
-						&pageSizeFlag,
 						&openFlag,
 					},
 					Action: ListModel,
