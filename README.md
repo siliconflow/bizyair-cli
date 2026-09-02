@@ -20,6 +20,7 @@ BizyAir CLI manages model files on BizyAir. It provides both an interactive term
 - Live progress, transfer rate, and per-version status
 - My Models module: list, filter, search, detail view, delete, and toggle public status
 - Model Zoo module: browse generation endpoints, filter by capability/manufacturer/series/version, view detail and price tables, and run tasks
+- AI Applications module: browse community ComfyUI workflows, view details, and run with custom parameters
 - User info module: whoami, plan overview, wallet balance, and daily spending
 - Built-in update checks, installation, and safe rollback
 - Standard English and Simplified Chinese interfaces
@@ -205,10 +206,11 @@ sudo bizyair upgrade
    - Upload model
    - My models
    - Model Zoo
+   - AI Applications
    - User info
    - Log out
    - Exit
-4. Follow the upload steps. You can select files or type paths, add multiple versions, and monitor progress and transfer speed. In **My Models**, you can browse, filter, search, view details, delete, and toggle public status. In **Model Zoo**, you can browse and filter generation endpoints, view detail and price tables, and run generation tasks without leaving the TUI.
+4. Follow the upload steps. You can select files or type paths, add multiple versions, and monitor progress and transfer speed. In **My Models**, you can browse, filter, search, view details, delete, and toggle public status. In **Model Zoo**, you can browse and filter generation endpoints, view detail and price tables, and run generation tasks without leaving the TUI. In **AI Applications**, you can browse community workflows, view details, and run tasks with custom parameters.
 
 ### Option 2: command line
 
@@ -432,6 +434,29 @@ In the TUI, choose **Model Zoo** from the main menu:
 - `/` search, `s` series filter, `m` manufacturer filter, `c` capability filter, `v` version filter, `r` reset
 - `Enter` show endpoint detail, `p` show price table, `t` run a task for the selected endpoint
 - In the task flow, fill each parameter (select / text / URL input; `Ctrl+S` or `Enter` to continue, `Esc` to go back), name the output, and wait for the result
+
+#### 8. AI Applications (run community apps)
+
+AI Applications lists community-built ComfyUI workflows on BizyAir. You can browse, view details, and run them with custom parameters:
+
+```bash
+# List AI applications (filters are optional)
+bizyair app ls
+bizyair app ls --keyword "FLUX"
+
+# Show app detail by ID or name
+bizyair app detail 12345
+bizyair app detail "LTX 2.5 Image-to-Video"
+
+# Run an app with parameters
+bizyair app run 12345 --param "width=512" --param "prompt=A cute cat"
+```
+
+In the TUI, select **AI Applications** from the main menu:
+
+- `/` search, `↑/↓` navigate, `Enter` view detail
+- `t` run the selected app — fill each parameter (select / text / URL input; `Ctrl+S` or `Enter` to continue, `Esc` to go back)
+- Task status is polled in real time; results show output URLs on success
 
 #### 9. View user info
 
