@@ -324,6 +324,8 @@ cli:
     gift_credits_label: "Gift Balance"
     recharge_credits_label: "Recharge Balance"
     expire_at_label: "Expires"
+    expire_line: "{{.Balance}}     Expires {{.Date}} ({{.Days}} days left), expiring amount {{.Amount}}"
+    expired_line: "{{.Balance}}     Expired {{.Date}}, expiring amount {{.Amount}}"
   day_cost:
     no_records: "No spending records for today."
     total_credits_label: "Total Cost"

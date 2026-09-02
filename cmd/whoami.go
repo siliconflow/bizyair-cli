@@ -132,18 +132,9 @@ func Wallet(c *cli.Context) error {
 	}
 
 	fmt.Fprintf(os.Stdout, "%s: %s\n", i18n.T("cli.credits.current_balance"), format.FormatCredits(result.TotalAmount))
-	printBalanceLine(i18n.T("cli.credits.recharge_balance"), format.FormatCredits(result.RechargeAmount), format.FormatExpiry(format.EarliestExpiry(result.Credits, false)))
-	printBalanceLine(i18n.T("cli.credits.gift_balance"), format.FormatCredits(result.GiftAmount), format.FormatExpiry(format.EarliestExpiry(result.Credits, true)))
+	fmt.Fprintf(os.Stdout, "%s: %s\n", i18n.T("cli.credits.recharge_balance"), format.FormatExpiryLine(result.Credits, false, format.FormatCredits(result.RechargeAmount)))
+	fmt.Fprintf(os.Stdout, "%s: %s\n", i18n.T("cli.credits.gift_balance"), format.FormatExpiryLine(result.Credits, true, format.FormatCredits(result.GiftAmount)))
 	return nil
-}
-
-// printBalanceLine 输出"标签: 金额"一行；有到期日时追加"日期（剩余天数）"。
-func printBalanceLine(label, value, expiry string) {
-	if expiry == "" {
-		fmt.Fprintf(os.Stdout, "%s: %s\n", label, value)
-		return
-	}
-	fmt.Fprintf(os.Stdout, "%s: %s %s\n", label, value, expiry)
 }
 
 // DayCost 查询今日按小时的消费记录：绘制每小时消费柱状图并汇总总积分与总请求数。

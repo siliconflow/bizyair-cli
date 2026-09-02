@@ -83,7 +83,16 @@ func FormatUsdCents(cents int64) string {
 }
 
 func EarliestExpiry(credits []*domain.CreditItem, isGift bool) string {
-	var earliest string
+	item := EarliestExpiryItem(credits, isGift)
+	if item == nil {
+		return ""
+	}
+	return FormatExpiry(item.ExpiredAt)
+}
+
+// EarliestExpiryItem 返回最早到期的积分条目（含金额），用于展示过期金额。
+func EarliestExpiryItem(credits []*domain.CreditItem, isGift bool) *domain.CreditItem {
+	var earliest *domain.CreditItem
 	for _, c := range credits {
 		if c.ExpiredAt == "" {
 			continue
@@ -92,8 +101,8 @@ func EarliestExpiry(credits []*domain.CreditItem, isGift bool) string {
 		if !matched {
 			continue
 		}
-		if earliest == "" || c.ExpiredAt < earliest {
-			earliest = c.ExpiredAt
+		if earliest == nil || c.ExpiredAt < earliest.ExpiredAt {
+			earliest = c
 		}
 	}
 	return earliest
@@ -116,6 +125,40 @@ func FormatExpiry(expiredAt string) string {
 		return i18n.T("cli.credits.expired_with_date", map[string]any{"Date": dateStr})
 	}
 	return i18n.T("cli.credits.expire_with_date", map[string]any{"Date": dateStr, "Days": days})
+}
+
+// FormatExpiryLine 格式化余额过期行：最近一笔费用过期时间与过期金额。
+func FormatExpiryLine(credits []*domain.CreditItem, isGift bool, balance string) string {
+	item := EarliestExpiryItem(credits, isGift)
+	if item == nil || item.ExpiredAt == "" {
+		return balance
+	}
+	t, err := time.Parse(time.RFC3339, item.ExpiredAt)
+	if err != nil {
+		t, err = time.Parse("2006-01-02", item.ExpiredAt)
+	}
+	if err != nil {
+		return balance
+	}
+	dateStr := t.Format("2006-01-02")
+	days := int(time.Until(t).Hours() / 24)
+	expireAmount := item.RechargeAmount
+	if isGift {
+		expireAmount = item.GiftAmount
+	}
+	if days <= 0 {
+		return i18n.T("cli.credits.expired_line", map[string]any{
+			"Balance": balance,
+			"Date":    dateStr,
+			"Amount":  FormatCredits(expireAmount),
+		})
+	}
+	return i18n.T("cli.credits.expire_line", map[string]any{
+		"Balance": balance,
+		"Date":    dateStr,
+		"Days":    days,
+		"Amount":  FormatCredits(expireAmount),
+	})
 }
 
 func FormatTimestamp(ts string) string {
