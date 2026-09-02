@@ -55,9 +55,7 @@ type WebAppInputNode = domain.WebAppInputNode
 type WebAppDetail = domain.WebAppDetail
 type WebAppVersionDetail = domain.WebAppVersionDetail
 type WebAppTaskCreateReq = domain.WebAppTaskCreateReq
-type WebAppTaskCreateResp = domain.WebAppTaskCreateResp
 type WebAppComfyTaskResp = domain.WebAppComfyTaskResp
-type WebAppTaskStatusResp = domain.WebAppTaskStatusResp
 type ComfyTaskStatusData = domain.ComfyTaskStatusData
 type WebAppTaskOutputsResp = domain.WebAppTaskOutputsResp
 type WebAppTaskOutput = domain.WebAppTaskOutput
@@ -270,23 +268,23 @@ type BatchUpdatePublicResp struct {
 
 // ModelzooModelFlat 模型广场扁平化模型（含价格表）
 type ModelzooModelFlat struct {
-	Endpoint        string      `json:"endpoint,omitempty"`
-	DisplayName     string      `json:"display_name,omitempty"`
-	Manufacturer    string      `json:"manufacturer,omitempty"`
-	ModelName       string      `json:"model_name,omitempty"`
-	BillingUnit     string      `json:"billing_unit,omitempty"`
-	MinCredits      int64       `json:"min_credits,omitempty"`
-	Category        string      `json:"category,omitempty"`
-	IndicativePrice bool        `json:"indicative_price,omitempty"`
+	Endpoint        string       `json:"endpoint,omitempty"`
+	DisplayName     string       `json:"display_name,omitempty"`
+	Manufacturer    string       `json:"manufacturer,omitempty"`
+	ModelName       string       `json:"model_name,omitempty"`
+	BillingUnit     string       `json:"billing_unit,omitempty"`
+	MinCredits      int64        `json:"min_credits,omitempty"`
+	Category        string       `json:"category,omitempty"`
+	IndicativePrice bool         `json:"indicative_price,omitempty"`
 	PriceTables     []PriceTable `json:"price_tables,omitempty"`
-	Series          string      `json:"series,omitempty"`
-	ModelVersion    string      `json:"model_version,omitempty"`
-	Tags            []string    `json:"tags,omitempty"`
-	Description     string      `json:"description,omitempty"`
-	Deprecated      bool        `json:"deprecated,omitempty"`
-	IconURL         string      `json:"icon_url,omitempty"`
-	SimplePriceText string      `json:"simple_price_text,omitempty"`
-	SubCategory     string      `json:"sub_category,omitempty"`
+	Series          string       `json:"series,omitempty"`
+	ModelVersion    string       `json:"model_version,omitempty"`
+	Tags            []string     `json:"tags,omitempty"`
+	Description     string       `json:"description,omitempty"`
+	Deprecated      bool         `json:"deprecated,omitempty"`
+	IconURL         string       `json:"icon_url,omitempty"`
+	SimplePriceText string       `json:"simple_price_text,omitempty"`
+	SubCategory     string       `json:"sub_category,omitempty"`
 }
 
 // ModelzooTag 能力标签

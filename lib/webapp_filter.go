@@ -20,11 +20,6 @@ type AIApplicationFilter struct {
 	Keyword   string
 }
 
-// Empty 判断筛选条件是否为空。
-func (f AIApplicationFilter) Empty() bool {
-	return f.Sort == "" && f.BaseModel == "" && f.Keyword == ""
-}
-
 // FilterAIApplications 按筛选条件过滤应用列表；条件为空时原样返回。
 func FilterAIApplications(apps []*BizyModelInfo, f AIApplicationFilter) []*BizyModelInfo {
 	result := apps

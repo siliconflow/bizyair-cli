@@ -204,7 +204,6 @@ type WebAppVersionDetailResult struct {
 type CreateWebAppTaskResult struct {
 	TaskID     int64
 	TaskStatus string
-	WssURL     string
 	Error      error
 }
 

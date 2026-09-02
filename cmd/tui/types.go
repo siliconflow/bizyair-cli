@@ -318,10 +318,6 @@ type taskStatusMsg struct {
 	err    error
 }
 
-type taskCancelledMsg struct {
-	err error
-}
-
 // clearCopyFeedbackMsg 复制成功提示自动消失的消息。
 type clearCopyFeedbackMsg struct{}
 
@@ -427,14 +423,22 @@ type aiAppInputs struct {
 
 	sortOpts      []filterOption
 	baseModelOpts []filterOption
+
+	enrichOffset int
+}
+
+// aiAppEnrichMsg AI 应用发布时间后台回填进度。
+type aiAppEnrichMsg struct {
+	done  int
+	total int
+	err   error
 }
 
 // aiAppTaskStep AI 应用任务步骤。
 type aiAppTaskStep int
 
 const (
-	aiAppTaskNone aiAppTaskStep = iota
-	aiAppTaskParamPoll
+	aiAppTaskParamPoll aiAppTaskStep = iota
 	aiAppTaskSubmitted
 	aiAppTaskPolling
 	aiAppTaskResult
@@ -479,7 +483,6 @@ type aiAppDetailDoneMsg struct {
 type aiAppTaskCreatedMsg struct {
 	taskID     int64
 	taskStatus string
-	wssURL     string
 	err        error
 }
 
@@ -491,8 +494,4 @@ type aiAppTaskStatusMsg struct {
 type aiAppTaskOutputsMsg struct {
 	outputs []lib.WebAppTaskOutput
 	err     error
-}
-
-type aiAppTaskCancelledMsg struct {
-	err error
 }

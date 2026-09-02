@@ -194,14 +194,3 @@ func GetTaskStatus(ctx context.Context, api lib.BizyAPI, requestID string) TaskS
 		Status: status,
 	}
 }
-
-func GetTaskCancel(ctx context.Context, api lib.BizyAPI, requestID string) error {
-	if ctx == nil {
-		ctx = context.Background()
-	}
-	err := api.CancelModelZooTaskContext(ctx, requestID)
-	if err != nil {
-		return lib.WithStep(i18n.T("step.cancel_task", nil), err)
-	}
-	return nil
-}

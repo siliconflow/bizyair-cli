@@ -25,7 +25,6 @@ func WebAppNodeToParam(n WebAppInputNode) ModelzooInputParam {
 	return ModelzooInputParam{
 		VariableName: n.VariableName,
 		VariableType: WebAppNodeVariableType(n),
-		FieldName:    n.FieldName,
 		FieldType:    n.FieldType,
 		FieldValue:   n.FieldValue,
 		FieldLabel:   n.FieldLabel,
@@ -156,9 +155,9 @@ func MissingWebAppRequiredParams(detail *WebAppDetail, params map[string]any) []
 	}
 	var missing []WebAppInputNode
 	for _, n := range detail.InputNodes {
-		key := n.FieldName
+		key := n.VariableName
 		if key == "" {
-			key = n.VariableName
+			key = n.FieldName
 		}
 		if key == "" {
 			continue
@@ -181,9 +180,9 @@ func ApplyWebAppFieldDefaults(params map[string]any, detail *WebAppDetail) {
 		return
 	}
 	for _, n := range detail.InputNodes {
-		key := n.FieldName
+		key := n.VariableName
 		if key == "" {
-			key = n.VariableName
+			key = n.FieldName
 		}
 		if key == "" || n.FieldValue == nil {
 			continue
@@ -194,12 +193,12 @@ func ApplyWebAppFieldDefaults(params map[string]any, detail *WebAppDetail) {
 	}
 }
 
-// WebAppNodeParamKey 返回输入节点的参数键名。
+// WebAppNodeParamKey 返回输入节点的参数键名（优先 VariableName，与 ComfyUI 工作流键名对齐）。
 func WebAppNodeParamKey(n WebAppInputNode) string {
-	if n.FieldName != "" {
-		return n.FieldName
+	if n.VariableName != "" {
+		return n.VariableName
 	}
-	return n.VariableName
+	return n.FieldName
 }
 
 // WebAppFieldLabel 返回本地化参数标签。
@@ -211,4 +210,27 @@ func WebAppFieldLabel(n WebAppInputNode) string {
 		return n.VariableName
 	}
 	return n.FieldName
+}
+
+// WebAppTaskStatusName 返回 AI 应用任务状态的本地化名称；
+// 兼容 comfy 任务（Queuing/Preparing/Queued/Running/Success/Failed/Cancelled/Transferring）。
+func WebAppTaskStatusName(status string) string {
+	switch status {
+	case TaskStatusSuccess:
+		return i18n.T("tui.ai_app.task_status_success", nil)
+	case TaskStatusFailed:
+		return i18n.T("tui.ai_app.task_status_failed", nil)
+	case TaskStatusRunning:
+		return i18n.T("tui.ai_app.task_status_running", nil)
+	case TaskStatusQueued, "Queuing":
+		return i18n.T("tui.ai_app.task_status_queued", nil)
+	case TaskStatusCancelled:
+		return i18n.T("tui.ai_app.task_status_cancelled", nil)
+	case TaskStatusTransferring:
+		return i18n.T("tui.ai_app.task_status_transferring", nil)
+	case "Preparing":
+		return i18n.T("tui.ai_app.task_status_preparing", nil)
+	default:
+		return status
+	}
 }

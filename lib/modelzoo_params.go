@@ -39,29 +39,37 @@ func MissingModelzooRequiredParams(inputParams []ModelzooInputParam, params map[
 }
 
 // CoerceModelzooParamValue 按参数类型解析并转换用户输入值。
-// number/float → float64，integer → int64，boolean → bool，其余原样返回字符串。
+// number/float → float64，integer → int64，boolean → bool，
+// 其余（string 等）先尝试解析为数字以匹配 API 数值类型，失败则原样返回字符串。
 // 解析失败时返回原始字符串与错误，供调用方决定行为。
 func CoerceModelzooParamValue(vtype, raw string) (any, error) {
+	trimmed := strings.TrimSpace(raw)
 	switch vtype {
 	case "number", "float":
-		f, err := strconv.ParseFloat(strings.TrimSpace(raw), 64)
+		f, err := strconv.ParseFloat(trimmed, 64)
 		if err != nil {
 			return raw, err
 		}
 		return f, nil
 	case "integer":
-		i, err := strconv.ParseInt(strings.TrimSpace(raw), 10, 64)
+		i, err := strconv.ParseInt(trimmed, 10, 64)
 		if err != nil {
 			return raw, err
 		}
 		return i, nil
 	case "boolean":
-		b, err := strconv.ParseBool(strings.TrimSpace(raw))
+		b, err := strconv.ParseBool(trimmed)
 		if err != nil {
 			return raw, err
 		}
 		return b, nil
 	default:
+		if i, err := strconv.ParseInt(trimmed, 10, 64); err == nil {
+			return i, nil
+		}
+		if f, err := strconv.ParseFloat(trimmed, 64); err == nil {
+			return f, nil
+		}
 		return raw, nil
 	}
 }
@@ -75,12 +83,14 @@ func ModelzooStatusName(status string) string {
 		return i18n.T("common.modelzoo.task_status_failed", nil)
 	case TaskStatusRunning:
 		return i18n.T("common.modelzoo.task_status_running", nil)
-	case TaskStatusQueued:
+	case TaskStatusQueued, "Queuing":
 		return i18n.T("common.modelzoo.task_status_queued", nil)
 	case TaskStatusCancelled:
 		return i18n.T("common.modelzoo.task_status_cancelled", nil)
 	case TaskStatusTransferring:
 		return i18n.T("common.modelzoo.task_status_transferring", nil)
+	case "Preparing":
+		return i18n.T("common.modelzoo.task_status_preparing", nil)
 	default:
 		return status
 	}

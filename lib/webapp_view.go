@@ -2,7 +2,6 @@ package lib
 
 import (
 	"strconv"
-	"strings"
 	"time"
 
 	"github.com/siliconflow/bizyair-cli/internal/i18n"
@@ -90,26 +89,4 @@ func formatCreatedAt(ts string) string {
 
 func countText(v int) string {
 	return strconv.Itoa(v)
-}
-
-// AIApplicationSearchFields 返回应用关键字搜索覆盖的字段。
-func AIApplicationSearchFields(app *BizyModelInfo) []string {
-	if app == nil {
-		return nil
-	}
-	return []string{app.Name, app.Description, AIApplicationBaseModel(app)}
-}
-
-// ContainsKeyword 判断某个应用是否命中关键字（大小写不敏感）。
-func ContainsKeyword(app *BizyModelInfo, q string) bool {
-	q = strings.ToLower(strings.TrimSpace(q))
-	if q == "" {
-		return true
-	}
-	for _, f := range AIApplicationSearchFields(app) {
-		if strings.Contains(strings.ToLower(f), q) {
-			return true
-		}
-	}
-	return false
 }

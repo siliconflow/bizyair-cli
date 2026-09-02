@@ -51,13 +51,6 @@ func createTaskCmd(api lib.BizyAPI, endpoint string, params map[string]any) tea.
 	}
 }
 
-func cancelTaskCmd(api lib.BizyAPI, requestID string) tea.Cmd {
-	return func() tea.Msg {
-		err := actions.GetTaskCancel(context.Background(), api, requestID)
-		return taskCancelledMsg{err: err}
-	}
-}
-
 func pollTaskStatus(api lib.BizyAPI, requestID string) tea.Cmd {
 	return tea.Tick(2*time.Second, func(_ time.Time) tea.Msg {
 		result := actions.GetTaskStatus(context.Background(), api, requestID)

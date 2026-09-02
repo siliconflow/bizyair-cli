@@ -3,7 +3,6 @@ package cmd
 import (
 	"fmt"
 	"os"
-	"strconv"
 	"strings"
 	"time"
 
@@ -19,13 +18,9 @@ func AppRun(c *cli.Context) error {
 	setLogVerbose(args.Verbose)
 	logArguments(args)
 
-	idStr := c.Args().First()
-	if idStr == "" {
+	arg := c.Args().First()
+	if arg == "" {
 		return cli.Exit(i18n.NewError("cli.app.id_required", nil, nil), meta.LoadError)
-	}
-	versionID, err := strconv.ParseInt(idStr, 10, 64)
-	if err != nil {
-		return cli.Exit(i18n.NewError("cli.app.not_found", map[string]any{"ID": idStr}, err), meta.LoadError)
 	}
 
 	_, client, err := ResolveClient(args)
@@ -33,13 +28,18 @@ func AppRun(c *cli.Context) error {
 		return cli.Exit(err, meta.LoadError)
 	}
 
-	detailResult := actions.GetAIAppDetail(c.Context, client, versionID)
+	ref, err := resolveWebAppVersion(c, client, args, arg)
+	if err != nil {
+		return cli.Exit(err, meta.LoadError)
+	}
+
+	detailResult := actions.GetAIAppDetail(c.Context, client, ref.VersionID)
 	if detailResult.Error != nil {
 		return cli.Exit(detailResult.Error, meta.ServerError)
 	}
 	detail := detailResult.Detail
 	if detail == nil {
-		return cli.Exit(i18n.NewError("cli.app.not_found", map[string]any{"ID": idStr}, nil), meta.ServerError)
+		return cli.Exit(i18n.NewError("cli.app.not_found", map[string]any{"ID": arg}, nil), meta.ServerError)
 	}
 
 	params, err := buildAppRunParams(c, detail)
@@ -98,7 +98,7 @@ func AppRun(c *cli.Context) error {
 			printRunFailure(status, time.Since(start))
 			return nil
 		default:
-			printRunPolling(spinner[si%len(spinner)], lib.ModelzooStatusName(status), time.Since(start))
+			printRunPolling(spinner[si%len(spinner)], lib.WebAppTaskStatusName(status), time.Since(start))
 			si++
 		}
 	}
@@ -107,7 +107,7 @@ func AppRun(c *cli.Context) error {
 // printAppRunSuccess 输出任务成功的头两行。
 
 func printAppRunSuccess() {
-	fmt.Fprintf(os.Stdout, "%s %s\n", green(i18n.T("cli.icon.success", nil)), green(bold(lib.ModelzooStatusName(lib.TaskStatusSuccess))))
+	fmt.Fprintf(os.Stdout, "%s %s\n", green(i18n.T("cli.icon.success", nil)), green(bold(lib.WebAppTaskStatusName(lib.TaskStatusSuccess))))
 }
 
 // buildAppRunParams 从 CLI 参数收集 AI 应用运行输入：
@@ -117,11 +117,13 @@ func buildAppRunParams(c *cli.Context, detail *lib.WebAppDetail) (map[string]any
 	params := make(map[string]any)
 
 	nodeMediaMap := make(map[string]bool)
+	nodeTypeMap := make(map[string]string)
 	for _, n := range detail.InputNodes {
 		key := lib.WebAppNodeParamKey(n)
 		if lib.IsWebAppMediaNode(n) {
 			nodeMediaMap[key] = true
 		}
+		nodeTypeMap[key] = lib.WebAppNodeVariableType(n)
 	}
 
 	for _, kv := range c.StringSlice("param") {
@@ -134,7 +136,15 @@ func buildAppRunParams(c *cli.Context, detail *lib.WebAppDetail) (map[string]any
 		if nodeMediaMap[key] && !lib.IsHTTPURL(val) {
 			return nil, fmt.Errorf("%s", i18n.T("cli.app.run.error.url_invalid", map[string]any{"Key": key}))
 		}
-		params[key] = val
+		vtype := nodeTypeMap[key]
+		if vtype == "" {
+			vtype = "string"
+		}
+		coerced, err := lib.CoerceModelzooParamValue(vtype, val)
+		if err != nil {
+			return nil, fmt.Errorf("%s: %w", key, err)
+		}
+		params[key] = coerced
 	}
 
 	for _, kv := range c.StringSlice("image") {

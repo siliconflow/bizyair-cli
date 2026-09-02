@@ -325,10 +325,6 @@ func (m *mainModel) updateAIAppTaskParamPoll(msg tea.Msg) tea.Cmd {
 func (m *mainModel) updateAIAppTaskPolling(msg tea.Msg) tea.Cmd {
 	if km, ok := msg.(tea.KeyMsg); ok {
 		switch km.String() {
-		case "x":
-			if m.aiAppTask.requestID != "" {
-				return cancelAIAppTask(m.getAPI(), m.aiAppTask.requestID)
-			}
 		case "esc":
 			m.step = mainStepAIAppDetail
 			m.running = false
@@ -338,13 +334,22 @@ func (m *mainModel) updateAIAppTaskPolling(msg tea.Msg) tea.Cmd {
 	return nil
 }
 
-// updateAIAppTaskResult 处理结果页按键。
+// updateAIAppTaskResult 处理结果页按键（含复制快捷键）。
 func (m *mainModel) updateAIAppTaskResult(msg tea.Msg) tea.Cmd {
 	if km, ok := msg.(tea.KeyMsg); ok {
 		switch km.String() {
 		case "enter", "esc":
 			m.step = mainStepAIApp
 			return nil
+		case "ctrl+y":
+			if len(m.outputURLs) > 0 {
+				return m.copyResultURLs()
+			}
+		case "ctrl+u":
+			if m.aiAppTask.requestID != "" {
+				m.copyFeedback = writeClipboard(m.aiAppTask.requestID, i18n.T("tui.task_model.copied_request_id", nil))
+				return m.feedbackClearCmd()
+			}
 		}
 	}
 	return nil
@@ -353,26 +358,23 @@ func (m *mainModel) updateAIAppTaskResult(msg tea.Msg) tea.Cmd {
 // renderAIAppTaskView 渲染 AI 应用任务页面。
 func (m *mainModel) renderAIAppTaskView() string {
 	var b strings.Builder
-	b.WriteString(m.titleStyle.Render(i18n.T("tui.ai_app.running_title", nil)))
-	b.WriteString("\n\n")
+	if m.aiAppTask.step != aiAppTaskResult {
+		b.WriteString(m.titleStyle.Render(i18n.T("tui.ai_app.running_title", nil)))
+		b.WriteString("\n\n")
+	}
 
 	switch m.aiAppTask.step {
 	case aiAppTaskParamPoll:
-		b.WriteString(m.titleStyle.Render(i18n.T("tui.ai_app.task_param_title", nil)))
-		b.WriteString("\n\n")
 		if p := m.currentAIAppTaskParam(); p != nil {
 			total := len(m.aiAppTask.fields)
-			b.WriteString(m.hintStyle.Render(i18n.T("tui.task_model.param_progress", map[string]any{
-				"Current": m.aiAppTask.currentParamIdx + 1, "Total": total,
-			})))
-			b.WriteString("\n\n")
-
 			label := i18n.APITranslate("param_label", p.FieldLabel)
 			if p.Required {
 				label += i18n.T("tui.task_model.required_marker", nil)
 			}
-			b.WriteString(m.titleStyle.Render(label))
-			b.WriteString("\n")
+			b.WriteString(m.titleStyle.Render(i18n.T("tui.ai_app.task_nav_title", map[string]any{
+				"Current": m.aiAppTask.currentParamIdx + 1, "Total": total, "Name": label,
+			})))
+			b.WriteString("\n\n")
 
 			if p.VariableType == "image" || p.VariableType == "video" {
 				b.WriteString(m.hintStyle.Render(i18n.T("tui.task_model.url_hint", map[string]any{"Type": variableTypeDisplayName(p.VariableType)})))
@@ -421,26 +423,36 @@ func (m *mainModel) renderAIAppTaskView() string {
 		spin := m.sp.View()
 		b.WriteString(i18n.T("tui.ai_app.generating_title", nil))
 		b.WriteString("\n\n")
-		b.WriteString(fmt.Sprintf("%s: %s\n", i18n.T("cli.app.run.request_id_label", nil), m.aiAppTask.requestID))
+		b.WriteString(fmt.Sprintf("%s %s\n", i18n.T("cli.app.run.request_id_label", nil), m.aiAppTask.requestID))
 		b.WriteString("\n")
-		if m.aiAppTask.lastPollStatus != "" {
-			b.WriteString(spin + " " + lib.ModelzooStatusName(m.aiAppTask.lastPollStatus))
-		} else {
-			b.WriteString(spin + " " + i18n.T("tui.status.waiting_api", nil))
+		statusText := lib.WebAppTaskStatusName(m.aiAppTask.lastPollStatus)
+		if m.aiAppTask.lastPollStatus == "" {
+			statusText = i18n.T("tui.status.waiting_api", nil)
 		}
-		b.WriteString("\n")
+		line := spin + " " + statusText
 		if !m.aiAppTask.startedAt.IsZero() {
-			b.WriteString(fmt.Sprintf("%s %s\n",
-				i18n.T("cli.app.run.elapsed_label", nil),
-				taskElapsedText(time.Since(m.aiAppTask.startedAt))))
+			line += " " + taskElapsedText(time.Since(m.aiAppTask.startedAt))
 		}
+		b.WriteString(line)
 		b.WriteString("\n\n")
 		b.WriteString(m.hintStyle.Render(i18n.T("tui.ai_app.hint_task_poll", nil)))
 
 	case aiAppTaskResult:
-		b.WriteString(m.titleStyle.Render(i18n.T("tui.status.done", nil)))
+		b.WriteString(m.titleStyle.Render(i18n.T("tui.ai_app.task_result_nav", nil)))
 		b.WriteString("\n\n")
-		b.WriteString(fmt.Sprintf("%s: %s\n", i18n.T("cli.app.run.request_id_label", nil), m.aiAppTask.requestID))
+		statusColor := "#34D399"
+		statusIcon := "✓ "
+		switch m.aiAppTask.lastPollStatus {
+		case lib.TaskStatusFailed:
+			statusColor = "#F87171"
+			statusIcon = "✗ "
+		case lib.TaskStatusCancelled:
+			statusColor = "#FBBF24"
+			statusIcon = "✗ "
+		}
+		b.WriteString(lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color(statusColor)).Render(statusIcon + lib.WebAppTaskStatusName(m.aiAppTask.lastPollStatus)))
+		b.WriteString("\n\n")
+		b.WriteString(fmt.Sprintf("%s %s\n", i18n.T("cli.app.run.request_id_label", nil), m.aiAppTask.requestID))
 		b.WriteString("\n")
 		if len(m.outputURLs) > 0 {
 			b.WriteString(lipgloss.NewStyle().Foreground(lipgloss.Color("#34D399")).Render(i18n.T("tui.task_model.result_url_label", nil)))
@@ -448,6 +460,12 @@ func (m *mainModel) renderAIAppTaskView() string {
 			b.WriteString(strings.Join(m.outputURLs, "\n"))
 			b.WriteString("\n")
 		}
+		if m.copyFeedback != "" {
+			b.WriteString("\n")
+			b.WriteString(m.renderStyledHint(m.copyFeedback))
+			b.WriteString("\n")
+		}
+		b.WriteString("\n")
 		b.WriteString(m.hintStyle.Render(i18n.T("tui.ai_app.hint_task_result", nil)))
 	}
 

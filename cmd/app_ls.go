@@ -39,6 +39,8 @@ func AppList(c *cli.Context) error {
 		return cli.Exit(result.Error, meta.ServerError)
 	}
 
+	actions.EnrichAIApplications(c.Context, client, result.Apps, 16)
+
 	apps := lib.FilterAIApplications(result.Apps, lib.AIApplicationFilter{
 		Sort:      sort,
 		BaseModel: baseModel,

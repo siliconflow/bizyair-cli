@@ -493,14 +493,10 @@ func (m mainModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		switch msg.String() {
 		case "ctrl+y":
-			if len(m.outputURLs) > 0 && ((m.step == mainStepOutput && m.taskModel.step == taskModelResult) || (m.step == mainStepAIAppTask && m.aiAppTask.step == aiAppTaskResult)) {
+			if len(m.outputURLs) > 0 && m.step == mainStepOutput && m.taskModel.step == taskModelResult {
 				return m, m.copyResultURLs()
 			}
 		case "ctrl+u":
-			if m.step == mainStepAIAppTask && m.aiAppTask.step == aiAppTaskResult && m.aiAppTask.requestID != "" {
-				m.copyFeedback = writeClipboard(m.aiAppTask.requestID, i18n.T("tui.task_model.copied_request_id", nil))
-				return m, m.feedbackClearCmd()
-			}
 			if m.step == mainStepOutput && m.taskModel.step == taskModelResult && m.taskModel.requestID != "" {
 				return m, m.copyRequestID()
 			}
@@ -906,15 +902,6 @@ func (m mainModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.running = true
 			return m, pollTaskStatus(m.getAPI(), m.taskModel.requestID)
 		}
-	case taskCancelledMsg:
-		m.running = false
-		if msg.err != nil {
-			m.err = msg.err
-			return m, nil
-		}
-		m.taskModel.step = taskModelResult
-		m.taskModel.lastPollStatus = lib.TaskStatusCancelled
-		return m, nil
 	case aiAppsDoneMsg:
 		m.running = false
 		if msg.err != nil {
@@ -928,6 +915,21 @@ func (m mainModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.applyAIAppFilters()
 		if m.step != mainStepAIAppDetail {
 			m.step = mainStepAIApp
+		}
+		if len(m.aiApp.apps) == 0 {
+			return m, nil
+		}
+		return m, enrichAIAppChunk(m.getAPI(), m.aiApp.apps, 0, aiAppEnrichChunkSize)
+	case aiAppEnrichMsg:
+		m.aiApp.enrichOffset = msg.done
+		if msg.err == nil && msg.done < msg.total {
+			if m.step == mainStepAIApp {
+				m.applyAIAppFilters()
+			}
+			return m, enrichAIAppChunk(m.getAPI(), m.aiApp.apps, msg.done, aiAppEnrichChunkSize)
+		}
+		if msg.err == nil && m.step == mainStepAIApp {
+			m.applyAIAppFilters()
 		}
 		return m, nil
 	case aiAppDetailDoneMsg:
@@ -988,16 +990,6 @@ func (m mainModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.outputURLs = aiAppTaskOutputURLs(msg.outputs)
 		m.aiAppTask.step = aiAppTaskResult
 		m.copyFeedback = ""
-		m.step = mainStepAIAppTask
-		return m, nil
-	case aiAppTaskCancelledMsg:
-		m.running = false
-		if msg.err != nil {
-			m.err = msg.err
-			return m, nil
-		}
-		m.aiAppTask.step = aiAppTaskResult
-		m.aiAppTask.lastPollStatus = lib.TaskStatusCancelled
 		m.step = mainStepAIAppTask
 		return m, nil
 	case clearCopyFeedbackMsg:
@@ -1225,8 +1217,20 @@ func (m mainModel) View() string {
 			}
 			return m.renderFrame(header + "\n" + panel.Render(m.renderUploadRunningView()))
 		}
-		spin := m.sp.View()
-		return m.renderFrame(header + "\n" + panel.Render(m.titleStyle.Render(i18n.T("tui.status.running", nil))+"\n\n"+spin+" "+i18n.T("tui.status.waiting_api", nil)))
+		// 任务轮询/提交页有专用渲染（含实时状态与用时），优先于通用加载页
+		if m.step == mainStepTaskModel && (m.taskModel.step == taskModelPolling || m.taskModel.step == taskModelResult) {
+			return m.renderFrame(header + "\n" + panel.Render(m.renderTaskModelView()))
+		}
+		if m.step == mainStepAIAppTask && (m.aiAppTask.step == aiAppTaskSubmitted || m.aiAppTask.step == aiAppTaskPolling) {
+			return m.renderFrame(header + "\n" + panel.Render(m.renderAIAppTaskView()))
+		}
+		// 列表加载中各模块显示自身的等待提示
+		if m.step == mainStepModelzoo && !m.modelzooLoaded {
+			return m.renderFrame(header + "\n" + panel.Render(m.renderModelzooView()))
+		}
+		if m.step == mainStepAIApp && !m.aiAppLoaded {
+			return m.renderFrame(header + "\n" + panel.Render(m.renderAIAppView()))
+		}
 	}
 	switch m.step {
 	case mainStepLogin:
@@ -1289,10 +1293,6 @@ func (m mainModel) View() string {
 	case mainStepTaskModel:
 		return m.renderFrame(header + "\n" + panel.Render(m.renderTaskModelView()))
 	default:
-		if m.running {
-			spin := m.sp.View()
-			return m.renderFrame(header + "\n" + panel.Render(m.titleStyle.Render(i18n.T("tui.status.running", nil))+"\n\n"+spin+" "+i18n.T("tui.status.waiting_api", nil)))
-		}
 		return m.renderFrame(header)
 	}
 }

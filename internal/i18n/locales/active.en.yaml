@@ -39,6 +39,8 @@ common:
     task_status_failed: "Failed"
     task_status_running: "Running"
     task_status_queued: "Queued"
+    task_status_queuing: "Queuing"
+    task_status_preparing: "Preparing"
     task_status_cancelled: "Cancelled"
     task_status_transferring: "Transferring"
   aiapp:
@@ -355,11 +357,21 @@ tui:
     cancel_success: "Task cancelled (request ID: {{.RequestID}})"
     hint_list: "<↑/k> Up\n<↓/j> Down\n<Enter> Detail\n<s> Sort\n<m> Base Model\n</> Search\n<r> Reset\n<Esc> Back"
     hint_detail: "<t> Run task\n<Esc> Back"
-    hint_task_poll: "<x> Cancel\n<Esc> Back"
+    hint_task_poll: "<Esc> Back"
     hint_task_result: "Ctrl+Y Copy URLs · Enter Back"
     task_param_title: "Task Parameters"
+    task_nav_title: "AI App · Step {{.Current}}/{{.Total}} · {{.Name}}"
     task_review_title: "Review & Submit"
     task_no_params: "No parameters to configure."
+    task_result_nav: "AI App · Finished"
+    task_status_queued: "Queued"
+    task_status_queuing: "Queuing"
+    task_status_preparing: "Preparing"
+    task_status_running: "Running"
+    task_status_success: "Success"
+    task_status_failed: "Failed"
+    task_status_cancelled: "Cancelled"
+    task_status_transferring: "Transferring"
   task_model:
     hint: "Enter Select | Esc Back"
     url_placeholder: "Enter {{.Type}} URL (http/https)..."
@@ -380,11 +392,11 @@ tui:
     required_marker: " *"
     url_hint: "Enter {{.Type}} URL"
     generating_title: "Generating..."
-    cancel_hint: "Press X to cancel"
+    cancel_hint: "<Esc> Back"
     status_label: "Status"
     select_hint: "Select an option from the list (Enter to confirm)"
     text_hint: "Enter content below (Ctrl+S saves · Enter for newline)"
-    param_hint_input: "Enter Confirm & next · Ctrl+U Clear · Ctrl+R Reset · Esc Back"
+    param_hint_input: "<Enter> Confirm & next\n<Ctrl+U> Clear\n<Ctrl+R> Reset\n<Esc> Back"
     output_name_title: "Name the Output"
     output_name_prompt: "Name:"
     output_name_placeholder: "Enter a name (optional, skip if empty)"
@@ -491,8 +503,8 @@ cli:
       Examples:
         bizyair ai-app ls --keyword "logo"
         bizyair ai-app ls --sort MostUsed --base-model "SDXL"
-        bizyair ai-app detail <app_id>
-        bizyair ai-app run <app_id> --param "prompt=...\" --image \"image=url\"
+        bizyair ai-app detail <name or version_id>
+        bizyair ai-app run <name or version_id> --param "prompt=...\" --image \"image=url\"
     login_desc: |-
       Log in to BizyAir using an API key.
 
@@ -541,7 +553,7 @@ cli:
   args:
     id_or_name: "[<id|name>]"
     endpoint: "<endpoint>"
-    app_id: "<app_id>"
+    app_id: "<name or version_id>"
   whoami:
     id_label: "ID"
     name_label: "Name"
@@ -708,8 +720,10 @@ cli:
     ls_count: "Total: {{.Count}} applications"
     ls_page: "Page {{.Current}} of {{.Pages}} · {{.Total}} applications total · {{.Shown}} on this page"
     ls_page_next: "(See next page: bizyair ai-app ls --page {{.Next}})"
-    id_required: "Application ID is required."
+    id_required: "Application name or version ID is required."
     not_found: "Application {{.ID}} not found."
+    ambiguous: "Multiple applications match the name \"{{.Name}}\":"
+    candidates_line: "  - {{.Name}} (base: {{.BaseModel}}, ID: {{.ID}})"
     detail_title: "Application Detail"
     detail_id: "ID: {{.ID}}"
     detail_name: "Name: {{.Name}}"
@@ -741,8 +755,8 @@ cli:
         webapp_id_missing: "This application has no runnable web app binding."
         usage_hint: |-
           Usage examples:
-             bizyair ai-app run <app_id> --param "key=value" [--param "key=value" ...]
-             bizyair ai-app run <app_id> --image "key=url"
+             bizyair ai-app run <name or version_id> --param "key=value" [--param "key=value" ...]
+             bizyair ai-app run <name or version_id> --image "key=url"
   task:
     request_id_label: "Request ID"
   detail:
@@ -1006,8 +1020,6 @@ step:
   get_price_table: "Get price table"
   create_task: "Create task"
   get_task_status: "Get task status"
-  cancel_task: "Cancel task"
-  interrupt_task: "Interrupt task"
   list_ai_apps: "List AI applications"
   get_webapp_detail: "Get AI application detail"
   get_task_outputs: "Get task outputs"

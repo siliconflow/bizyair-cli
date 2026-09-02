@@ -2,6 +2,8 @@ package actions
 
 import (
 	"context"
+	"strings"
+	"sync"
 
 	"github.com/siliconflow/bizyair-cli/internal/i18n"
 	"github.com/siliconflow/bizyair-cli/lib"
@@ -38,6 +40,103 @@ func ListAIApplications(ctx context.Context, api lib.BizyAPI, keyword, sort stri
 	return AIApplicationsResult{
 		Apps:  apps,
 		Total: total,
+	}
+}
+
+// EnrichAIApplications 并发回填列表应用的发布时间。
+// 社区列表接口不返回 created_at，需逐个拉取版本详情；
+// 单条失败不中断，未取到时间的应用保持原值（显示 "-"）。
+func EnrichAIApplications(ctx context.Context, api lib.BizyAPI, apps []*lib.BizyModelInfo, workers int) {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	if workers < 1 {
+		workers = 8
+	}
+	if len(apps) == 0 || workers > len(apps) {
+		workers = len(apps)
+	}
+	if workers < 1 {
+		return
+	}
+	var wg sync.WaitGroup
+	jobs := make(chan *lib.BizyModelInfo)
+	for i := 0; i < workers; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for app := range jobs {
+				enrichAIApplicationCreatedAt(ctx, api, app)
+			}
+		}()
+	}
+	for _, app := range apps {
+		jobs <- app
+	}
+	close(jobs)
+	wg.Wait()
+}
+
+// enrichAIApplicationCreatedAt 用版本详情/WebApp 详情回填单个应用的发布时间。
+func enrichAIApplicationCreatedAt(ctx context.Context, api lib.BizyAPI, app *lib.BizyModelInfo) {
+	if app == nil || app.CreatedAt != "" || len(app.Versions) == 0 || app.Versions[0] == nil {
+		return
+	}
+	versionID := app.Versions[0].Id
+	if versionID > 0 {
+		if resp, err := api.GetWebappVersionDetailContext(ctx, versionID); err == nil && resp != nil {
+			if resp.Data.CreatedAt != "" {
+				app.CreatedAt = resp.Data.CreatedAt
+				return
+			}
+		}
+		if resp, err := api.GetWebappDetailByVersionContext(ctx, versionID); err == nil && resp != nil {
+			if resp.Data.CreatedAt != "" {
+				app.CreatedAt = resp.Data.CreatedAt
+			}
+		}
+	}
+}
+
+// ResolveAIAppByNameResult 按名称解析 AI 应用的结果。
+type ResolveAIAppByNameResult struct {
+	App        *lib.BizyModelInfo
+	Candidates []*lib.BizyModelInfo
+	Error      error
+}
+
+// ResolveAIAppByName 按名称（大小写不敏感）在社区列表中精确匹配应用。
+// 无匹配时返回错误；多个同名应用时返回候选列表交由调用方提示用户区分。
+func ResolveAIAppByName(ctx context.Context, api lib.BizyAPI, name string) ResolveAIAppByNameResult {
+	name = strings.TrimSpace(name)
+	if name == "" {
+		return ResolveAIAppByNameResult{
+			Error: i18n.NewError("cli.app.id_required", nil, nil),
+		}
+	}
+	resp, err := api.ListWebAppsContext(ctx, 1, 100, name)
+	if err != nil {
+		return ResolveAIAppByNameResult{
+			Error: lib.WithStep(i18n.T("step.list_ai_apps", nil), err),
+		}
+	}
+	var matched []*lib.BizyModelInfo
+	if resp != nil {
+		for _, app := range resp.Data.List {
+			if app != nil && strings.EqualFold(app.Name, name) {
+				matched = append(matched, app)
+			}
+		}
+	}
+	switch len(matched) {
+	case 0:
+		return ResolveAIAppByNameResult{
+			Error: i18n.NewError("cli.app.not_found", map[string]any{"ID": name}, nil),
+		}
+	case 1:
+		return ResolveAIAppByNameResult{App: matched[0]}
+	default:
+		return ResolveAIAppByNameResult{Candidates: matched}
 	}
 }
 
@@ -162,7 +261,6 @@ func CreateWebAppTask(ctx context.Context, api lib.BizyAPI, req lib.WebAppTaskCr
 	if resp != nil {
 		result.TaskID = resp.Data.TaskID
 		result.TaskStatus = resp.Data.TaskStatus
-		result.WssURL = resp.Data.WssURL
 	}
 	return result
 }
@@ -205,28 +303,4 @@ func GetWebAppTaskOutputs(ctx context.Context, api lib.BizyAPI, requestID string
 	return WebAppTaskOutputsResult{
 		Outputs: outputs,
 	}
-}
-
-// CancelWebAppTask 取消排队中的 AI 应用任务。
-func CancelWebAppTask(ctx context.Context, api lib.BizyAPI, requestID string) error {
-	if ctx == nil {
-		ctx = context.Background()
-	}
-	err := api.CancelWebappTaskContext(ctx, requestID)
-	if err != nil {
-		return lib.WithStep(i18n.T("step.cancel_task", nil), err)
-	}
-	return nil
-}
-
-// InterruptWebAppTask 中断运行中的 AI 应用任务。
-func InterruptWebAppTask(ctx context.Context, api lib.BizyAPI, requestID string) error {
-	if ctx == nil {
-		ctx = context.Background()
-	}
-	err := api.InterruptWebappTaskContext(ctx, requestID)
-	if err != nil {
-		return lib.WithStep(i18n.T("step.interrupt_task", nil), err)
-	}
-	return nil
 }

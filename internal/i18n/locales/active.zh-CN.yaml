@@ -36,9 +36,11 @@ common:
     price_kind_input: "输入"
     price_kind_output: "输出"
     task_status_success: "成功"
-    task_status_failed: "失败"
+    task_status_failed: "运行失败"
     task_status_running: "运行中"
     task_status_queued: "排队中"
+    task_status_queuing: "排队中"
+    task_status_preparing: "准备中"
     task_status_cancelled: "已取消"
     task_status_transferring: "传输中"
   aiapp:
@@ -355,11 +357,21 @@ tui:
     cancel_success: "任务已取消（请求 ID：{{.RequestID}}）"
     hint_list: "<↑/k> 上移\n<↓/j> 下移\n<Enter> 详情\n<s> 排序\n<m> 基础模型\n</> 搜索\n<r> 重置\n<Esc> 返回"
     hint_detail: "<t> 运行任务\n<Esc> 返回"
-    hint_task_poll: "<x> 取消\n<Esc> 返回"
+    hint_task_poll: "<Esc> 返回"
     hint_task_result: "Ctrl+Y 复制链接 · Enter 返回"
     task_param_title: "任务参数"
+    task_nav_title: "AI 应用 · 第 {{.Current}}/{{.Total}} 步 · {{.Name}}"
     task_review_title: "确认并提交"
     task_no_params: "无需配置参数。"
+    task_result_nav: "AI 应用 · 运行完成"
+    task_status_queued: "排队中"
+    task_status_queuing: "排队中"
+    task_status_preparing: "准备中"
+    task_status_running: "运行中"
+    task_status_success: "成功"
+    task_status_failed: "运行失败"
+    task_status_cancelled: "已取消"
+    task_status_transferring: "传输中"
   task_model:
     hint: "Enter 选择 | Esc 返回"
     url_placeholder: "输入 {{.Type}} URL（http/https）..."
@@ -380,11 +392,11 @@ tui:
     required_marker: " *"
     url_hint: "输入 {{.Type}} URL"
     generating_title: "任务生成中..."
-    cancel_hint: "按 X 取消"
+    cancel_hint: "<Esc> 返回"
     status_label: "状态"
     select_hint: "请从列表中选择一个选项（Enter 确认）"
     text_hint: "请在下方输入内容（Ctrl+S 保存并继续 · Enter 换行）"
-    param_hint_input: "Enter 确认并下一步 · Ctrl+U 清空 · Ctrl+R 重置 · Esc 返回"
+    param_hint_input: "<Enter> 确认并下一步\n<Ctrl+U> 清空\n<Ctrl+R> 重置\n<Esc> 返回"
     output_name_title: "命名生成结果"
     output_name_prompt: "名称:"
     output_name_placeholder: "输入名称（可选，留空跳过）"
@@ -491,8 +503,8 @@ cli:
       示例:
          bizyair ai-app ls --keyword "logo"
          bizyair ai-app ls --sort MostUsed --base-model "SDXL"
-         bizyair ai-app detail <应用ID>
-         bizyair ai-app run <应用ID> --param "prompt=..."
+         bizyair ai-app detail <名称或版本ID>
+         bizyair ai-app run <名称或版本ID> --param "prompt=..."
     login_desc: |-
       登录到 BizyAir。使用 API Key 认证。
 
@@ -541,7 +553,7 @@ cli:
   args:
     id_or_name: "[<id|name>]"
     endpoint: "<endpoint>"
-    app_id: "<应用ID>"
+    app_id: "<名称或版本ID>"
   whoami:
     id_label: "ID"
     name_label: "名称"
@@ -708,8 +720,10 @@ cli:
     ls_count: "共 {{.Count}} 个应用"
     ls_page: "第 {{.Current}}/{{.Pages}} 页 · 共 {{.Total}} 个应用 · 本页 {{.Shown}} 个"
     ls_page_next: "（查看下页：bizyair ai-app ls --page {{.Next}}）"
-    id_required: "必须提供应用 ID。"
+    id_required: "必须提供应用名称或版本 ID。"
     not_found: "未找到应用 {{.ID}}。"
+    ambiguous: "名称「{{.Name}}」对应多个应用："
+    candidates_line: "  - {{.Name}}（基座：{{.BaseModel}}，ID：{{.ID}}）"
     detail_title: "应用详情"
     detail_id: "ID：{{.ID}}"
     detail_name: "名称：{{.Name}}"
@@ -741,8 +755,8 @@ cli:
         webapp_id_missing: "该应用没有可运行的 WebApp 绑定。"
         usage_hint: |-
           用法示例:
-             bizyair ai-app run <应用ID> --param "key=value" [--param "key=value" ...]
-             bizyair ai-app run <应用ID> --image "key=url"
+             bizyair ai-app run <名称或版本ID> --param "key=value" [--param "key=value" ...]
+             bizyair ai-app run <名称或版本ID> --image "key=url"
   task:
     request_id_label: "请求 ID"
   detail:
@@ -1006,8 +1020,6 @@ step:
   get_price_table: "获取价格表"
   create_task: "创建任务"
   get_task_status: "获取任务状态"
-  cancel_task: "取消任务"
-  interrupt_task: "中断任务"
   list_ai_apps: "获取 AI 应用列表"
   get_webapp_detail: "获取 AI 应用详情"
   get_task_outputs: "获取任务输出"

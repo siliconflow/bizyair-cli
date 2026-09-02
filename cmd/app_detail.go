@@ -3,7 +3,6 @@ package cmd
 import (
 	"fmt"
 	"os"
-	"strconv"
 
 	"github.com/siliconflow/bizyair-cli/internal/i18n"
 	"github.com/siliconflow/bizyair-cli/lib"
@@ -17,13 +16,9 @@ func AppDetail(c *cli.Context) error {
 	setLogVerbose(args.Verbose)
 	logArguments(args)
 
-	idStr := c.Args().First()
-	if idStr == "" {
+	arg := c.Args().First()
+	if arg == "" {
 		return cli.Exit(i18n.NewError("cli.app.id_required", nil, nil), meta.LoadError)
-	}
-	appID, err := strconv.ParseInt(idStr, 10, 64)
-	if err != nil {
-		return cli.Exit(i18n.NewError("cli.app.not_found", map[string]any{"ID": idStr}, err), meta.LoadError)
 	}
 
 	_, client, err := ResolveClient(args)
@@ -31,13 +26,18 @@ func AppDetail(c *cli.Context) error {
 		return cli.Exit(err, meta.LoadError)
 	}
 
-	result := actions.GetWebAppDetail(c.Context, client, appID)
+	ref, err := resolveWebAppVersion(c, client, args, arg)
+	if err != nil {
+		return cli.Exit(err, meta.LoadError)
+	}
+
+	result := actions.GetWebAppDetail(c.Context, client, ref.VersionID)
 	if result.Error != nil {
 		return cli.Exit(result.Error, meta.ServerError)
 	}
 	d := result.Detail
 	if d == nil {
-		return cli.Exit(i18n.NewError("cli.app.not_found", map[string]any{"ID": idStr}, nil), meta.ServerError)
+		return cli.Exit(i18n.NewError("cli.app.not_found", map[string]any{"ID": arg}, nil), meta.ServerError)
 	}
 
 	fmt.Fprintln(os.Stdout, i18n.T("cli.app.detail_title", nil))
@@ -58,9 +58,10 @@ func AppDetail(c *cli.Context) error {
 		fmt.Fprintln(os.Stdout, i18n.T("cli.app.detail_params_header", nil))
 		for _, n := range d.InputNodes {
 			fmt.Fprintln(os.Stdout, i18n.T("cli.app.detail_param_line", map[string]any{
-				"Name":  lib.WebAppNodeParamKey(n),
-				"Label": lib.WebAppFieldLabel(n),
-				"Type":  variableTypeDisplayName(lib.WebAppNodeVariableType(n)),
+				"Name":     lib.WebAppNodeParamKey(n),
+				"Label":    lib.WebAppFieldLabel(n),
+				"Type":     variableTypeDisplayName(lib.WebAppNodeVariableType(n)),
+				"Required": "",
 			}))
 		}
 	}

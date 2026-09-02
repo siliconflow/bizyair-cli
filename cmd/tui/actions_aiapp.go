@@ -9,11 +9,32 @@ import (
 	"github.com/siliconflow/bizyair-cli/lib/actions"
 )
 
-// fetchAIApps 异步拉取社区 AI 应用列表。
+// aiAppEnrichChunkSize 每轮后台回填的应用数量。
+const aiAppEnrichChunkSize = 48
+
+// fetchAIApps 异步拉取社区 AI 应用列表（发布时间由后台分块回填，不阻塞打开）。
 func fetchAIApps(api lib.BizyAPI, keyword string) tea.Cmd {
 	return func() tea.Msg {
 		result := actions.ListAIApplications(context.Background(), api, keyword, lib.AIAppSortRecent, nil, 1, 500)
 		return aiAppsDoneMsg{apps: result.Apps, total: result.Total, err: result.Error}
+	}
+}
+
+// enrichAIAppChunk 回填一段应用的发布时间并报告进度；所有分块回填完毕后
+// 由主循环停止后续调用。块内并发请求，块序即列表序（最近发布在前），
+// 前面的行优先拿到发布时间。
+func enrichAIAppChunk(api lib.BizyAPI, apps []*lib.BizyModelInfo, offset, chunk int) tea.Cmd {
+	return func() tea.Msg {
+		total := len(apps)
+		if offset >= total {
+			return aiAppEnrichMsg{done: total, total: total}
+		}
+		end := offset + chunk
+		if end > total {
+			end = total
+		}
+		actions.EnrichAIApplications(context.Background(), api, apps[offset:end], chunk)
+		return aiAppEnrichMsg{done: end, total: total}
 	}
 }
 
@@ -32,7 +53,6 @@ func createAIAppTask(api lib.BizyAPI, req lib.WebAppTaskCreateReq) tea.Cmd {
 		return aiAppTaskCreatedMsg{
 			taskID:     result.TaskID,
 			taskStatus: result.TaskStatus,
-			wssURL:     result.WssURL,
 			err:        result.Error,
 		}
 	}
@@ -51,13 +71,5 @@ func getAIAppTaskOutputs(api lib.BizyAPI, requestID string) tea.Cmd {
 	return func() tea.Msg {
 		result := actions.GetWebAppTaskOutputs(context.Background(), api, requestID)
 		return aiAppTaskOutputsMsg{outputs: result.Outputs, err: result.Error}
-	}
-}
-
-// cancelAIAppTask 异步取消排队中的 AI 应用任务（按 request_id）。
-func cancelAIAppTask(api lib.BizyAPI, requestID string) tea.Cmd {
-	return func() tea.Msg {
-		err := actions.CancelWebAppTask(context.Background(), api, requestID)
-		return aiAppTaskCancelledMsg{err: err}
 	}
 }

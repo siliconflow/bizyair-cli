@@ -401,10 +401,10 @@ func (m *mainModel) updateOutputName(msg tea.Msg) tea.Cmd {
 func (m *mainModel) updateTaskPolling(msg tea.Msg) tea.Cmd {
 	if km, ok := msg.(tea.KeyMsg); ok {
 		switch km.String() {
-		case "x":
-			if m.taskModel.requestID != "" {
-				return cancelTaskCmd(m.getAPI(), m.taskModel.requestID)
-			}
+		case "esc":
+			m.step = mainStepModelzooDetail
+			m.running = false
+			return nil
 		}
 	}
 	return nil
@@ -507,17 +507,15 @@ func (m *mainModel) renderTaskModelView() string {
 		b.WriteString("\n\n")
 		b.WriteString(fmt.Sprintf("%s: %s\n", i18n.T("cli.task.request_id_label", nil), m.taskModel.requestID))
 		b.WriteString("\n")
-		if m.taskModel.lastPollStatus != "" {
-			b.WriteString(spin + " " + lib.ModelzooStatusName(m.taskModel.lastPollStatus))
-		} else {
-			b.WriteString(spin + " " + i18n.T("tui.status.waiting_api", nil))
+		statusText := lib.ModelzooStatusName(m.taskModel.lastPollStatus)
+		if m.taskModel.lastPollStatus == "" {
+			statusText = i18n.T("tui.status.waiting_api", nil)
 		}
-		b.WriteString("\n")
+		line := spin + " " + statusText
 		if !m.taskModel.startedAt.IsZero() {
-			b.WriteString(fmt.Sprintf("%s %s\n",
-				i18n.T("cli.modelzoo.run.elapsed_label", nil),
-				taskElapsedText(time.Since(m.taskModel.startedAt))))
+			line += " " + taskElapsedText(time.Since(m.taskModel.startedAt))
 		}
+		b.WriteString(line)
 		b.WriteString("\n\n")
 		b.WriteString(m.hintStyle.Render(i18n.T("tui.task_model.cancel_hint", nil)))
 
