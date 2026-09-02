@@ -26,6 +26,7 @@ const (
 	CmdModelzoo = "modelzoo"
 	CmdPrice    = "price"
 	CmdRun      = "run"
+	CmdApp      = "ai-app"
 )
 
 const (

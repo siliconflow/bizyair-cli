@@ -138,6 +138,13 @@ type mainModel struct {
 	priceTableContent    string
 	taskModel            taskModelInputs
 
+	// AI Applications
+	aiApp             aiAppInputs
+	aiAppTable        tablev2.Model
+	aiAppLoaded       bool
+	aiAppDetailScroll int
+	aiAppTask         aiAppTaskInputs
+
 	// 任务结果输出与复制反馈
 	outputURLs   []string
 	copyFeedback string
@@ -167,6 +174,7 @@ func newMainModelWithContext(ctx context.Context, baseDomain string) mainModel {
 		menuEntry{listItem{title: i18n.T("tui.menu.user_info", nil), desc: i18n.T("tui.menu.user_info_desc", nil)}, actionUserInfo},
 		menuEntry{listItem{title: i18n.T("tui.menu.models", nil), desc: i18n.T("tui.menu.models_desc", nil)}, actionLsModel},
 		menuEntry{listItem{title: i18n.T("tui.menu.modelzoo", nil), desc: i18n.T("tui.menu.modelzoo_desc", nil)}, actionModelzoo},
+		menuEntry{listItem{title: i18n.T("tui.menu.ai_app", nil), desc: i18n.T("tui.menu.ai_app_desc", nil)}, actionAIApp},
 		menuEntry{listItem{title: i18n.T("tui.menu.logout", nil), desc: i18n.T("tui.menu.logout_desc", nil)}, actionLogout},
 		menuEntry{listItem{title: i18n.T("tui.menu.exit", nil), desc: i18n.T("tui.menu.exit_desc", nil)}, actionExit},
 	}
@@ -364,6 +372,13 @@ func newMainModelWithContext(ctx context.Context, baseDomain string) mainModel {
 	m.modelzoo.search.TextStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("#E5E7EB"))
 	m.modelzoo.search.Placeholder = i18n.T("tui.modelzoo.search_placeholder", nil)
 	m.modelzoo.search.PlaceholderStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("#6B7280"))
+	m.aiApp.search = textinput.New()
+	m.aiApp.search.Prompt = "> "
+	m.aiApp.search.PromptStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("#FBBF24"))
+	m.aiApp.search.TextStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("#E5E7EB"))
+	m.aiApp.search.Placeholder = i18n.T("tui.ai_app.search_placeholder", nil)
+	m.aiApp.search.PlaceholderStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("#6B7280"))
+	m.aiApp.sortBy = lib.AIAppSortRecent
 	if key, err := lib.NewSfFolder().GetKey(); err == nil && key != "" {
 		m.loggedIn = true
 		m.apiKey = key
@@ -433,6 +448,9 @@ func (m mainModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.step == mainStepModelzoo && m.modelzooLoaded {
 			m.updateModelzooTable()
 		}
+		if m.step == mainStepAIApp && m.aiAppLoaded {
+			m.updateAIAppTable()
+		}
 		if m.step == mainStepPriceView && len(m.priceTables) > 0 {
 			m.buildPriceTableContent(m.priceTables)
 		}
@@ -464,12 +482,25 @@ func (m mainModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.step == mainStepPriceView {
 			return m, updatePriceView(&m, msg)
 		}
+		if m.step == mainStepAIApp {
+			return updateAIApp(&m, msg)
+		}
+		if m.step == mainStepAIAppDetail {
+			return updateAIAppDetail(&m, msg)
+		}
+		if m.step == mainStepAIAppTask {
+			return updateAIAppTask(&m, msg)
+		}
 		switch msg.String() {
 		case "ctrl+y":
-			if m.step == mainStepOutput && m.taskModel.step == taskModelResult && len(m.outputURLs) > 0 {
+			if len(m.outputURLs) > 0 && ((m.step == mainStepOutput && m.taskModel.step == taskModelResult) || (m.step == mainStepAIAppTask && m.aiAppTask.step == aiAppTaskResult)) {
 				return m, m.copyResultURLs()
 			}
 		case "ctrl+u":
+			if m.step == mainStepAIAppTask && m.aiAppTask.step == aiAppTaskResult && m.aiAppTask.requestID != "" {
+				m.copyFeedback = writeClipboard(m.aiAppTask.requestID, i18n.T("tui.task_model.copied_request_id", nil))
+				return m, m.feedbackClearCmd()
+			}
 			if m.step == mainStepOutput && m.taskModel.step == taskModelResult && m.taskModel.requestID != "" {
 				return m, m.copyRequestID()
 			}
@@ -543,6 +574,10 @@ func (m mainModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 							fetchModelzooTags(m.getAPI()),
 							fetchModelzooCategories(m.getAPI()),
 						)
+					case actionAIApp:
+						m.step = mainStepAIApp
+						m.running = true
+						return m, fetchAIApps(m.getAPI(), "")
 					case actionUserInfo:
 						m.step = mainStepUserInfo
 						return m, nil
@@ -596,6 +631,16 @@ func (m mainModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return m, nil
 			case mainStepTaskModel:
 				m.step = mainStepModelzoo
+				return m, nil
+			case mainStepAIApp:
+				m.step = mainStepMenu
+				return m, nil
+			case mainStepAIAppDetail:
+				m.step = mainStepAIApp
+				return m, nil
+			case mainStepAIAppTask:
+				m.step = mainStepAIAppDetail
+				m.running = false
 				return m, nil
 			}
 		default:
@@ -827,6 +872,7 @@ func (m mainModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		m.taskModel.requestID = msg.requestID
 		m.taskModel.step = taskModelPolling
+		m.taskModel.startedAt = time.Now()
 		m.running = true
 		return m, pollTaskStatus(m.getAPI(), msg.requestID)
 	case taskStatusMsg:
@@ -868,6 +914,91 @@ func (m mainModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		m.taskModel.step = taskModelResult
 		m.taskModel.lastPollStatus = lib.TaskStatusCancelled
+		return m, nil
+	case aiAppsDoneMsg:
+		m.running = false
+		if msg.err != nil {
+			m.err = msg.err
+			m.step = mainStepMenu
+			return m, nil
+		}
+		m.aiApp.apps = msg.apps
+		m.aiAppLoaded = true
+		m.extractAIAppFilterOptions()
+		m.applyAIAppFilters()
+		if m.step != mainStepAIAppDetail {
+			m.step = mainStepAIApp
+		}
+		return m, nil
+	case aiAppDetailDoneMsg:
+		m.running = false
+		if msg.err != nil {
+			m.err = msg.err
+			return m, nil
+		}
+		m.aiApp.detail = msg.detail
+		m.aiAppDetailScroll = 0
+		m.step = mainStepAIAppDetail
+		return m, nil
+	case aiAppTaskCreatedMsg:
+		m.running = false
+		if msg.err != nil {
+			m.err = msg.err
+			return m, nil
+		}
+		m.aiAppTask.taskID = msg.taskID
+		m.aiAppTask.requestID = ""
+		m.aiAppTask.startedAt = time.Now()
+		m.aiAppTask.step = aiAppTaskPolling
+		m.running = true
+		return m, pollAIAppTaskStatus(m.getAPI(), msg.taskID)
+	case aiAppTaskStatusMsg:
+		m.running = false
+		if msg.err != nil {
+			m.err = msg.err
+			return m, nil
+		}
+		if msg.status == nil {
+			m.running = true
+			return m, pollAIAppTaskStatus(m.getAPI(), m.aiAppTask.taskID)
+		}
+		m.aiAppTask.lastPollStatus = msg.status.Status
+		m.aiAppTask.requestID = msg.status.RequestID
+		switch msg.status.Status {
+		case lib.TaskStatusSuccess, lib.TaskStatusFailed, lib.TaskStatusCancelled:
+			m.running = true
+			if msg.status.Status == lib.TaskStatusSuccess && msg.status.RequestID != "" {
+				return m, getAIAppTaskOutputs(m.getAPI(), msg.status.RequestID)
+			}
+			m.aiAppTask.step = aiAppTaskResult
+			m.outputURLs = nil
+			m.copyFeedback = ""
+			m.step = mainStepAIAppTask
+			return m, nil
+		default:
+			m.running = true
+			return m, pollAIAppTaskStatus(m.getAPI(), m.aiAppTask.taskID)
+		}
+	case aiAppTaskOutputsMsg:
+		m.running = false
+		if msg.err != nil {
+			m.err = msg.err
+			return m, nil
+		}
+		m.outputURLs = aiAppTaskOutputURLs(msg.outputs)
+		m.aiAppTask.step = aiAppTaskResult
+		m.copyFeedback = ""
+		m.step = mainStepAIAppTask
+		return m, nil
+	case aiAppTaskCancelledMsg:
+		m.running = false
+		if msg.err != nil {
+			m.err = msg.err
+			return m, nil
+		}
+		m.aiAppTask.step = aiAppTaskResult
+		m.aiAppTask.lastPollStatus = lib.TaskStatusCancelled
+		m.step = mainStepAIAppTask
 		return m, nil
 	case clearCopyFeedbackMsg:
 		m.copyFeedback = ""
@@ -1147,6 +1278,12 @@ func (m mainModel) View() string {
 		return m.renderFrame(header + "\n" + panel.Render(m.renderModelzooView()))
 	case mainStepModelzooDetail:
 		return m.renderFrame(header + "\n" + panel.Render(m.renderModelzooDetailView()))
+	case mainStepAIApp:
+		return m.renderFrame(header + "\n" + panel.Render(m.renderAIAppView()))
+	case mainStepAIAppDetail:
+		return m.renderFrame(header + "\n" + panel.Render(m.renderAIAppDetailView()))
+	case mainStepAIAppTask:
+		return m.renderFrame(header + "\n" + panel.Render(m.renderAIAppTaskView()))
 	case mainStepPriceView:
 		return m.renderFrame(header + "\n" + panel.Render(m.renderPriceView()))
 	case mainStepTaskModel:
@@ -1204,6 +1341,9 @@ func (m *mainModel) syncListSizes() {
 	if m.modelzoo.filterMode != modelzooFilterNone {
 		m.modelzoo.filterList.SetSize(lw, h)
 	}
+	if m.aiApp.filterMode != aiAppFilterNone {
+		m.aiApp.filterList.SetSize(lw, h)
+	}
 
 	// 创建任务参数输入控件：枚举选择列表 / 多行文本域 / URL 输入框
 	if m.taskModel.usingSelect && len(m.taskModel.paramSelectList.Items()) > 0 {
@@ -1218,6 +1358,21 @@ func (m *mainModel) syncListSizes() {
 			ti.Width = w
 		}
 		m.taskModel.paramInputs[k] = ti
+	}
+
+	// AI 应用任务参数输入控件
+	if m.aiAppTask.usingSelect && len(m.aiAppTask.paramSelectList.Items()) > 0 {
+		m.aiAppTask.paramSelectList.SetSize(lw-4, m.aiAppTaskParamHeight())
+	}
+	if m.aiAppTask.usingTA {
+		m.aiAppTask.taParam.SetWidth(lw - 4)
+		m.aiAppTask.taParam.SetHeight(m.aiAppTaskParamHeight())
+	}
+	for k, ti := range m.aiAppTask.paramInputs {
+		if w := lw - 4; w > 10 {
+			ti.Width = w
+		}
+		m.aiAppTask.paramInputs[k] = ti
 	}
 }
 

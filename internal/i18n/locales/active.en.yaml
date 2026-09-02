@@ -41,6 +41,13 @@ common:
     task_status_queued: "Queued"
     task_status_cancelled: "Cancelled"
     task_status_transferring: "Transferring"
+  aiapp:
+    col_name: "Name"
+    col_base_model: "Base Model"
+    col_created: "Published"
+    col_used: "Used"
+    col_liked: "Liked"
+    col_forked: "Forked"
 
 tui:
   menu:
@@ -67,6 +74,8 @@ tui:
     day_cost_desc: "View today's spending breakdown"
     modelzoo: "Model Zoo"
     modelzoo_desc: "Browse Model Zoo endpoints, view details, prices and run tasks"
+    ai_app: "AI Applications"
+    ai_app_desc: "Browse and run AI applications"
   model_type:
     title: "Choose a model type"
     checkpoint: "A complete diffusion model containing all components"
@@ -312,6 +321,45 @@ tui:
     price_short: "Price"
     price_title: "Price Table"
     no_price: "No price table available."
+  ai_app:
+    search_placeholder: "Search applications..."
+    no_apps: "No AI applications found."
+    filter_summary: "{{.Total}} apps"
+    filter_all: "All"
+    key_search: "Search"
+    key_sort: "Sort"
+    key_base_model: "Base Model"
+    key_reset: "Reset"
+    sort_label: "Sort: {{.Sort}}"
+    sort_Recently: "Recently"
+    sort_MostUsed: "Most Used"
+    sort_MostLiked: "Most Liked"
+    sort_MostForked: "Most Forked"
+    filter_sort_title: "Select Sort Order"
+    filter_base_model_title: "Select Base Model"
+    base_model_label: "Base Model"
+    author_label: "Author"
+    created_label: "Published"
+    section_desc: "Introduction"
+    params_label: "Input Parameters"
+    media_hint: "Enter {{.Type}} URL:"
+    type_image: "image"
+    type_video: "video"
+    generating_title: "Generating"
+    running_title: "Running application..."
+    cancel_confirm_title: "Cancel this task?"
+    cancel_confirm_hint: "Press X to confirm, Esc to go back"
+    canceling: "Cancelling..."
+    task_success: "Task completed. Outputs below (Ctrl+Y to copy links):"
+    task_finished: "Task finished (status: {{.Status}}, request ID: {{.RequestID}})"
+    cancel_success: "Task cancelled (request ID: {{.RequestID}})"
+    hint_list: "<↑/k> Up\n<↓/j> Down\n<Enter> Detail\n<s> Sort\n<m> Base Model\n</> Search\n<r> Reset\n<Esc> Back"
+    hint_detail: "<t> Run task\n<Esc> Back"
+    hint_task_poll: "<x> Cancel\n<Esc> Back"
+    hint_task_result: "Ctrl+Y Copy URLs · Enter Back"
+    task_param_title: "Task Parameters"
+    task_review_title: "Review & Submit"
+    task_no_params: "No parameters to configure."
   task_model:
     hint: "Enter Select | Esc Back"
     url_placeholder: "Enter {{.Type}} URL (http/https)..."
@@ -336,6 +384,7 @@ tui:
     status_label: "Status"
     select_hint: "Select an option from the list (Enter to confirm)"
     text_hint: "Enter content below (Ctrl+S saves · Enter for newline)"
+    param_hint_input: "Enter Confirm & next · Ctrl+U Clear · Ctrl+R Reset · Esc Back"
     output_name_title: "Name the Output"
     output_name_prompt: "Name:"
     output_name_placeholder: "Enter a name (optional, skip if empty)"
@@ -432,6 +481,18 @@ cli:
       Examples:
         bizyair modelzoo run <endpoint> --param "key=value" [--param "key=value" ...]
         bizyair modelzoo run <endpoint> --image "key=url"
+    app: "AI applications: browse and run"
+    app_list: "List AI applications"
+    app_detail: "Show AI application detail"
+    app_run: "Run an AI application"
+    app_desc: |-
+      Browse community AI applications, view details with --keyword/--base-model, and run them.
+
+      Examples:
+        bizyair ai-app ls --keyword "logo"
+        bizyair ai-app ls --sort MostUsed --base-model "SDXL"
+        bizyair ai-app detail <app_id>
+        bizyair ai-app run <app_id> --param "prompt=...\" --image \"image=url\"
     login_desc: |-
       Log in to BizyAir using an API key.
 
@@ -480,6 +541,7 @@ cli:
   args:
     id_or_name: "[<id|name>]"
     endpoint: "<endpoint>"
+    app_id: "<app_id>"
   whoami:
     id_label: "ID"
     name_label: "Name"
@@ -640,6 +702,47 @@ cli:
           Usage examples:
              bizyair modelzoo run <endpoint> --param "key=value" [--param "key=value" ...]
              bizyair modelzoo run <endpoint> --image "key=url"
+  app:
+    ls_empty: "No AI applications found."
+    ls_title: "AI Applications"
+    ls_count: "Total: {{.Count}} applications"
+    ls_page: "Page {{.Current}} of {{.Pages}} · {{.Total}} applications total · {{.Shown}} on this page"
+    ls_page_next: "(See next page: bizyair ai-app ls --page {{.Next}})"
+    id_required: "Application ID is required."
+    not_found: "Application {{.ID}} not found."
+    detail_title: "Application Detail"
+    detail_id: "ID: {{.ID}}"
+    detail_name: "Name: {{.Name}}"
+    detail_base_model: "Base Model: {{.Model}}"
+    detail_owner: "Author: {{.Owner}}"
+    detail_created: "Published: {{.Created}}"
+    detail_description: "Description: {{.Desc}}"
+    detail_params_header: "Input Parameters:"
+    detail_param_line: "  {{.Name}} ({{.Label}}) [{{.Type}}]{{.Required}}"
+    param_required: " (required)"
+    run:
+      app_label: "Application:"
+      request_id_label: "Request ID:"
+      polling_status: "Polling..."
+      status_label: "Status"
+      elapsed_label: "Elapsed:"
+      outputs_label: "Outputs:"
+      type_number: "Number"
+      type_boolean: "Boolean"
+      type_media: "Media"
+      type_string: "String"
+      error:
+        param_format: "Invalid parameter format: {{.Param}} (expected key=value)"
+        boolean_invalid: "Invalid boolean value for {{.Key}}: {{.Value}}"
+        url_invalid: "Invalid URL for {{.Key}} (must start with http:// or https://)"
+        missing_params: "Missing required parameters: {{.Names}}. Provide values via --param."
+        missing_param_line: "  {{.Name}} ({{.Label}}) [{{.Type}}]{{.Default}}"
+        default_value: " (default: {{.Value}})"
+        webapp_id_missing: "This application has no runnable web app binding."
+        usage_hint: |-
+          Usage examples:
+             bizyair ai-app run <app_id> --param "key=value" [--param "key=value" ...]
+             bizyair ai-app run <app_id> --image "key=url"
   task:
     request_id_label: "Request ID"
   detail:
@@ -904,6 +1007,10 @@ step:
   create_task: "Create task"
   get_task_status: "Get task status"
   cancel_task: "Cancel task"
+  interrupt_task: "Interrupt task"
+  list_ai_apps: "List AI applications"
+  get_webapp_detail: "Get AI application detail"
+  get_task_outputs: "Get task outputs"
 
 config:
   yaml:

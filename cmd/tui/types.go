@@ -1,6 +1,8 @@
 package tui
 
 import (
+	"time"
+
 	"github.com/charmbracelet/bubbles/list"
 	"github.com/charmbracelet/bubbles/textarea"
 	"github.com/charmbracelet/bubbles/textinput"
@@ -24,6 +26,9 @@ const (
 	mainStepModelzooDetail
 	mainStepPriceView
 	mainStepTaskModel
+	mainStepAIApp
+	mainStepAIAppDetail
+	mainStepAIAppTask
 )
 
 type actionKind string
@@ -42,6 +47,7 @@ const (
 	actionDayCost     actionKind = "day_cost"
 	actionModelzoo    actionKind = "modelzoo"
 	actionTask        actionKind = "task"
+	actionAIApp       actionKind = "ai_app"
 )
 
 // 上传步骤
@@ -335,9 +341,9 @@ type modelzooInputs struct {
 	search       textinput.Model
 	searchActive bool
 
-	models     []lib.ModelzooModelFlat
-	filtered   []lib.ModelzooModelFlat
-	detail     *lib.ModelzooEndpointDetail
+	models   []lib.ModelzooModelFlat
+	filtered []lib.ModelzooModelFlat
+	detail   *lib.ModelzooEndpointDetail
 
 	tags             []lib.ModelzooTag
 	categories       []lib.ModelzooCategoryItem
@@ -378,6 +384,7 @@ type taskModelInputs struct {
 	currentParamIdx int
 	requestID       string
 	lastPollStatus  string
+	startedAt       time.Time
 
 	usingSelect bool
 	usingTA     bool
@@ -388,4 +395,104 @@ type taskModelInputs struct {
 	paramInputs     map[string]textinput.Model
 	taParam         textarea.Model
 	outputNameInput textinput.Model
+}
+
+// --- AI Applications ---
+
+// aiAppFilterMode AI 应用过滤模式。
+type aiAppFilterMode int
+
+const (
+	aiAppFilterNone aiAppFilterMode = iota
+	aiAppFilterSort
+	aiAppFilterBaseModel
+)
+
+// aiAppInputs AI 应用列表/详情状态。
+type aiAppInputs struct {
+	search       textinput.Model
+	searchActive bool
+
+	apps     []*lib.BizyModelInfo
+	filtered []*lib.BizyModelInfo
+	detail   *lib.WebAppDetail
+
+	baseModels []string
+
+	sortBy          string
+	baseModelFilter string
+
+	filterMode aiAppFilterMode
+	filterList list.Model
+
+	sortOpts      []filterOption
+	baseModelOpts []filterOption
+}
+
+// aiAppTaskStep AI 应用任务步骤。
+type aiAppTaskStep int
+
+const (
+	aiAppTaskNone aiAppTaskStep = iota
+	aiAppTaskParamPoll
+	aiAppTaskSubmitted
+	aiAppTaskPolling
+	aiAppTaskResult
+)
+
+// aiAppTaskInputs AI 应用运行向导状态。
+type aiAppTaskInputs struct {
+	step aiAppTaskStep
+
+	detail *lib.WebAppDetail
+	fields []lib.ModelzooInputParam
+	params map[string]any
+
+	currentParamIdx int
+	taskID          int64
+	requestID       string
+	lastPollStatus  string
+	startedAt       time.Time
+
+	usingSelect bool
+	usingTA     bool
+	paramRules  []lib.ModelzooValidationRule
+	paramError  error
+
+	paramSelectList list.Model
+	paramInputs     map[string]textinput.Model
+	taParam         textarea.Model
+}
+
+// AI 应用消息类型。
+type aiAppsDoneMsg struct {
+	apps  []*lib.BizyModelInfo
+	total int
+	err   error
+}
+
+type aiAppDetailDoneMsg struct {
+	detail *lib.WebAppDetail
+	err    error
+}
+
+type aiAppTaskCreatedMsg struct {
+	taskID     int64
+	taskStatus string
+	wssURL     string
+	err        error
+}
+
+type aiAppTaskStatusMsg struct {
+	status *lib.ComfyTaskStatusData
+	err    error
+}
+
+type aiAppTaskOutputsMsg struct {
+	outputs []lib.WebAppTaskOutput
+	err     error
+}
+
+type aiAppTaskCancelledMsg struct {
+	err error
 }

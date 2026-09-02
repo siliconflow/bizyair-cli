@@ -50,6 +50,19 @@ GetModelzooPriceTableContext(ctx context.Context, endpoint string) (*Response[Mo
 	CreateModelZooTaskContext(ctx context.Context, endpoint string, params map[string]any) (*Response[ModelZooTaskResp], error)
 	GetModelZooTaskStatusContext(ctx context.Context, requestID string) (*Response[ModelZooTaskStatusResp], error)
 	CancelModelZooTaskContext(ctx context.Context, requestID string) error
+
+	// AI Applications
+	ListWebAppsContext(ctx context.Context, current, pageSize int, keyword string) (*Response[BizyModelListResp], error)
+	GetWebappDetailContext(ctx context.Context, bizyModelID int64) (*Response[WebAppDetail], error)
+	GetWebappVersionDetailContext(ctx context.Context, versionID int64) (*Response[WebAppVersionDetail], error)
+	GetWebappDetailByVersionContext(ctx context.Context, webAppID int64) (*Response[WebAppDetail], error)
+	CreateWebappTaskContext(ctx context.Context, req WebAppTaskCreateReq) (*WebAppTaskCreateResp, error)
+	CreateWebappComfyTaskContext(ctx context.Context, req WebAppTaskCreateReq) (*Response[WebAppComfyTaskResp], error)
+	GetWebappTaskDetailContext(ctx context.Context, requestID string) (*Response[WebAppTaskStatusResp], error)
+	GetComfyTaskDetailContext(ctx context.Context, taskID int64) (*Response[ComfyTaskStatusData], error)
+	GetWebappTaskOutputsContext(ctx context.Context, requestID string) (*Response[WebAppTaskOutputsResp], error)
+	CancelWebappTaskContext(ctx context.Context, requestID string) error
+	InterruptWebappTaskContext(ctx context.Context, requestID string) error
 }
 
 // Client bizyair client
@@ -584,6 +597,168 @@ func (c *Client) CancelModelZooTaskContext(ctx context.Context, requestID string
 	return nil
 }
 
+// ---- AI Applications ----
+
+// ListWebAppsContext 获取社区 AI 应用列表（GET /v1/bizy_models/community?model_types=Application）。
+func (c *Client) ListWebAppsContext(ctx context.Context, current, pageSize int, keyword string) (*Response[BizyModelListResp], error) {
+	serverURL := joinEndpoint(c.Endpoints.Meta, "/v1/bizy_models/community")
+	param := BizyModelListReq{
+		Current:    current,
+		PageSize:   pageSize,
+		Keyword:    keyword,
+		Sort:       "Recently",
+		ModelTypes: []string{"Application"},
+	}
+	body, statusCode, err := c.doGet(ctx, serverURL, param, c.authHeader())
+	if err != nil {
+		return nil, err
+	}
+	if statusCode != http.StatusOK {
+		return nil, handleError(body, statusCode)
+	}
+	return handleResponse[BizyModelListResp](body)
+}
+
+// GetWebappDetailContext 获取 AI 应用详情（GET /v1/webapp/{bizy_model_id}）。
+func (c *Client) GetWebappDetailContext(ctx context.Context, bizyModelID int64) (*Response[WebAppDetail], error) {
+	serverURL := joinEndpoint(c.Endpoints.Meta, fmt.Sprintf("/v1/webapp/%d", bizyModelID))
+	body, statusCode, err := c.doGet(ctx, serverURL, nil, c.authHeader())
+	if err != nil {
+		return nil, err
+	}
+	if statusCode != http.StatusOK {
+		return nil, handleError(body, statusCode)
+	}
+	return handleResponse[WebAppDetail](body)
+}
+
+// GetWebappVersionDetailContext 获取 AI 应用版本详情（GET /v1/bizy_models/versions/{version_id}）。
+// 版本 ID 同时是任务创建时使用的 web_app_id；其 ref_bizy_model_id 指向工作流详情。
+func (c *Client) GetWebappVersionDetailContext(ctx context.Context, versionID int64) (*Response[WebAppVersionDetail], error) {
+	serverURL := joinEndpoint(c.Endpoints.Meta, fmt.Sprintf("/v1/bizy_models/versions/%d", versionID))
+	body, statusCode, err := c.doGet(ctx, serverURL, nil, c.authHeader())
+	if err != nil {
+		return nil, err
+	}
+	if statusCode != http.StatusOK {
+		return nil, handleError(body, statusCode)
+	}
+	return handleResponse[WebAppVersionDetail](body)
+}
+
+// GetWebappDetailByVersionContext 按 web_app_id（版本 ID）获取 AI 应用详情
+// （GET /v1/webapp/{web_app_id}/detail），返回包含 input_nodes 输入节点定义。
+func (c *Client) GetWebappDetailByVersionContext(ctx context.Context, webAppID int64) (*Response[WebAppDetail], error) {
+	serverURL := joinEndpoint(c.Endpoints.Meta, fmt.Sprintf("/v1/webapp/%d/detail", webAppID))
+	body, statusCode, err := c.doGet(ctx, serverURL, nil, c.authHeader())
+	if err != nil {
+		return nil, err
+	}
+	if statusCode != http.StatusOK {
+		return nil, handleError(body, statusCode)
+	}
+	return handleResponse[WebAppDetail](body)
+}
+
+// CreateWebappTaskContext 同步创建 AI 应用任务（POST /v1/webapp/task/openapi/create，扁平 JSON 响应）。
+// 该接口可能耗时超过默认超时；临时放宽客户端超时。
+func (c *Client) CreateWebappTaskContext(ctx context.Context, req WebAppTaskCreateReq) (*WebAppTaskCreateResp, error) {
+	serverURL := joinEndpoint(c.Endpoints.API, "/v1/webapp/task/openapi/create")
+	origTimeout := c.httpClient.Timeout
+	c.httpClient.Timeout = 180 * time.Second
+	defer func() { c.httpClient.Timeout = origTimeout }()
+	body, statusCode, err := c.doPost(ctx, serverURL, req, c.authHeader())
+	if err != nil {
+		return nil, err
+	}
+	if statusCode != http.StatusOK {
+		return nil, handleError(body, statusCode)
+	}
+	var resp WebAppTaskCreateResp
+	if err := json.Unmarshal(body, &resp); err != nil {
+		return nil, &APIError{HTTPStatus: statusCode, RawMessage: strings.TrimSpace(string(body))}
+	}
+	return &resp, nil
+}
+
+// CreateWebappComfyTaskContext 异步创建 AI 应用任务（POST /v1/webapp/task/create，标准信封）。
+func (c *Client) CreateWebappComfyTaskContext(ctx context.Context, req WebAppTaskCreateReq) (*Response[WebAppComfyTaskResp], error) {
+	serverURL := joinEndpoint(c.Endpoints.API, "/v1/webapp/task/create")
+	body, statusCode, err := c.doPost(ctx, serverURL, req, c.authHeader())
+	if err != nil {
+		return nil, err
+	}
+	if statusCode != http.StatusOK {
+		return nil, handleError(body, statusCode)
+	}
+	return handleResponse[WebAppComfyTaskResp](body)
+}
+
+// GetWebappTaskDetailContext 按 request_id 查询 AI 应用任务状态（GET /v1/webapp/task/openapi/{request_id}）。
+func (c *Client) GetWebappTaskDetailContext(ctx context.Context, requestID string) (*Response[WebAppTaskStatusResp], error) {
+	serverURL := joinEndpoint(c.Endpoints.API, fmt.Sprintf("/v1/webapp/task/openapi/%s", url.PathEscape(requestID)))
+	body, statusCode, err := c.doGet(ctx, serverURL, nil, c.authHeader())
+	if err != nil {
+		return nil, err
+	}
+	if statusCode != http.StatusOK {
+		return nil, handleError(body, statusCode)
+	}
+	return handleResponse[WebAppTaskStatusResp](body)
+}
+
+// GetComfyTaskDetailContext 按 Comfy task_id 查询任务状态（GET /v1/comfy/task/{task_id}）。
+func (c *Client) GetComfyTaskDetailContext(ctx context.Context, taskID int64) (*Response[ComfyTaskStatusData], error) {
+	serverURL := joinEndpoint(c.Endpoints.API, fmt.Sprintf("/v1/comfy/task/%d", taskID))
+	body, statusCode, err := c.doGet(ctx, serverURL, nil, c.authHeader())
+	if err != nil {
+		return nil, err
+	}
+	if statusCode != http.StatusOK {
+		return nil, handleError(body, statusCode)
+	}
+	return handleResponse[ComfyTaskStatusData](body)
+}
+
+// GetWebappTaskOutputsContext 获取 AI 应用任务输出（GET /v1/webapp/task/openapi/{request_id}/outputs）。
+func (c *Client) GetWebappTaskOutputsContext(ctx context.Context, requestID string) (*Response[WebAppTaskOutputsResp], error) {
+	serverURL := joinEndpoint(c.Endpoints.API, fmt.Sprintf("/v1/webapp/task/openapi/%s/outputs", url.PathEscape(requestID)))
+	body, statusCode, err := c.doGet(ctx, serverURL, nil, c.authHeader())
+	if err != nil {
+		return nil, err
+	}
+	if statusCode != http.StatusOK {
+		return nil, handleError(body, statusCode)
+	}
+	return handleResponse[WebAppTaskOutputsResp](body)
+}
+
+// CancelWebappTaskContext 取消排队中的 AI 应用任务（PUT /v1/webapp/task/openapi/{request_id}/cancel）。
+func (c *Client) CancelWebappTaskContext(ctx context.Context, requestID string) error {
+	serverURL := joinEndpoint(c.Endpoints.API, fmt.Sprintf("/v1/webapp/task/openapi/%s/cancel", url.PathEscape(requestID)))
+	body, statusCode, err := c.doPut(ctx, serverURL, nil, c.authHeader())
+	if err != nil {
+		return err
+	}
+	if statusCode != http.StatusOK {
+		return handleError(body, statusCode)
+	}
+	return nil
+}
+
+// InterruptWebappTaskContext 中断运行中的 AI 应用任务（PUT /v1/webapp/task/openapi/{request_id}/interrupt）。
+func (c *Client) InterruptWebappTaskContext(ctx context.Context, requestID string) error {
+	serverURL := joinEndpoint(c.Endpoints.API, fmt.Sprintf("/v1/webapp/task/openapi/%s/interrupt", url.PathEscape(requestID)))
+	body, statusCode, err := c.doPut(ctx, serverURL, nil, c.authHeader())
+	if err != nil {
+		return err
+	}
+	if statusCode != http.StatusOK {
+		return handleError(body, statusCode)
+	}
+	return nil
+}
+
 func (c *Client) authHeader() map[string]string {
 	header := make(map[string]string)
 	header[meta.HeaderAuthorization] = fmt.Sprintf("Bearer %s", c.ApiKey)
@@ -602,6 +777,10 @@ func (c *Client) doPost(ctx context.Context, urlStr string, data interface{}, he
 
 func (c *Client) doDelete(ctx context.Context, urlStr string, data interface{}, header map[string]string) ([]byte, int, error) {
 	return c.do(ctx, meta.HTTPDelete, urlStr, nil, data, header)
+}
+
+func (c *Client) doPut(ctx context.Context, urlStr string, data interface{}, header map[string]string) ([]byte, int, error) {
+	return c.do(ctx, meta.HTTPPut, urlStr, nil, data, header)
 }
 
 func (c *Client) do(ctx context.Context, method, urlStr string, queryParams, data interface{}, header map[string]string) ([]byte, int, error) {

@@ -29,7 +29,10 @@ func DeriveModelzooRules(p ModelzooInputParam) []ModelzooValidationRule {
 		rules = append(rules, modelzooBooleanRule{label: p.FieldLabel})
 	}
 
-	if p.FieldOptions != nil {
+	// 媒体（图片/视频）由用户填写 URL 或上传，枚举选项仅是预设建议，
+	// 不能作为可选范围校验；其余类型的枚举选项才作为必选列表约束。
+	media := p.VariableType == "image" || p.VariableType == "video"
+	if p.FieldOptions != nil && !media {
 		rules = append(rules, modelzooRangeRules(p)...)
 		ev := p.FieldOptions.EnumValues()
 		if len(ev) > 0 {

@@ -1,9 +1,11 @@
 package tui
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	tablev2 "charm.land/bubbles/v2/table"
 	lipglossv2 "charm.land/lipgloss/v2"
@@ -20,6 +22,27 @@ func dash(s string) string {
 		return "-"
 	}
 	return s
+}
+
+// formatTimestamp 将 RFC3339 时间串格式化为本地可读格式；解析失败时原样返回。
+func formatTimestamp(ts string) string {
+	if ts == "" {
+		return "-"
+	}
+	t, err := time.Parse(time.RFC3339, ts)
+	if err != nil {
+		return ts
+	}
+	return t.Format("2006-01-02 15:04:05")
+}
+
+// taskElapsedText 返回任务已执行时间文本（与 CLI 轮询样式一致）。
+func taskElapsedText(d time.Duration) string {
+	s := int(d.Seconds())
+	if s < 1 {
+		s = 1
+	}
+	return fmt.Sprintf("(%d s)", s)
 }
 
 // 校验名称：字母/数字/下划线/短横线（使用 lib 层的实现）
@@ -396,6 +419,19 @@ func (m *mainModel) getContextualHint() string {
 		return i18n.T("tui.modelzoo.hint_list", nil)
 	case mainStepModelzooDetail:
 		return i18n.T("tui.modelzoo.hint_detail", nil)
+	case mainStepAIApp:
+		return i18n.T("tui.ai_app.hint_list", nil)
+	case mainStepAIAppDetail:
+		return i18n.T("tui.ai_app.hint_detail", nil)
+	case mainStepAIAppTask:
+		switch m.aiAppTask.step {
+		case aiAppTaskParamPoll:
+			return i18n.T("tui.task_model.param_hint_input", nil)
+		case aiAppTaskSubmitted, aiAppTaskPolling:
+			return i18n.T("tui.ai_app.hint_task_poll", nil)
+		case aiAppTaskResult:
+			return i18n.T("tui.ai_app.hint_task_result", nil)
+		}
 	case mainStepPriceView:
 		return i18n.T("tui.hint.return_menu", nil)
 	case mainStepTaskModel:

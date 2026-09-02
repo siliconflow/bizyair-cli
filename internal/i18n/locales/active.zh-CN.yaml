@@ -41,6 +41,13 @@ common:
     task_status_queued: "排队中"
     task_status_cancelled: "已取消"
     task_status_transferring: "传输中"
+  aiapp:
+    col_name: "名称"
+    col_base_model: "基础模型"
+    col_created: "发布时间"
+    col_used: "使用"
+    col_liked: "点赞"
+    col_forked: "收藏"
 
 tui:
   menu:
@@ -67,6 +74,8 @@ tui:
     day_cost_desc: "查看今日消费明细"
     modelzoo: "模型广场"
     modelzoo_desc: "浏览模型广场端点，查看详情、价格和运行任务"
+    ai_app: "AI 应用"
+    ai_app_desc: "浏览并运行 AI 应用"
   model_type:
     title: "选择模型类型"
     checkpoint: "完整的扩散模型，包含所有组件"
@@ -312,6 +321,45 @@ tui:
     price_short: "价格"
     price_title: "价格表"
     no_price: "暂无价格表。"
+  ai_app:
+    search_placeholder: "搜索应用..."
+    no_apps: "未找到 AI 应用。"
+    filter_summary: "共 {{.Total}} 个应用"
+    filter_all: "全部"
+    key_search: "搜索"
+    key_sort: "排序"
+    key_base_model: "基础模型"
+    key_reset: "重置"
+    sort_label: "排序：{{.Sort}}"
+    sort_Recently: "最近发布"
+    sort_MostUsed: "使用最多"
+    sort_MostLiked: "点赞最多"
+    sort_MostForked: "收藏最多"
+    filter_sort_title: "选择排序方式"
+    filter_base_model_title: "选择基础模型"
+    base_model_label: "基础模型"
+    author_label: "作者"
+    created_label: "发布时间"
+    section_desc: "介绍"
+    params_label: "输入参数"
+    media_hint: "请输入 {{.Type}} URL："
+    type_image: "图片"
+    type_video: "视频"
+    generating_title: "生成中"
+    running_title: "正在运行应用..."
+    cancel_confirm_title: "确定要取消这个任务吗？"
+    cancel_confirm_hint: "按 X 确认，按 Esc 返回"
+    canceling: "正在取消..."
+    task_success: "任务已完成。输出如下（Ctrl+Y 复制链接）："
+    task_finished: "任务已结束（状态：{{.Status}}，请求 ID：{{.RequestID}}）"
+    cancel_success: "任务已取消（请求 ID：{{.RequestID}}）"
+    hint_list: "<↑/k> 上移\n<↓/j> 下移\n<Enter> 详情\n<s> 排序\n<m> 基础模型\n</> 搜索\n<r> 重置\n<Esc> 返回"
+    hint_detail: "<t> 运行任务\n<Esc> 返回"
+    hint_task_poll: "<x> 取消\n<Esc> 返回"
+    hint_task_result: "Ctrl+Y 复制链接 · Enter 返回"
+    task_param_title: "任务参数"
+    task_review_title: "确认并提交"
+    task_no_params: "无需配置参数。"
   task_model:
     hint: "Enter 选择 | Esc 返回"
     url_placeholder: "输入 {{.Type}} URL（http/https）..."
@@ -336,6 +384,7 @@ tui:
     status_label: "状态"
     select_hint: "请从列表中选择一个选项（Enter 确认）"
     text_hint: "请在下方输入内容（Ctrl+S 保存并继续 · Enter 换行）"
+    param_hint_input: "Enter 确认并下一步 · Ctrl+U 清空 · Ctrl+R 重置 · Esc 返回"
     output_name_title: "命名生成结果"
     output_name_prompt: "名称:"
     output_name_placeholder: "输入名称（可选，留空跳过）"
@@ -432,6 +481,18 @@ cli:
       示例:
          bizyair modelzoo run <端点> --param "key=value" [--param "key=value" ...]
          bizyair modelzoo run <端点> --image "key=url"
+    app: "AI 应用：浏览和运行"
+    app_list: "列出 AI 应用"
+    app_detail: "显示 AI 应用详情"
+    app_run: "运行 AI 应用"
+    app_desc: |-
+      浏览社区 AI 应用，支持 --keyword/--base-model 过滤与详情查看，并可提交运行任务。
+
+      示例:
+         bizyair ai-app ls --keyword "logo"
+         bizyair ai-app ls --sort MostUsed --base-model "SDXL"
+         bizyair ai-app detail <应用ID>
+         bizyair ai-app run <应用ID> --param "prompt=..."
     login_desc: |-
       登录到 BizyAir。使用 API Key 认证。
 
@@ -480,6 +541,7 @@ cli:
   args:
     id_or_name: "[<id|name>]"
     endpoint: "<endpoint>"
+    app_id: "<应用ID>"
   whoami:
     id_label: "ID"
     name_label: "名称"
@@ -640,6 +702,47 @@ cli:
           用法示例:
              bizyair modelzoo run <端点> --param "key=value" [--param "key=value" ...]
              bizyair modelzoo run <端点> --image "key=url"
+  app:
+    ls_empty: "未找到 AI 应用。"
+    ls_title: "AI 应用"
+    ls_count: "共 {{.Count}} 个应用"
+    ls_page: "第 {{.Current}}/{{.Pages}} 页 · 共 {{.Total}} 个应用 · 本页 {{.Shown}} 个"
+    ls_page_next: "（查看下页：bizyair ai-app ls --page {{.Next}}）"
+    id_required: "必须提供应用 ID。"
+    not_found: "未找到应用 {{.ID}}。"
+    detail_title: "应用详情"
+    detail_id: "ID：{{.ID}}"
+    detail_name: "名称：{{.Name}}"
+    detail_base_model: "基座模型：{{.Model}}"
+    detail_owner: "作者：{{.Owner}}"
+    detail_created: "发布时间：{{.Created}}"
+    detail_description: "描述：{{.Desc}}"
+    detail_params_header: "输入参数："
+    detail_param_line: "  {{.Name}} ({{.Label}}) [{{.Type}}]{{.Required}}"
+    param_required: "（必填）"
+    run:
+      app_label: "应用："
+      request_id_label: "请求 ID："
+      polling_status: "轮询中..."
+      status_label: "状态"
+      elapsed_label: "耗时："
+      outputs_label: "输出："
+      type_number: "数值"
+      type_boolean: "布尔"
+      type_media: "媒体"
+      type_string: "字符串"
+      error:
+        param_format: "无效参数格式：{{.Param}}（应为 key=value）"
+        boolean_invalid: "{{.Key}} 的布尔值无效：{{.Value}}"
+        url_invalid: "{{.Key}} 的 URL 无效（必须以 http:// 或 https:// 开头）"
+        missing_params: "缺少必填参数：{{.Names}}，请通过 --param 提供参数值。"
+        missing_param_line: "  {{.Name}} ({{.Label}}) [{{.Type}}]{{.Default}}"
+        default_value: "（默认值：{{.Value}}）"
+        webapp_id_missing: "该应用没有可运行的 WebApp 绑定。"
+        usage_hint: |-
+          用法示例:
+             bizyair ai-app run <应用ID> --param "key=value" [--param "key=value" ...]
+             bizyair ai-app run <应用ID> --image "key=url"
   task:
     request_id_label: "请求 ID"
   detail:
@@ -904,6 +1007,10 @@ step:
   create_task: "创建任务"
   get_task_status: "获取任务状态"
   cancel_task: "取消任务"
+  interrupt_task: "中断任务"
+  list_ai_apps: "获取 AI 应用列表"
+  get_webapp_detail: "获取 AI 应用详情"
+  get_task_outputs: "获取任务输出"
 
 config:
   yaml:

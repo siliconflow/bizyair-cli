@@ -180,3 +180,42 @@ type TaskStatusResult struct {
 	Status *lib.ModelZooTaskStatusResp
 	Error  error
 }
+
+// AIApplicationsResult AI 应用列表结果
+type AIApplicationsResult struct {
+	Apps  []*lib.BizyModelInfo
+	Total int
+	Error error
+}
+
+// WebAppDetailResult AI 应用详情结果（版本详情 + 工作流详情合并）
+type WebAppDetailResult struct {
+	Detail *lib.WebAppDetail
+	Error  error
+}
+
+// WebAppVersionDetailResult AI 应用版本详情结果
+type WebAppVersionDetailResult struct {
+	Detail *lib.WebAppVersionDetail
+	Error  error
+}
+
+// CreateWebAppTaskResult AI 应用任务创建结果（异步创建，返回 task_id 轮询）
+type CreateWebAppTaskResult struct {
+	TaskID     int64
+	TaskStatus string
+	WssURL     string
+	Error      error
+}
+
+// WebAppTaskStatusResult AI 应用任务状态查询结果（Comfy 任务）
+type WebAppTaskStatusResult struct {
+	Status *lib.ComfyTaskStatusData
+	Error  error
+}
+
+// WebAppTaskOutputsResult AI 应用任务输出结果
+type WebAppTaskOutputsResult struct {
+	Outputs []lib.WebAppTaskOutput
+	Error   error
+}

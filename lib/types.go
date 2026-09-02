@@ -1,6 +1,35 @@
 package lib
 
-import "github.com/siliconflow/bizyair-cli/domain"
+import (
+	"encoding/json"
+	"fmt"
+
+	"github.com/siliconflow/bizyair-cli/domain"
+)
+
+// JSONString 是容忍 JSON 数值/布尔/字符串输入的字符串类型：
+// 后端部分字段（如 draft_id）对同一定义既返回字符串也返回数字，这里统一按字符串接收。
+type JSONString string
+
+// UnmarshalJSON 接收 JSON string/number/bool，统一转换为文本。
+func (s *JSONString) UnmarshalJSON(b []byte) error {
+	var v any
+	if err := json.Unmarshal(b, &v); err != nil {
+		return err
+	}
+	switch t := v.(type) {
+	case string:
+		*s = JSONString(t)
+	default:
+		*s = JSONString(fmt.Sprintf("%v", t))
+	}
+	return nil
+}
+
+func (s JSONString) String() string { return string(s) }
+func (s JSONString) MarshalJSON() ([]byte, error) {
+	return json.Marshal(string(s))
+}
 
 type FileReq struct {
 	Sign string `json:"sign,omitempty" form:"sign" query:"sign"`
@@ -20,6 +49,18 @@ type CreditsListResp = domain.CreditsListResp
 type CreditsReq = domain.CreditsReq
 type CostByTimeResult = domain.CostByTimeResult
 type DayCostResp = domain.DayCostResp
+
+// AI applications types（定义见 domain/webapp.go）
+type WebAppInputNode = domain.WebAppInputNode
+type WebAppDetail = domain.WebAppDetail
+type WebAppVersionDetail = domain.WebAppVersionDetail
+type WebAppTaskCreateReq = domain.WebAppTaskCreateReq
+type WebAppTaskCreateResp = domain.WebAppTaskCreateResp
+type WebAppComfyTaskResp = domain.WebAppComfyTaskResp
+type WebAppTaskStatusResp = domain.WebAppTaskStatusResp
+type ComfyTaskStatusData = domain.ComfyTaskStatusData
+type WebAppTaskOutputsResp = domain.WebAppTaskOutputsResp
+type WebAppTaskOutput = domain.WebAppTaskOutput
 
 type FilesResp struct {
 	File    *FileInfo    `json:"file,omitempty" form:"file" query:"file"`
@@ -120,7 +161,7 @@ type BizyModelVersion struct {
 	FileName     string       `json:"file_name,omitempty"`
 	FileSize     int64        `json:"file_size,omitempty"`
 	Public       bool         `json:"public,omitempty"`
-	DraftId      string       `json:"draft_id,omitempty"`
+	DraftId      JSONString   `json:"draft_id,omitempty"`
 	CreatedAt    string       `json:"created_at,omitempty"`
 	Forked       bool         `json:"forked,omitempty"`
 	Liked        bool         `json:"liked,omitempty"`

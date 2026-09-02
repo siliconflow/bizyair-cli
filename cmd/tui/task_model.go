@@ -3,6 +3,7 @@ package tui
 import (
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/charmbracelet/bubbles/list"
 	"github.com/charmbracelet/bubbles/textarea"
@@ -490,7 +491,7 @@ func (m *mainModel) renderTaskModelView() string {
 				b.WriteString("\n")
 			} else {
 				b.WriteString("\n\n")
-}
+			}
 		}
 
 	case taskModelOutputName:
@@ -510,6 +511,12 @@ func (m *mainModel) renderTaskModelView() string {
 			b.WriteString(spin + " " + lib.ModelzooStatusName(m.taskModel.lastPollStatus))
 		} else {
 			b.WriteString(spin + " " + i18n.T("tui.status.waiting_api", nil))
+		}
+		b.WriteString("\n")
+		if !m.taskModel.startedAt.IsZero() {
+			b.WriteString(fmt.Sprintf("%s %s\n",
+				i18n.T("cli.modelzoo.run.elapsed_label", nil),
+				taskElapsedText(time.Since(m.taskModel.startedAt))))
 		}
 		b.WriteString("\n\n")
 		b.WriteString(m.hintStyle.Render(i18n.T("tui.task_model.cancel_hint", nil)))

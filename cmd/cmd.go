@@ -241,6 +241,54 @@ func Init() *cli.App {
 			},
 		},
 		{
+			Name:  meta.CmdApp,
+			Usage: i18n.T("cli.command.app"),
+			Action: func(c *cli.Context) error {
+				if c.Args().Present() {
+					return i18n.NewError("cli.error.unknown_command", map[string]any{"Command": c.Args().First()}, nil)
+				}
+				return cli.ShowSubcommandHelp(c)
+			},
+			Subcommands: []*cli.Command{
+				{
+					Name:        meta.CmdLs,
+					Usage:       i18n.T("cli.command.app_list"),
+					Description: i18n.T("cli.command.app_desc"),
+					Flags: []cli.Flag{
+						&keywordFlag,
+						&sortFlag,
+						&baseModelFilterFlag,
+						&pageFlag,
+						&pageSizeFlag,
+						&apiKeyFlag,
+						&baseDomainFlag,
+					},
+					Action: AppList,
+				},
+				{
+					Name:        meta.CmdDetail,
+					Usage:       i18n.T("cli.command.app_detail"),
+					Description: i18n.T("cli.command.app_desc"),
+					ArgsUsage:   i18n.T("cli.args.app_id"),
+					Flags:       []cli.Flag{&apiKeyFlag, &baseDomainFlag},
+					Action:      AppDetail,
+				},
+				{
+					Name:        meta.CmdRun,
+					Usage:       i18n.T("cli.command.app_run"),
+					Description: i18n.T("cli.command.app_desc"),
+					ArgsUsage:   i18n.T("cli.args.app_id"),
+					Flags: []cli.Flag{
+						&modelzooParamFlag,
+						&modelzooImageFlag,
+						&apiKeyFlag,
+						&baseDomainFlag,
+					},
+					Action: AppRun,
+				},
+			},
+		},
+		{
 			Name:        meta.CmdUpgrade,
 			Usage:       i18n.T("cli.command.upgrade"),
 			Description: i18n.T("cli.command.upgrade_desc"),
