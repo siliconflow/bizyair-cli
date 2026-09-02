@@ -43,3 +43,10 @@ dist/
 *.backup
 *.sha256
 .omo/
+
+# 只读参考目录（非本项目代码，仅作移植对照）
+bizyair-cli_参照/
+testdata/
+
+# go build 产生的根目录二进制（勿提交）
+/bizyair-cli

@@ -19,6 +19,7 @@ type ServiceEndpoints struct {
 	Meta    string
 	Web     string
 	Storage string
+	Finance string
 }
 
 // ResolveServiceEndpoints derives BizyAir service origins from baseDomain.
@@ -48,6 +49,7 @@ func ResolveServiceEndpoints(baseDomain string) (ServiceEndpoints, error) {
 	if hostname == "localhost" || net.ParseIP(hostname) != nil || u.Port() != "" || u.Path != "" {
 		return ServiceEndpoints{
 			Base: normalized, API: normalized, Meta: normalized, Web: normalized, Storage: normalized,
+			Finance: normalized,
 		}, nil
 	}
 
@@ -75,6 +77,7 @@ func ResolveServiceEndpoints(baseDomain string) (ServiceEndpoints, error) {
 		Meta:    origin("meta." + rootHost),
 		Web:     origin("www." + rootHost),
 		Storage: origin("storage." + rootHost),
+		Finance: origin("finance." + rootHost),
 	}, nil
 }
 
@@ -91,7 +94,7 @@ func joinEndpoint(origin, path string) string {
 }
 
 func (e ServiceEndpoints) BaseModelTypesURL() string {
-	return joinEndpoint(e.Web, "/api/special/community/base_model_types")
+	return joinEndpoint(e.Meta, "/v1/dict")
 }
 
 func (e ServiceEndpoints) MyModelsURL() string {
@@ -100,4 +103,13 @@ func (e ServiceEndpoints) MyModelsURL() string {
 
 func (e ServiceEndpoints) ModelDetailURL(modelID int64) string {
 	return joinEndpoint(e.Web, fmt.Sprintf("/community/models/my/%d", modelID))
+}
+
+// FinanceURL 返回财务（钱包/积分/消费）服务地址。
+// 优先使用显式配置的 Finance 地址，否则从 Meta 主机名推导 finance 子域。
+func (e ServiceEndpoints) FinanceURL() string {
+	if e.Finance != "" {
+		return e.Finance
+	}
+	return "https://finance." + meta.DefaultServiceHost
 }

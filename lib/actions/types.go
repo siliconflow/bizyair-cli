@@ -103,3 +103,32 @@ type UploadCallback interface {
 	// status: "converting" (转换中), "ready" (已准备), "fallback" (回退原格式), "done" (完成)
 	OnCoverStatus(index, total int, status, message string)
 }
+
+// WhoamiResult 用户信息查询结果
+type WhoamiResult struct {
+	User  *lib.UserInfo
+	Error error
+}
+
+// PlanResult 套餐概览查询结果
+type PlanResult struct {
+	Plan  *lib.PlanOverviewResp
+	Error error
+}
+
+// WalletResult 钱包余额查询结果
+// CreditsResult 积分明细查询结果
+type CreditsResult struct {
+	Credits        []*lib.CreditItem
+	Total          int
+	GiftAmount     int64
+	RechargeAmount int64
+	TotalAmount    int64
+	Error          error
+}
+
+// DayCostResult 每日消费查询结果
+type DayCostResult struct {
+	Records []*lib.CostByTimeResult
+	Error   error
+}

@@ -11,6 +11,7 @@ common:
   version: "Print the version"
   yes: "Yes"
   no: "No"
+  currency_usd: "$"
 
 tui:
   menu:
@@ -23,6 +24,18 @@ tui:
     logout_desc: "Remove the local API key"
     exit: "Exit"
     exit_desc: "Leave BizyAir CLI"
+    user_info: "User Info"
+    user_info_desc: "Account info, plan, wallet, and day cost"
+    whoami: "Basic Info"
+    whoami_desc: "View your account information"
+    plan: "Subscription Plan"
+    plan_desc: "View your subscription plan overview"
+    wallet: "Wallet Balance"
+    wallet_desc: "View your wallet balance"
+    credits: "Balance Details"
+    credits_desc: "View balance details and expiration"
+    day_cost: "Day Cost"
+    day_cost_desc: "View today's spending breakdown"
   model_type:
     title: "Choose a model type"
     checkpoint: "A complete diffusion model containing all components"
@@ -264,6 +277,63 @@ cli:
     model_list: "List your models"
     model_remove: "Remove one of your models"
     upgrade: "Check for and install CLI updates"
+    whoami: "Show current user identity"
+    plan: "Show subscription plan overview"
+    wallet: "Show wallet balance"
+    credits: "Show balance details and expiration"
+    day_cost: "Show today's spending"
+  whoami:
+    id_label: "ID"
+    name_label: "Name"
+    email_label: "Email"
+    level_label: "Level"
+    level_with_number: "{{.Name}} (Lv.{{.Level}})"
+    status_label: "Status"
+    online_tester_label: "Online Tester"
+    api_key_label: "API Key"
+  plan:
+    effective_plan_label: "Effective Plan"
+    effective_level_label: "Effective Level"
+    current_level_label: "Current Level"
+    next_downgrade_label: "Next Downgrade Check"
+    next_tier_label: "Next Tier"
+    need_recharge_label: "Recharge to Upgrade"
+    level_name:
+      basic: "Basic"
+      iron: "Iron"
+      bronze: "Bronze"
+      silver: "Silver"
+      gold: "Gold"
+      platinum: "Platinum"
+  wallet:
+    recharge_balance_label: "Recharge Balance"
+    gift_balance_label: "Gift Balance"
+  credits:
+    not_logged_in: "Not logged in. Use 'bizyair login' first."
+    no_credits: "No balance records found."
+    card_title: "Balance & Benefits"
+    current_balance: "Current Balance"
+    recharge_balance: "Recharge Balance"
+    gift_balance: "Gift Balance"
+    days_until_expire: "{{.Days}} days until expiration"
+    expired_short: "Expired"
+    expire_with_date: "Expires {{.Date}} ({{.Days}} days left)"
+    expired_with_date: "Expired {{.Date}}"
+    total_label: "Total Entries"
+    total_credits_label: "Total Balance"
+    gift_credits_label: "Gift Balance"
+    recharge_credits_label: "Recharge Balance"
+    expire_at_label: "Expires"
+    expire_line: "{{.Balance}}     Expires {{.Date}} ({{.Days}} days left), expiring amount {{.Amount}}"
+    expired_line: "{{.Balance}}     Expired {{.Date}}, expiring amount {{.Amount}}"
+  day_cost:
+    no_records: "No spending records for today."
+    total_credits_label: "Total Cost"
+    total_prompts_label: "Total Requests"
+  chart:
+    intro: "Hourly cost chart: bar length = cost for that hour, right number = request count"
+    row_format: "{{.Time}}  {{.Cost}}  {{.Bar}}  {{.Requests}} req"
+    total_format: "Total  {{.Cost}}  {{.Requests}} req"
   flag:
     verbose: "Enable verbose mode"
     base_domain: "Specify the BizyAir root domain used to derive API, metadata, web, and storage endpoints."
@@ -470,8 +540,6 @@ validation:
   base_model_required: "Base model is required."
   base_model_list_missing: "The base model cannot be validated because the allowed list was not loaded from the API."
   base_model_unsupported: "Unsupported base model: {{.Model}} (supported: {{.Supported}})"
-  base_model_unsupported_simple: "Unsupported base model: {{.Model}}"
-  base_model_invalid: "Invalid base model: {{.Model}}"
   cover_not_found: "Cover file does not exist: {{.Path}}: {{.Cause}}"
   cover_format_unsupported: "Unsupported cover format {{.Format}} (supported: {{.Supported}})"
   cover_too_large: "Video cover exceeds the size limit ({{.Size}} MB > {{.Limit}} MB)."
@@ -522,6 +590,10 @@ step:
   create_oss_client: "Create OSS client"
   oss_upload: "OSS upload"
   commit_file: "Commit file"
+  whoami: "User info"
+  plan: "Plan overview"
+  credits: "Credits"
+  day_cost: "Day cost"
 
 config:
   yaml:
@@ -549,3 +621,11 @@ test:
   files:
     one: "{{.Count}} file"
     other: "{{.Count}} files"
+
+api:
+  user_status:
+    normal: "Normal"
+    banned: "Banned"
+    frozen: "Frozen"
+    pending: "Pending"
+    inactive: "Inactive"

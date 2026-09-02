@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"net/url"
 	"reflect"
+	"sort"
 	"strings"
 	"time"
 	"unicode"
@@ -34,6 +35,9 @@ type BizyAPI interface {
 	GetUploadTokenContext(ctx context.Context, fileName, fileType string) (*Response[FilesResp], error)
 	CommitInputResourceContext(ctx context.Context, name, objectKey string) (*Response[InputResourceCommitResp], error)
 	GetBaseModelTypesContext(ctx context.Context) (*Response[[]*BaseModelTypeItem], error)
+	GetPlanOverviewContext(ctx context.Context) (*Response[PlanOverviewResp], error)
+	GetCreditsContext(ctx context.Context, current, pageSize, expireDays int) (*Response[CreditsListResp], error)
+	GetDayCostContext(ctx context.Context, date string) (*Response[DayCostResp], error)
 }
 
 // Client bizyair client
@@ -298,7 +302,22 @@ func (c *Client) GetBaseModelTypes() (*Response[[]*BaseModelTypeItem], error) {
 	return c.GetBaseModelTypesContext(context.Background())
 }
 
+// GetBaseModelTypesContext 获取基础模型类型列表，接口失败或返回空时回退到本地列表
 func (c *Client) GetBaseModelTypesContext(ctx context.Context) (*Response[[]*BaseModelTypeItem], error) {
+	resp, err := c.fetchBaseModelTypes(ctx)
+	if err != nil {
+		if ctx != nil && ctx.Err() != nil {
+			return nil, err
+		}
+		return localBaseModelTypes(), nil
+	}
+	if len(resp.Data) == 0 {
+		return localBaseModelTypes(), nil
+	}
+	return resp, nil
+}
+
+func (c *Client) fetchBaseModelTypes(ctx context.Context) (*Response[[]*BaseModelTypeItem], error) {
 	serverURL := c.Endpoints.BaseModelTypesURL()
 	body, statusCode, err := c.doGet(ctx, serverURL, nil, nil)
 	if err != nil {
@@ -309,7 +328,95 @@ func (c *Client) GetBaseModelTypesContext(ctx context.Context) (*Response[[]*Bas
 		return nil, handleError(body, statusCode)
 	}
 
-	return handleResponse[[]*BaseModelTypeItem](body)
+	dictResp, err := handleResponse[MetaDict](body)
+	if err != nil {
+		return nil, err
+	}
+	return &Response[[]*BaseModelTypeItem]{
+		RequestId: dictResp.RequestId,
+		Code:      dictResp.Code,
+		Message:   dictResp.Message,
+		Status:    dictResp.Status,
+		Data:      dictResp.Data.BaseModels,
+	}, nil
+}
+
+func localBaseModelTypes() *Response[[]*BaseModelTypeItem] {
+	items := make([]*BaseModelTypeItem, 0, len(meta.SupportedBaseModels))
+	for name := range meta.SupportedBaseModels {
+		items = append(items, &BaseModelTypeItem{Value: name})
+	}
+	sort.Slice(items, func(i, j int) bool { return items[i].Value < items[j].Value })
+	return &Response[[]*BaseModelTypeItem]{
+		Code:   meta.OKCode,
+		Status: true,
+		Data:   items,
+	}
+}
+
+// GetPlanOverview 获取套餐概览
+func (c *Client) GetPlanOverview() (*Response[PlanOverviewResp], error) {
+	return c.GetPlanOverviewContext(context.Background())
+}
+
+func (c *Client) GetPlanOverviewContext(ctx context.Context) (*Response[PlanOverviewResp], error) {
+	serverURL := joinEndpoint(c.Endpoints.Meta, "/v1/user/plan_overview")
+	body, statusCode, err := c.doGet(ctx, serverURL, nil, c.authHeader())
+	if err != nil {
+		return nil, err
+	}
+	if statusCode != http.StatusOK {
+		return nil, handleError(body, statusCode)
+	}
+	return handleResponse[PlanOverviewResp](body)
+}
+
+// GetCredits 获取积分明细
+func (c *Client) GetCredits(current, pageSize, expireDays int) (*Response[CreditsListResp], error) {
+	return c.GetCreditsContext(context.Background(), current, pageSize, expireDays)
+}
+
+func (c *Client) GetCreditsContext(ctx context.Context, current, pageSize, expireDays int) (*Response[CreditsListResp], error) {
+	serverURL := joinEndpoint(c.Endpoints.FinanceURL(), "/v1/credits")
+	body, statusCode, err := c.doGet(ctx, serverURL, CreditsReq{
+		Current:    current,
+		PageSize:   pageSize,
+		ExpireDays: expireDays,
+	}, c.authHeader())
+	if err != nil {
+		return nil, err
+	}
+	if statusCode != http.StatusOK {
+		return nil, handleError(body, statusCode)
+	}
+	return handleResponse[CreditsListResp](body)
+}
+
+// GetDayCost 获取每日消费记录
+func (c *Client) GetDayCost(date string) (*Response[DayCostResp], error) {
+	return c.GetDayCostContext(context.Background(), date)
+}
+
+func (c *Client) GetDayCostContext(ctx context.Context, date string) (*Response[DayCostResp], error) {
+	serverURL := joinEndpoint(c.Endpoints.FinanceURL(), "/v1/bills/day_cost")
+	// API requires ISO 8601 date format (e.g. "2026-08-10T00:00:00Z").
+	// Default to today if no date provided.
+	if date == "" {
+		date = time.Now().UTC().Format("2006-01-02T00:00:00Z")
+	} else if len(date) == 10 && date[4] == '-' && date[7] == '-' {
+		// Convert plain date like "2026-08-10" to ISO 8601.
+		date = date + "T00:00:00Z"
+	}
+	body, statusCode, err := c.doGet(ctx, serverURL, struct {
+		Date string `form:"date" query:"date"`
+	}{Date: date}, c.authHeader())
+	if err != nil {
+		return nil, err
+	}
+	if statusCode != http.StatusOK {
+		return nil, handleError(body, statusCode)
+	}
+	return handleResponse[DayCostResp](body)
 }
 
 func (c *Client) authHeader() map[string]string {

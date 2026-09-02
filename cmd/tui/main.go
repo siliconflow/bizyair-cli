@@ -25,6 +25,7 @@ type mainModel struct {
 	ctx           context.Context
 	baseDomain    string
 	step          mainStep
+	returnStep    mainStep
 	loggedIn      bool
 	apiKey        string
 	err           error
@@ -34,6 +35,7 @@ type mainModel struct {
 	height int
 
 	menu            list.Model
+	userInfoMenu    list.Model
 	inpApi          textinput.Model
 	typeList        list.Model
 	baseList        list.Model
@@ -53,8 +55,12 @@ type mainModel struct {
 
 	confirmingExit bool
 
-	act    actionInputs
-	upStep uploadStep
+	act      actionInputs
+	upStep   uploadStep
+	userInfo userInfoInputs
+
+	// API client (lazy-initialized)
+	api lib.BizyAPI
 
 	running     bool
 	canceling   bool
@@ -108,6 +114,18 @@ func newMainModel() mainModel {
 	return newMainModelWithContext(context.Background(), meta.DefaultBaseDomain)
 }
 
+func (m *mainModel) getAPI() lib.BizyAPI {
+	if m.api == nil {
+		m.api = lib.NewClient(m.baseDomain, m.apiKey)
+	}
+	return m.api
+}
+
+func (m *mainModel) setAPIKey(key string) {
+	m.apiKey = key
+	m.api = nil
+}
+
 func newMainModelWithBaseDomain(baseDomain string) mainModel {
 	return newMainModelWithContext(context.Background(), baseDomain)
 }
@@ -118,6 +136,7 @@ func newMainModelWithContext(ctx context.Context, baseDomain string) mainModel {
 	}
 	mItems := []list.Item{
 		menuEntry{listItem{title: i18n.T("tui.menu.upload", nil), desc: i18n.T("tui.menu.upload_desc", nil)}, actionUpload},
+		menuEntry{listItem{title: i18n.T("tui.menu.user_info", nil), desc: i18n.T("tui.menu.user_info_desc", nil)}, actionUserInfo},
 		menuEntry{listItem{title: i18n.T("tui.menu.models", nil), desc: i18n.T("tui.menu.models_desc", nil)}, actionLsModel},
 		menuEntry{listItem{title: i18n.T("tui.menu.logout", nil), desc: i18n.T("tui.menu.logout_desc", nil)}, actionLogout},
 		menuEntry{listItem{title: i18n.T("tui.menu.exit", nil), desc: i18n.T("tui.menu.exit_desc", nil)}, actionExit},
@@ -131,6 +150,19 @@ func newMainModelWithContext(ctx context.Context, baseDomain string) mainModel {
 	localizeList(&menuList)
 	menuList.SetShowStatusBar(false)
 	menuList.SetShowPagination(false)
+
+	// User Info submenu
+	uiItems := []list.Item{
+		menuEntry{listItem{title: i18n.T("tui.menu.whoami", nil), desc: i18n.T("tui.menu.whoami_desc", nil)}, actionWhoami},
+		menuEntry{listItem{title: i18n.T("tui.menu.plan", nil), desc: i18n.T("tui.menu.plan_desc", nil)}, actionPlan},
+		menuEntry{listItem{title: i18n.T("tui.menu.credits", nil), desc: i18n.T("tui.menu.credits_desc", nil)}, actionCredits},
+		menuEntry{listItem{title: i18n.T("tui.menu.day_cost", nil), desc: i18n.T("tui.menu.day_cost_desc", nil)}, actionDayCost},
+	}
+	uiMenu := list.New(uiItems, d, 30, len(uiItems)*8)
+	uiMenu.Title = i18n.T("tui.menu.user_info", nil)
+	localizeList(&uiMenu)
+	uiMenu.SetShowStatusBar(false)
+	uiMenu.SetShowPagination(false)
 
 	// 模型类型描述映射
 	modelTypeDescriptionIDs := map[meta.UploadFileType]string{
@@ -245,7 +277,9 @@ func newMainModelWithContext(ctx context.Context, baseDomain string) mainModel {
 		ctx:              ctx,
 		baseDomain:       baseDomain,
 		step:             mainStepHome,
+		returnStep:       mainStepMenu,
 		menu:             menuList,
+		userInfoMenu:     uiMenu,
 		inpApi:           inApi,
 		typeList:         tp,
 		baseList:         bl,
@@ -291,7 +325,7 @@ func newMainModelWithContext(ctx context.Context, baseDomain string) mainModel {
 	}
 	if key, err := lib.NewSfFolder().GetKey(); err == nil && key != "" {
 		m.loggedIn = true
-		m.apiKey = key
+		m.setAPIKey(key)
 		m.step = mainStepMenu
 	} else {
 		m.step = mainStepLogin
@@ -313,6 +347,7 @@ func (m mainModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			lw = 10
 		}
 		m.menu.SetWidth(lw)
+		m.userInfoMenu.SetWidth(lw)
 		m.typeList.SetWidth(lw)
 		m.baseList.SetWidth(lw)
 		m.coverMethodList.SetWidth(lw)
@@ -398,6 +433,7 @@ func (m mainModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			case mainStepMenu:
 				if it, ok := m.menu.SelectedItem().(menuEntry); ok {
 					m.currentAction = it.key
+					m.returnStep = mainStepMenu
 					switch it.key {
 					case actionExit:
 						return m, tea.Quit
@@ -419,16 +455,23 @@ func (m mainModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					case actionLsModel:
 						m.running = true
 						return m, openMyModelsInBrowser(m.baseDomain)
+					case actionUserInfo:
+						m.step = mainStepUserInfo
+						return m, nil
 					}
 				}
 			case mainStepAction:
 				return m, m.updateActionInputs(msg)
 			case mainStepOutput:
-				m.step = mainStepMenu
+				m.step = m.returnStep
 				m.output = ""
 				m.err = nil
 				m.resetUploadState()
 				return m, nil
+			case mainStepUserInfo:
+				if it, ok := m.userInfoMenu.SelectedItem().(menuEntry); ok {
+					return m.handleUserInfoSelect(it.key)
+				}
 			}
 		case "esc":
 			// 如果在退出确认界面，Esc 取消退出
@@ -443,10 +486,14 @@ func (m mainModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			case mainStepAction:
 				return m, m.updateActionInputs(msg)
 			case mainStepOutput:
-				m.step = mainStepMenu
+				m.step = m.returnStep
 				m.output = ""
 				m.err = nil
 				m.resetUploadState()
+				return m, nil
+			case mainStepUserInfo:
+				m.step = mainStepMenu
+				m.returnStep = mainStepMenu
 				return m, nil
 			}
 		default:
@@ -458,6 +505,10 @@ func (m mainModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			case mainStepMenu:
 				var cmd tea.Cmd
 				m.menu, cmd = m.menu.Update(msg)
+				return m, cmd
+			case mainStepUserInfo:
+				var cmd tea.Cmd
+				m.userInfoMenu, cmd = m.userInfoMenu.Update(msg)
 				return m, cmd
 			case mainStepAction:
 				return m, m.updateActionInputs(msg)
@@ -474,7 +525,7 @@ func (m mainModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 		m.loggedIn = true
-		m.apiKey = m.inpApi.Value()
+		m.setAPIKey(m.inpApi.Value())
 		m.step = mainStepMenu
 		return m, nil
 	case openBrowserDoneMsg:
@@ -498,7 +549,7 @@ func (m mainModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			// 清除登录状态
 			m.loggedIn = false
-			m.apiKey = ""
+			m.setAPIKey("")
 			m.step = mainStepLogin
 			m.inpApi.SetValue("")
 			m.inpApi.Focus() // 设置焦点以便用户可以输入新的 API Key
@@ -511,6 +562,42 @@ func (m mainModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		m.step = mainStepOutput
 		m.resetUploadState()
+		return m, nil
+	case whoamiDoneMsg:
+		m.running = false
+		if msg.err != nil {
+			m.err = msg.err
+			return m, nil
+		}
+		m.output = m.renderWhoami(msg.user)
+		m.step = mainStepOutput
+		return m, nil
+	case planDoneMsg:
+		m.running = false
+		if msg.err != nil {
+			m.err = msg.err
+			return m, nil
+		}
+		m.output = m.renderPlan(msg.plan)
+		m.step = mainStepOutput
+		return m, nil
+	case creditsDoneMsg:
+		m.running = false
+		if msg.err != nil {
+			m.err = msg.err
+			return m, nil
+		}
+		m.output = m.renderCredits(msg.credits, msg.total, msg.giftAmt, msg.rechargeAmt, msg.totalAmt)
+		m.step = mainStepOutput
+		return m, nil
+	case dayCostDoneMsg:
+		m.running = false
+		if msg.err != nil {
+			m.err = msg.err
+			return m, nil
+		}
+		m.output = m.renderDayCost(msg.records)
+		m.step = mainStepOutput
 		return m, nil
 	case uploadStartMsg:
 		m.uploadCh = msg.ch
@@ -654,6 +741,36 @@ func (m mainModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
+func (m mainModel) handleUserInfoSelect(key actionKind) (tea.Model, tea.Cmd) {
+	m.userInfo.selectedAction = key
+	m.returnStep = mainStepUserInfo
+	m.running = true
+	api := m.getAPI()
+	switch key {
+	case actionWhoami:
+		return m, fetchWhoami(api)
+	case actionPlan:
+		return m, fetchPlan(api)
+	case actionCredits:
+		return m, fetchCredits(api)
+	case actionDayCost:
+		return m, fetchDayCost(api)
+	default:
+		m.running = false
+		return m, nil
+	}
+}
+
+func (m mainModel) outputTitle() string {
+	if m.returnStep == mainStepUserInfo {
+		switch m.userInfo.selectedAction {
+		case actionWhoami, actionPlan, actionCredits, actionDayCost:
+			return i18n.T("tui.menu."+string(m.userInfo.selectedAction), nil)
+		}
+	}
+	return i18n.T("tui.status.done", nil)
+}
+
 func (m mainModel) View() string {
 	innerW, innerH := m.innerSize()
 	if innerW < 10 {
@@ -718,6 +835,13 @@ func (m mainModel) View() string {
 		}
 		m.menu.SetHeight(h)
 		return m.renderFrame(logoStr + "\n\n" + m.titleStyle.Render(i18n.T("tui.status.menu_title", nil)) + "\n\n" + m.menu.View() + "\n" + m.hintStyle.Render(i18n.T("tui.hint.menu_footer", nil)))
+	case mainStepUserInfo:
+		uiH := innerH - 10
+		if uiH < 5 {
+			uiH = 5
+		}
+		m.userInfoMenu.SetHeight(uiH)
+		return m.renderFrame(header + "\n" + panel.Render(m.titleStyle.Render(i18n.T("tui.menu.user_info", nil))+"\n\n"+m.userInfoMenu.View()))
 	case mainStepAction:
 		return m.renderFrame(header + "\n" + panel.Render(m.renderActionView()))
 	case mainStepOutput:
@@ -732,7 +856,7 @@ func (m mainModel) View() string {
 			body += i18n.T("tui.status.error", map[string]any{"Error": m.err})
 			return m.renderFrame(header + "\n" + panel.Render(m.titleStyle.Render(i18n.T("tui.status.done_with_errors", nil))+"\n\n"+body+"\n\n"+m.hintStyle.Render(i18n.T("tui.hint.enter_menu", nil))))
 		}
-		return m.renderFrame(header + "\n" + panel.Render(m.titleStyle.Render(i18n.T("tui.status.done", nil))+"\n\n"+m.output+"\n\n"+m.hintStyle.Render(i18n.T("tui.hint.enter_menu", nil))))
+		return m.renderFrame(header + "\n" + panel.Render(m.titleStyle.Render(m.outputTitle())+"\n\n"+m.output+"\n\n"+m.hintStyle.Render(i18n.T("tui.hint.enter_menu", nil))))
 	default:
 		if m.running {
 			spin := m.sp.View()

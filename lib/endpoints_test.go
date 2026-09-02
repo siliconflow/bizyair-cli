@@ -15,6 +15,7 @@ func TestResolveServiceEndpoints(t *testing.T) {
 			want: ServiceEndpoints{
 				Base: "https://bizyair.vip", API: "https://api.bizyair.vip", Meta: "https://meta.bizyair.vip",
 				Web: "https://www.bizyair.vip", Storage: "https://storage.bizyair.vip",
+				Finance: "https://finance.bizyair.vip",
 			},
 		},
 		{
@@ -23,6 +24,7 @@ func TestResolveServiceEndpoints(t *testing.T) {
 			want: ServiceEndpoints{
 				Base: "https://bizyair.vip", API: "https://api.bizyair.vip", Meta: "https://meta.bizyair.vip",
 				Web: "https://www.bizyair.vip", Storage: "https://storage.bizyair.vip",
+				Finance: "https://finance.bizyair.vip",
 			},
 		},
 		{
@@ -31,6 +33,7 @@ func TestResolveServiceEndpoints(t *testing.T) {
 			want: ServiceEndpoints{
 				Base: "https://bizyair.ai", API: "https://api.bizyair.ai", Meta: "https://meta.bizyair.ai",
 				Web: "https://www.bizyair.ai", Storage: "https://storage.bizyair.ai",
+				Finance: "https://finance.bizyair.ai",
 			},
 		},
 		{
@@ -39,6 +42,7 @@ func TestResolveServiceEndpoints(t *testing.T) {
 			want: ServiceEndpoints{
 				Base: "https://bizyair.ai", API: "https://api.bizyair.ai", Meta: "https://meta.bizyair.ai",
 				Web: "https://www.bizyair.ai", Storage: "https://storage.bizyair.ai",
+				Finance: "https://finance.bizyair.ai",
 			},
 		},
 		{
@@ -47,6 +51,7 @@ func TestResolveServiceEndpoints(t *testing.T) {
 			want: ServiceEndpoints{
 				Base: "http://127.0.0.1:8080", API: "http://127.0.0.1:8080", Meta: "http://127.0.0.1:8080",
 				Web: "http://127.0.0.1:8080", Storage: "http://127.0.0.1:8080",
+				Finance: "http://127.0.0.1:8080",
 			},
 		},
 		{name: "relative URL", input: "bizyair.vip", wantErr: true},
@@ -76,7 +81,7 @@ func TestServiceEndpointURLs(t *testing.T) {
 		"model detail": endpoints.ModelDetailURL(42),
 	}
 	wants := map[string]string{
-		"base models":  "https://www.bizyair.vip/api/special/community/base_model_types",
+		"base models":  "https://meta.bizyair.vip/v1/dict",
 		"my models":    "https://www.bizyair.vip/community?path=my",
 		"model detail": "https://www.bizyair.vip/community/models/my/42",
 	}
